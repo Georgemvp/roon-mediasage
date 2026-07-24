@@ -32,6 +32,7 @@ public struct DiscoveryView: View {
         List {
             ZoneHintBanner().plainCardRow()
             weeklyInstap.plainCardRow()
+            labelsInstap.plainCardRow()
             if let stats {
                 if let hero = heroItem { heroCard(hero).plainCardRow() }
                 summaryCards(stats).plainCardRow()
@@ -135,6 +136,31 @@ public struct DiscoveryView: View {
                 Spacer(minLength: 0)
                 // No manual chevron: the List-hosted NavigationLink already draws
                 // its own disclosure indicator (a second one read as ">  >").
+            }
+            .padding(Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Entry into browsing the library by record label.
+    private var labelsInstap: some View {
+        NavigationLink {
+            LabelExplorerView()
+        } label: {
+            HStack(spacing: Spacing.md) {
+                Image(systemName: "tag")
+                    .font(.title2)
+                    .foregroundStyle(Color.roonGold)
+                    .frame(width: 44, height: 44)
+                    .background(Color.roonGold.opacity(0.15), in: RoundedRectangle(cornerRadius: Radius.lg))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Platenlabels").font(.headline)
+                    Text("Blader door je bibliotheek op label — met een label van de week.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
             .padding(Spacing.md)
             .contentShape(Rectangle())

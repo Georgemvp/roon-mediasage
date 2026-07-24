@@ -684,6 +684,36 @@ enum Schema {
             }
         }
 
+        // Record label as a browse dimension. `album_label` keys albums by
+        // `album_key` (there is no numeric album id in this DB). `label_merge`
+        // records each merge with the exact album_keys it moved (restored_keys)
+        // and the ones newly added to the target (added_keys) so undo restores the
+        // precise prior state. Labels are seeded from the dataset-imported
+        // track_audio_features.label; external enrichment lands here later.
+        migrator.registerMigration("v44_labels") { db in
+            try db.create(table: "label", ifNotExists: true) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("canonical_name", .text).notNull()
+                t.column("logo_url", .text)
+                t.column("mbid", .text)
+            }
+            try db.execute(sql: "CREATE UNIQUE INDEX IF NOT EXISTS idx_label_name ON label(LOWER(canonical_name))")
+            try db.create(table: "album_label", ifNotExists: true) { t in
+                t.column("album_key", .text).notNull()
+                t.column("label_id", .integer).notNull()
+                t.column("source", .text)            // 'dataset' | 'filetag' | 'musicbrainz' | 'discogs'
+                t.primaryKey(["album_key", "label_id"])
+            }
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_album_label_label ON album_label(label_id)")
+            try db.create(table: "label_merge", ifNotExists: true) { t in
+                t.column("from_label_id", .integer).notNull()
+                t.column("into_label_id", .integer).notNull()
+                t.column("merged_at", .text).notNull()
+                t.column("restored_keys", .text)     // JSON [album_key] that were under `from`
+                t.column("added_keys", .text)         // JSON [album_key] newly added to `into`
+            }
+        }
+
         try migrator.migrate(db)
     }
 }
