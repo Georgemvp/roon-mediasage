@@ -509,6 +509,37 @@ extension RoonClient {
         await curateTracks(tracks, zoneID: zoneID)
     }
 
+    /// Play several albums as one queue, in the given selection order: the first
+    /// album's tracks play now, everything after is queued (one Roon load). The
+    /// existing `RemoteCommand.tracks` proxy path carries the assembled list, so no
+    /// new server command is needed.
+    public func playAlbums(albumKeys: [String], zoneID: String) async {
+        let tracks = await tracksForAlbums(albumKeys)
+        guard !tracks.isEmpty else { return }
+        await curateTracks(tracks, zoneID: zoneID)
+    }
+
+    /// Queue several albums (append, no interrupt) in the given selection order.
+    public func queueAlbums(albumKeys: [String], zoneID: String) async {
+        let tracks = await tracksForAlbums(albumKeys)
+        guard !tracks.isEmpty else { return }
+        await queueTracks(tracks, zoneID: zoneID)
+    }
+
+    /// Concatenate every album's library tracks, preserving the input album order
+    /// (so the queue matches the order the user selected them in).
+    private func tracksForAlbums(_ albumKeys: [String]) async -> [TrackRecord] {
+        var out: [TrackRecord] = []
+        for key in albumKeys {
+            var opts = DatabaseManager.FilterOptions()
+            opts.albumKey = key
+            opts.excludeLive = false
+            opts.limit = 200
+            out += await filterTracks(options: opts)
+        }
+        return out
+    }
+
     // MARK: - Sonic similarity (Radio / Fingerprint)
 
     /// Library tracks sonically similar to a seed (tempo, key, energy, tags).

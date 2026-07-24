@@ -20,6 +20,10 @@ public struct LibraryView: View {
     /// Grid filter: only starred albums/artists (LMS "Starred" browse mode).
     @State private var favoritesOnly = false
     @State private var selection = Set<String>()
+    // Album grid multi-select (a LazyVGrid can't use List(selection:)). Ordered so
+    // the bulk queue follows the order the user tapped the albums in.
+    @State private var isSelectingAlbums = false
+    @State private var albumSelection: [String] = []
     @State private var showSaveSheet = false
     @State private var newPlaylistName = ""
     @State private var infoTrack: DatabaseManager.LibraryTrackRow?
@@ -133,8 +137,10 @@ public struct LibraryView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if viewMode == .tracks, !selection.isEmpty { selectionBar }
+            else if viewMode == .albums, isSelectingAlbums, !albumSelection.isEmpty { albumSelectionBar }
         }
         .animation(Motion.quick, value: selection.isEmpty)
+        .animation(Motion.quick, value: albumSelection.isEmpty)
         .navigationDestination(for: DatabaseManager.AlbumResult.self) { AlbumDetailView(album: $0) }
         .navigationDestination(for: DatabaseManager.ArtistResult.self) { ArtistDetailView(artist: $0) }
         .navigationDestination(for: LibraryFilter.self) { FilteredTracksView(filter: $0) }
@@ -164,6 +170,17 @@ public struct LibraryView: View {
                     }
                     .accessibilityLabel("Alleen favorieten")
                     .help(favoritesOnly ? "Toon alles" : "Alleen favorieten")
+                }
+            }
+            if viewMode == .albums, !visibleAlbums.isEmpty {
+                ToolbarItem {
+                    Button {
+                        isSelectingAlbums.toggle()
+                        if !isSelectingAlbums { albumSelection.removeAll() }
+                    } label: {
+                        Text(isSelectingAlbums ? "Klaar" : "Selecteer")
+                    }
+                    .help(isSelectingAlbums ? "Selectie sluiten" : "Selecteer meerdere albums")
                 }
             }
             ToolbarItem {
@@ -200,7 +217,11 @@ public struct LibraryView: View {
         .onChange(of: selectedTag) { _, _ in reloadTracks() }
         // Every sort now orders in SQL and paginates, so a change is a full reload.
         .onChange(of: sort) { _, _ in reloadTracks() }
-        .onChange(of: viewMode) { _, _ in reloadContent() }
+        .onChange(of: viewMode) { _, _ in
+            isSelectingAlbums = false
+            albumSelection.removeAll()
+            reloadContent()
+        }
         .onChange(of: client.trackCount) { _, _ in reload() }
         .onAppear { reload() }
         .sheet(item: $infoTrack) { TrackInfoSheet(track: $0) }
@@ -314,16 +335,29 @@ public struct LibraryView: View {
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: Spacing.lg) {
                     ForEach(Array(visibleAlbums.enumerated()), id: \.element.id) { index, album in
-                        NavigationLink(value: album) { AlbumGridCell(album: album) }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                PlayActionsMenu(fetch: { [client] in
-                                    await client.tracksForAlbum(album.albumKey).map(\.asTrackRecord)
-                                })
+                        Group {
+                            if isSelectingAlbums {
+                                Button { toggleAlbumSelection(album.albumKey) } label: {
+                                    AlbumGridCell(album: album)
+                                        .overlay(alignment: .topTrailing) { albumSelectionBadge(album.albumKey) }
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                NavigationLink(value: album) { AlbumGridCell(album: album) }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button { enterAlbumSelection(album.albumKey) } label: {
+                                            Label("Selecteer meerdere", systemImage: "checkmark.circle")
+                                        }
+                                        PlayActionsMenu(fetch: { [client] in
+                                            await client.tracksForAlbum(album.albumKey).map(\.asTrackRecord)
+                                        })
+                                    }
                             }
-                            .onAppear {
-                                if index >= visibleAlbums.count - 6 { Task { await loadMoreAlbums() } }
-                            }
+                        }
+                        .onAppear {
+                            if index >= visibleAlbums.count - 6 { Task { await loadMoreAlbums() } }
+                        }
                     }
                 }
                 .padding(Spacing.lg)
@@ -399,6 +433,67 @@ public struct LibraryView: View {
         .padding(.horizontal, Spacing.lg).padding(.vertical, Spacing.sm)
         .background(.bar)
         .transition(.move(edge: .bottom))
+    }
+
+    // MARK: - Album multi-select
+
+    private var albumSelectionBar: some View {
+        HStack(spacing: Spacing.md) {
+            Text("\(albumSelection.count) album\(albumSelection.count == 1 ? "" : "s")")
+                .font(.callout).foregroundStyle(.secondary)
+            Spacer()
+            Button { bulkPlayAlbums() } label: { Label("Speel alle", systemImage: "play.fill") }
+                .disabled(client.selectedZone == nil)
+            Button { bulkQueueAlbums() } label: { Label("In wachtrij", systemImage: "text.append") }
+                .disabled(client.selectedZone == nil)
+            Button { albumSelection.removeAll() } label: { Label("Wis", systemImage: "xmark") }
+                .labelStyle(.iconOnly)
+        }
+        .padding(.horizontal, Spacing.lg).padding(.vertical, Spacing.sm)
+        .background(.bar)
+        .transition(.move(edge: .bottom))
+    }
+
+    /// Selection order = tap order (append/remove), so the bulk queue matches it.
+    private func toggleAlbumSelection(_ key: String) {
+        if let i = albumSelection.firstIndex(of: key) { albumSelection.remove(at: i) }
+        else { albumSelection.append(key) }
+    }
+
+    private func enterAlbumSelection(_ key: String) {
+        isSelectingAlbums = true
+        if !albumSelection.contains(key) { albumSelection.append(key) }
+    }
+
+    @ViewBuilder
+    private func albumSelectionBadge(_ key: String) -> some View {
+        let selected = albumSelection.contains(key)
+        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+            .font(.title3)
+            .foregroundStyle(selected ? Color.roonGold : Color.white.opacity(0.8))
+            .padding(6)
+            .shadow(radius: 2)
+    }
+
+    private func bulkPlayAlbums() {
+        guard let zone = client.selectedZone else { return }
+        Haptics.tap()
+        let keys = albumSelection
+        Task { await client.playAlbums(albumKeys: keys, zoneID: zone.id) }
+        exitAlbumSelection()
+    }
+
+    private func bulkQueueAlbums() {
+        guard let zone = client.selectedZone else { return }
+        Haptics.tap()
+        let keys = albumSelection
+        Task { await client.queueAlbums(albumKeys: keys, zoneID: zone.id) }
+        exitAlbumSelection()
+    }
+
+    private func exitAlbumSelection() {
+        isSelectingAlbums = false
+        albumSelection.removeAll()
     }
 
     // MARK: - Per-row context menu
