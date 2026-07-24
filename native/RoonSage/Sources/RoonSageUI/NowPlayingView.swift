@@ -641,6 +641,10 @@ private struct NowPlayingHero: View {
             .buttonStyle(.plain)
             .accessibilityLabel(NowPlayingHeroOptions.loopLabel(loop))
             .accessibilityAddTraits(loop == "disabled" ? [] : .isSelected)
+
+            if let np = zone.nowPlaying {
+                ShareCardButton(title: np.title.displayTitle, artist: np.artist, imageKey: np.imageKey)
+            }
         }
     }
 
