@@ -667,6 +667,23 @@ enum Schema {
             try db.execute(sql: "ALTER TABLE track_audio_features ADD COLUMN tags_model TEXT")
         }
 
+        // Editorial context (artist bios + album reviews) on the detail pages,
+        // generalising the artist_bio cache: keyed by (entity_type, entity_key,
+        // kind), refreshed after 30 days, `body` NULL = negative cache. `entity_key`
+        // is content-derived (artist: lowercased name; album: "album|artist") so it
+        // survives resyncs — there is no numeric album/artist id in this DB.
+        migrator.registerMigration("v43_editorial_cache") { db in
+            try db.create(table: "editorial_cache", ifNotExists: true) { t in
+                t.column("entity_type", .text).notNull()   // 'artist' | 'album'
+                t.column("entity_key",  .text).notNull()
+                t.column("kind",        .text).notNull()   // 'bio' | 'review'
+                t.column("body",        .text)             // nil = negative cache
+                t.column("source",      .text)             // 'wikipedia' | 'last.fm'
+                t.column("fetched_at",  .text).notNull()
+                t.primaryKey(["entity_type", "entity_key", "kind"])
+            }
+        }
+
         try migrator.migrate(db)
     }
 }

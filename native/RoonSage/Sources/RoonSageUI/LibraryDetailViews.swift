@@ -15,6 +15,8 @@ struct AlbumDetailView: View {
     /// Other editions of this release in the library (remasters, deluxe,
     /// box-set copies) — grouped by the LMS-style version key.
     @State private var otherVersions: [DatabaseManager.AlbumResult] = []
+    @State private var review: Editorial?
+    @State private var reviewExpanded = false
 
     var body: some View {
         List {
@@ -23,6 +25,9 @@ struct AlbumDetailView: View {
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: Spacing.md, leading: Spacing.lg,
                                               bottom: Spacing.md, trailing: Spacing.lg))
+            }
+            if let review {
+                Section("Over dit album") { reviewSection(review) }
             }
             if isLoading {
                 ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden)
@@ -86,7 +91,36 @@ struct AlbumDetailView: View {
                 $0.albumKey != album.albumKey
                     && AlbumGrouping.versionKey(album: $0.album, artist: $0.artist) == key
             }
+            // Editorial loads after the fold — never blocks the tracklist.
+            review = await client.albumReview(album: album.album, artist: album.artist)
         }
+    }
+
+    /// Expandable album review ("2 regels, tik om uit te klappen"), with source
+    /// attribution — mirrors the artist bioSection pattern.
+    private func reviewSection(_ editorial: Editorial) -> some View {
+        Button {
+            withAnimation(Motion.quick) { reviewExpanded.toggle() }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(editorial.body)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(reviewExpanded ? nil : 3)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack {
+                    Text(reviewExpanded ? "Toon minder" : "Lees meer")
+                        .font(.caption.bold())
+                        .foregroundStyle(Color.roonGold)
+                    Spacer()
+                    Text("bron: \(editorial.source)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var header: some View {
@@ -249,7 +283,7 @@ struct ArtistDetailView: View {
             albums = await client.albumsByArtist(artist.name)
             isLoading = false
             // Secondary sections load after the fold, never blocking the albums.
-            bio = await client.artistBio(name: artist.name)
+            bio = await client.artistEditorial(name: artist.name)?.body
             topPlayed = await client.topPlayedTracks(artist: artist.name, limit: 5)
             similar = await client.similarLibraryArtists(to: artist.name, limit: 10)
             similarArtists = await resolveSimilar(similar)
