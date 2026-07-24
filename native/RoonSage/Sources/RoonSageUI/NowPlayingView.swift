@@ -266,6 +266,7 @@ private struct NowPlayingHero: View {
     @State private var startingAdventure = false
     @State private var showLyrics = false
     @State private var showFullArt = false
+    @State private var showWall = false
     @State private var similarSeed: SonicSeed?
     @AppStorage("showVisualizer") private var showVisualizer = true
 
@@ -322,6 +323,7 @@ private struct NowPlayingHero: View {
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in tickPosition() }
         .task { await client.ensureFeedbackLoaded() }
         .sheet(isPresented: $showLyrics) { LyricsView(zone: zone) }
+        .sheet(isPresented: $showWall) { WallDisplayView(zone: zone) }
         .similarTracksSheet(item: $similarSeed)
     }
 
@@ -644,6 +646,19 @@ private struct NowPlayingHero: View {
 
             if let np = zone.nowPlaying {
                 ShareCardButton(title: np.title.displayTitle, artist: np.artist, imageKey: np.imageKey)
+
+                Button {
+                    Haptics.tap()
+                    showWall = true
+                } label: {
+                    Image(systemName: "play.tv")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .tappable44()
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Wanddisplay")
+                .help("Volledig scherm — wanddisplay")
             }
         }
     }
