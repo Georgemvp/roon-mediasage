@@ -172,6 +172,12 @@ public final class LibraryWalker {
                                 clap: CLAPModel?, excerptSeconds: Double, sampleRate: Double,
                                 minBpm: Double, maxBpm: Double, priorBpm: Double,
                                 isoFormatter: ISO8601DateFormatter) -> WalkResult {
+        // Runs on a TaskGroup worker thread with no run loop, so ObjC autoreleased
+        // objects (AVAudioFile/AVAudioPCMBuffer decode buffers, metadata reads,
+        // CoreML outputs) have no drain point without this pool — they would
+        // accumulate for the whole walk. Draining per file bounds the footprint to
+        // one in-flight track. (CLAP's per-window pool nests inside this one.)
+        return autoreleasepool {
         switch mode {
         case .embeddingOnly:
             // Scalars already stored — only (re)compute the embedding. We mark
@@ -206,6 +212,7 @@ public final class LibraryWalker {
                 moods: f.moods.isEmpty ? nil : encodeFloatMap(f.moods),
                 attributes: f.attributes.isEmpty ? nil : encodeFloatMap(f.attributes)
             ))
+        }
         }
     }
 

@@ -50,6 +50,7 @@ public final class CLAPModel: @unchecked Sendable {
             NSLog("[CLAP] no model directory found — embeddings disabled")
             return nil
         }
+        sweepStaleTempBundles()
         do {
             let model = try CLAPModel(dir: dir)
             model.prepareProbes()   // build attribute probes once (best-effort)
@@ -90,8 +91,10 @@ public final class CLAPModel: @unchecked Sendable {
         if ProcessInfo.processInfo.environment["ROONSAGE_CLAP_CPU_ONLY"] == "1" {
             cfgML.computeUnits = .cpuOnly
         }
-        self.audioModel = try MLModel(contentsOf: MLModel.compileModel(at: audioURL), configuration: cfgML)
-        self.textModel = try MLModel(contentsOf: MLModel.compileModel(at: textURL), configuration: cfgML)
+        let audioCompiled = try Self.compiledModel(name: "CLAPAudio", source: audioURL, version: self.modelVersion)
+        let textCompiled = try Self.compiledModel(name: "CLAPText", source: textURL, version: self.modelVersion)
+        self.audioModel = try MLModel(contentsOf: audioCompiled, configuration: cfgML)
+        self.textModel = try MLModel(contentsOf: textCompiled, configuration: cfgML)
 
         self.tokenizer = RobertaBPETokenizer(dir: dir)   // best-effort (text search)
         self.moodLabels = cfg.moodLabels
@@ -101,25 +104,90 @@ public final class CLAPModel: @unchecked Sendable {
         self.moodEmbeds = (0..<cfg.moodLabels.count).map { Array(moodFlat[$0 * d..<($0 + 1) * d]) }
     }
 
+    // MARK: - Compiled-model cache
+
+    /// Compile a `.mlpackage` once into a stable, version-keyed cache directory
+    /// and reuse it thereafter.
+    ///
+    /// `MLModel.compileModel(at:)` writes a fresh `<name>_<UUID>.mlmodelc` into
+    /// `$TMPDIR` and hands ownership of that URL to the caller. Compiling inline
+    /// and dropping the URL leaked ~750 MB of orphaned bundles into temp on every
+    /// process launch. We compile-if-missing into Application Support instead,
+    /// which also avoids recompiling the ~478 MB RoBERTa text tower each run.
+    private static func compiledModel(name: String, source: URL, version: String) throws -> URL {
+        let fm = FileManager.default
+        let cacheRoot = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("RoonSageAnalyzer/CLAP/compiled/\(version)", isDirectory: true)
+        let dest = cacheRoot?.appendingPathComponent("\(name).mlmodelc", isDirectory: true)
+
+        if let dest, fm.fileExists(atPath: dest.path) {
+            return dest   // already compiled for this model version — reuse
+        }
+
+        // Apple's API gives us no choice but to compile into $TMPDIR; adopt the
+        // result into the cache so it does not accumulate there.
+        let compiled = try MLModel.compileModel(at: source)
+        guard let cacheRoot, let dest else { return compiled }   // no cache location; rare
+        do {
+            try fm.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
+            if fm.fileExists(atPath: dest.path) { try? fm.removeItem(at: dest) }
+            try fm.moveItem(at: compiled, to: dest)
+            return dest
+        } catch {
+            NSLog("[CLAP] could not cache compiled \(name): \(error) — using temp copy")
+            return compiled
+        }
+    }
+
+    /// Best-effort removal of orphaned `CLAP{Audio,Text}_<UUID>.mlmodelc` bundles
+    /// that older builds leaked into `$TMPDIR`. Safe: these are pure compile
+    /// artifacts, regenerated on demand. A 10-minute age floor avoids racing a
+    /// compile that another process may have in flight.
+    static func sweepStaleTempBundles() {
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(
+            at: fm.temporaryDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let cutoff = Date().addingTimeInterval(-600)
+        for u in items where u.pathExtension == "mlmodelc" {
+            let n = u.lastPathComponent
+            guard n.hasPrefix("CLAPAudio_") || n.hasPrefix("CLAPText_") else { continue }
+            let mod = (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let mod, mod > cutoff { continue }   // recent — may be an active compile
+            try? fm.removeItem(at: u)
+        }
+    }
+
     // MARK: - Audio embedding
 
     /// 512-dim L2-normalized embedding for mono samples at 48 kHz.
+    ///
+    /// The whole body runs inside an `autoreleasepool`: `MLMultiArray`,
+    /// `MLDictionaryFeatureProvider`, the prediction output and the MPSGraph/Metal
+    /// command-buffer temporaries CoreML spawns are all autoreleased ObjC objects.
+    /// This method is called once PER WINDOW (up to ~360 times for a 30-min track)
+    /// on a Swift-concurrency worker thread that has NO run loop — so without an
+    /// explicit pool those temporaries accumulate for the whole track (and across
+    /// the whole walk), which is the analyzer's RAM-spike source. Draining per call
+    /// keeps peak footprint at one window's worth.
     public func embed(samples: [Float]) throws -> [Float] {
-        let logMel = mel.logMel(samples)   // [frames * nMels], row-major
-        let arr = try MLMultiArray(
-            shape: [1, 1, NSNumber(value: CLAPMel.frames), NSNumber(value: CLAPMel.nMels)],
-            dataType: .float32)
-        logMel.withUnsafeBufferPointer { src in
-            let dst = arr.dataPointer.assumingMemoryBound(to: Float.self)
-            dst.update(from: src.baseAddress!, count: src.count)
+        try autoreleasepool {
+            let logMel = mel.logMel(samples)   // [frames * nMels], row-major
+            let arr = try MLMultiArray(
+                shape: [1, 1, NSNumber(value: CLAPMel.frames), NSNumber(value: CLAPMel.nMels)],
+                dataType: .float32)
+            logMel.withUnsafeBufferPointer { src in
+                let dst = arr.dataPointer.assumingMemoryBound(to: Float.self)
+                dst.update(from: src.baseAddress!, count: src.count)
+            }
+            let provider = try MLDictionaryFeatureProvider(
+                dictionary: ["input_features": MLFeatureValue(multiArray: arr)])
+            let out = try audioModel.prediction(from: provider)
+            guard let emb = out.featureValue(for: "embedding")?.multiArrayValue else {
+                throw CLAPError.missingOutput
+            }
+            return Self.l2(Self.toFloats(emb))
         }
-        let provider = try MLDictionaryFeatureProvider(
-            dictionary: ["input_features": MLFeatureValue(multiArray: arr)])
-        let out = try audioModel.prediction(from: provider)
-        guard let emb = out.featureValue(for: "embedding")?.multiArrayValue else {
-            throw CLAPError.missingOutput
-        }
-        return Self.l2(Self.toFloats(emb))
     }
 
     /// Full-track windowing (AudioMuse-parity): 10 s segments every 5 s (2×
@@ -129,23 +197,41 @@ public final class CLAPModel: @unchecked Sendable {
     /// opening no longer misrepresents the song.
     static let windowSamples = CLAPMel.clipSamples          // 10 s @ 48 kHz
     static let windowHopSamples = CLAPMel.clipSamples / 2   // 5 s hop
-    /// Decode cap: covers virtually every real track in full while bounding
-    /// memory (30 min @ 48 kHz mono f32 ≈ 345 MB × walker concurrency).
+    /// Coverage cap: covers virtually every real track in full. Memory no longer
+    /// scales with track length — `embed(url:)` streams the windows (see
+    /// `AudioDecoder.decodeWindows`), so peak footprint is one window regardless of
+    /// this value; the cap now only bounds CPU (windows embedded) on pathological
+    /// hour-long files.
     static let maxEmbedSeconds: Double = 1800
 
-    /// Decode the whole track once (chunked decoder, bounded memory) and embed
-    /// the mean direction of all windows. Falls back to three seeked 10 s
-    /// windows (25/50/75%), then to a single window from the start — a failed
-    /// full decode never blocks the embed entirely.
+    /// Stream the whole track's windows in bounded memory and embed their mean
+    /// direction. Falls back to three seeked 10 s windows (25/50/75%), then to a
+    /// single window from the start — a failed streaming decode never blocks the
+    /// embed entirely.
     public func embed(url: URL) throws -> [Float] {
-        if let audio = try? AudioDecoder.decode(
-            url: url, targetSampleRate: Double(CLAPMel.sampleRate),
-            maxSeconds: Self.maxEmbedSeconds),
-            !audio.samples.isEmpty,
-            let e = try? embedWindowed(samples: audio.samples) {
-            return e
-        }
+        if let e = try? embedStreamed(url: url) { return e }
         return try embedSampledWindows(url: url)
+    }
+
+    /// Streaming full-track embedding: decode + window without ever holding the
+    /// whole 48 kHz PCM (`AudioDecoder.decodeWindows`). Emits the SAME window set
+    /// as `embedWindowed`, so the mean-direction result is byte-identical to the
+    /// old decode-all path — only peak memory differs. Throws when no window embeds
+    /// (→ caller falls back to `embedSampledWindows`).
+    func embedStreamed(url: URL) throws -> [Float] {
+        var sum = [Float](repeating: 0, count: Self.embeddingDim)
+        var n = 0
+        try AudioDecoder.decodeWindows(
+            url: url, targetSampleRate: Double(CLAPMel.sampleRate),
+            windowSamples: Self.windowSamples, hopSamples: Self.windowHopSamples,
+            maxSeconds: Self.maxEmbedSeconds
+        ) { window in
+            guard let e = try? self.embed(samples: window), e.count == Self.embeddingDim else { return }
+            vDSP_vadd(sum, 1, e, 1, &sum, 1, vDSP_Length(Self.embeddingDim))
+            n += 1
+        }
+        guard n > 0 else { throw CLAPError.missingOutput }
+        return Self.l2(sum)   // mean direction of the windows, unit-normalized
     }
 
     /// Mean-direction embedding of 10 s windows (5 s hop + tail) over `samples`.
@@ -286,22 +372,24 @@ public final class CLAPModel: @unchecked Sendable {
 
     /// 512-dim L2-normalized text embedding from pre-tokenized ids + mask.
     public func textEmbedding(tokenIds: [Int32], attentionMask: [Int32]) throws -> [Float] {
-        let len = tokenIds.count
-        let ids = try MLMultiArray(shape: [1, NSNumber(value: len)], dataType: .int32)
-        let mask = try MLMultiArray(shape: [1, NSNumber(value: len)], dataType: .int32)
-        for i in 0..<len {
-            ids[i] = NSNumber(value: tokenIds[i])
-            mask[i] = NSNumber(value: attentionMask[i])
+        try autoreleasepool {   // drain CoreML temporaries per call (see embed(samples:))
+            let len = tokenIds.count
+            let ids = try MLMultiArray(shape: [1, NSNumber(value: len)], dataType: .int32)
+            let mask = try MLMultiArray(shape: [1, NSNumber(value: len)], dataType: .int32)
+            for i in 0..<len {
+                ids[i] = NSNumber(value: tokenIds[i])
+                mask[i] = NSNumber(value: attentionMask[i])
+            }
+            let provider = try MLDictionaryFeatureProvider(dictionary: [
+                "input_ids": MLFeatureValue(multiArray: ids),
+                "attention_mask": MLFeatureValue(multiArray: mask),
+            ])
+            let out = try textModel.prediction(from: provider)
+            guard let emb = out.featureValue(for: "embedding")?.multiArrayValue else {
+                throw CLAPError.missingOutput
+            }
+            return Self.l2(Self.toFloats(emb))
         }
-        let provider = try MLDictionaryFeatureProvider(dictionary: [
-            "input_ids": MLFeatureValue(multiArray: ids),
-            "attention_mask": MLFeatureValue(multiArray: mask),
-        ])
-        let out = try textModel.prediction(from: provider)
-        guard let emb = out.featureValue(for: "embedding")?.multiArrayValue else {
-            throw CLAPError.missingOutput
-        }
-        return Self.l2(Self.toFloats(emb))
     }
 
     // MARK: - Helpers
