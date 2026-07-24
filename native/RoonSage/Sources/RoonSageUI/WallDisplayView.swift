@@ -9,6 +9,7 @@ import SwiftUI
 ///
 /// (Related-artists and an optional YouTube panel are future additions; this
 /// ships the rotating art + editorial core.)
+@MainActor
 struct WallDisplayView: View {
     @Environment(RoonClient.self) private var client
     @Environment(\.dismiss) private var dismiss
