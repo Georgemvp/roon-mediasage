@@ -1,4 +1,5 @@
 import AudioAnalysis
+import Darwin   // malloc_zone_pressure_relief
 import Foundation
 
 public struct AnalyzeProgress: Sendable {
@@ -164,6 +165,14 @@ public final class LibraryWalker {
             flush()   // persist the tail (also covers the cancel path)
             group.cancelAll()
         }
+        // A walk allocates/frees a lot of transient audio + CoreML memory; libmalloc
+        // keeps those freed pages on its per-zone free lists (they show up as
+        // "MALLOC_SMALL (empty)" resident-dirty in vmmap) rather than returning them
+        // to the OS until real memory pressure hits. The server is idle once a walk
+        // ends, so hand them back now — stops idle RSS from ratcheting up to each
+        // walk's allocation peak. goal 0 = release as much as possible.
+        let freedMB = malloc_zone_pressure_relief(nil, 0) / 1_048_576
+        NSLog("[walker] walk done — pressure relief returned \(freedMB) MB to the OS")
         return (done, failed)
     }
 
