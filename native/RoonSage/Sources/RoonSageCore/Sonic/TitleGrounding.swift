@@ -74,6 +74,21 @@ public enum TitleGrounding {
             guard let e = energySignal(t) else { return nil }
             return percentile(of: Float(e), axis: energyAxis)
         }
+
+        /// Library-relative percentile of one track on any CLAP attribute axis
+        /// (0…1), or nil when the track lacks that attribute or the library has no
+        /// calibration for it. Library-relative on purpose: an absolute cut-off on
+        /// e.g. `instrumentalness` empties out entirely on a vocal-heavy library,
+        /// where "instrumental for THIS collection" is the useful question.
+        public func attributePercentile(_ t: DatabaseManager.SonicTrack, axis: String) -> Double? {
+            guard let v = t.attributes[axis] else { return nil }
+            return percentile(of: v, axis: axis)
+        }
+
+        /// Whether the library has usable calibration data for `axis` — lets a gate
+        /// degrade to "don't filter on this" instead of matching nothing when the
+        /// attribute was never analyzed.
+        public func hasAxis(_ axis: String) -> Bool { !(sorted[axis]?.isEmpty ?? true) }
     }
 
     // MARK: - Selection stats

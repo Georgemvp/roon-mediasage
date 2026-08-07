@@ -130,4 +130,68 @@ final class RadioGateTests: XCTestCase {
         XCTAssertFalse(pool.contains { $0.id.hasPrefix("lo") },
                        "low-energy tracks leaked past the gate: \(pool.map(\.id))")
     }
+
+    // MARK: Activity gates — genre + instrumentalness (2026-08-07)
+
+    /// Track carrying a CLAP attribute value.
+    private func attrTrack(_ id: String, energy: Double, bpm: Double,
+                           instrumentalness: Float?, genres: [String] = [])
+        -> DatabaseManager.SonicTrack {
+        var t = st(id, energy: energy, bpm: bpm, genres: genres)
+        if let i = instrumentalness { t.attributes = ["instrumentalness": i] }
+        return t
+    }
+
+    /// Library spanning BOTH axes so percentiles are meaningful. Energy must vary
+    /// too: with a flat-energy library every percentile collapses to 0 and the
+    /// focus energy window rejects everything before instrumentalness is reached.
+    private func calibratedLibrary() -> TitleGrounding.Calibration {
+        let lib = (0..<20).map {
+            attrTrack("lib\($0)", energy: Double($0) / 20.0, bpm: 100,
+                      instrumentalness: Float($0) / 20.0)
+        }
+        return TitleGrounding.Calibration.compute(library: lib)
+    }
+
+    func testWorkoutExcludesTheClassicalFamily() throws {
+        let gate = try XCTUnwrap(RoonClient.bucketGate(radioID: "activity:workout"))
+        // Same energy/tempo — only the genre differs.
+        XCTAssertTrue(gate(st("rock", energy: 0.9, bpm: 140, genres: ["indie rock"])))
+        for g in ["classical", "opera", "orchestral", "film score", "neo-classical"] {
+            XCTAssertFalse(gate(st("c", energy: 0.9, bpm: 140, genres: [g])),
+                           "\(g) does not belong in a workout station")
+        }
+    }
+
+    func testWorkoutStillAllowsClassicRock() {
+        // The deny-list must not catch "classic rock" via a bare "classic" match.
+        XCTAssertFalse(RoonClient.isClassical(st("cr", genres: ["classic rock"])))
+        XCTAssertTrue(RoonClient.isClassical(st("cl", genres: ["classical"])))
+    }
+
+    func testFocusKeepsInstrumentalAndDropsVocalTracks() throws {
+        let cal = calibratedLibrary()
+        let gate = try XCTUnwrap(RoonClient.bucketGate(radioID: "activity:focus", calibration: cal))
+        // Both sit inside focus's energy/tempo window; only vocals differ.
+        XCTAssertTrue(gate(attrTrack("instr", energy: 0.4, bpm: 100, instrumentalness: 0.95)))
+        XCTAssertFalse(gate(attrTrack("vocal", energy: 0.4, bpm: 100, instrumentalness: 0.05)),
+                       "a vocal-led track is what broke concentration in the first place")
+    }
+
+    func testFocusExcludesTracksThatWereNeverScoredOnTheAxis() throws {
+        // Unjudgeable rows must not slip through the gate they're meant to face.
+        let cal = calibratedLibrary()
+        let gate = try XCTUnwrap(RoonClient.bucketGate(radioID: "activity:focus", calibration: cal))
+        XCTAssertFalse(gate(attrTrack("nil", energy: 0.4, bpm: 100, instrumentalness: nil)))
+    }
+
+    func testFocusIgnoresInstrumentalnessWhenTheLibraryLacksTheAxis() throws {
+        // A library analyzed before attributes existed must still get a Focus
+        // station rather than an empty one.
+        let lib = (0..<20).map { st("l\($0)", energy: Double($0) / 20.0, bpm: 100) }
+        let cal = TitleGrounding.Calibration.compute(library: lib)
+        XCTAssertFalse(cal.hasAxis("instrumentalness"))
+        let gate = try XCTUnwrap(RoonClient.bucketGate(radioID: "activity:focus", calibration: cal))
+        XCTAssertTrue(gate(st("any", energy: 0.4, bpm: 100)), "gate degrades to energy+tempo only")
+    }
 }

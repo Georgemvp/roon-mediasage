@@ -62,6 +62,29 @@ extension RoonClient {
     /// Cap on non-artist buckets surfaced per category (keeps the grid + Qobuz set
     /// from exploding when the library has dozens of genres/decades).
     nonisolated static let categoryRadioMax = 8
+    /// Focus keeps only tracks at or above this library-relative instrumentalness
+    /// percentile. Median rather than something stricter: the aim is to drop the
+    /// vocal-led half, not to demand true ambient — a pop/rock library has very
+    /// few genuinely instrumental tracks, and a high cut-off would starve the
+    /// station below `categoryRadioMinTracks` and remove it entirely.
+    nonisolated static let focusInstrumentalPercentile = 0.5
+
+    /// Classical-family genre tokens excluded from Workout. Matched against
+    /// `SonicTrack.genres` (MusicBrainz ∪ Deezer, already lowercased) as a
+    /// SUBSTRING check, so "classical crossover" and "neo-classical" are caught
+    /// too — the token set is deliberately small and specific to avoid dragging in
+    /// e.g. "classic rock", which is why the check is on these phrases and not on
+    /// the bare word "classic".
+    nonisolated static let workoutGenreDenyList: [String] = [
+        "classical", "opera", "orchestral", "orchestra", "symphony", "baroque",
+        "chamber music", "film score", "soundtrack",
+    ]
+
+    /// Whether a track reads as classical-family for the Workout gate.
+    nonisolated static func isClassical(_ t: DatabaseManager.SonicTrack) -> Bool {
+        t.genres.contains { g in workoutGenreDenyList.contains { g.contains($0) } }
+    }
+
     /// How many of your most recent distinct plays seed the `.recent` station.
     /// Distinct tracks, not raw plays — a song on repeat shouldn't crowd out the
     /// rest of the listening session.
@@ -321,9 +344,33 @@ extension RoonClient {
         // The `>=` gates below already exclude nil-as-0 correctly; only the pure
         // upper-bound profiles (chillen/lounge) need an explicit presence guard.
         @Sendable func hasBpm(_ t: DatabaseManager.SonicTrack) -> Bool { t.bpm != nil }
+
+        // Focus additionally demands ABOVE-MEDIAN instrumentalness: energy+tempo
+        // alone made "Focus" mean "your pop/rock at a calm tempo" (user, 2026-08-07
+        // on 'Alternatieve Rock voor diepe concentratie' — Snow Patrol and Chris Rea
+        // fit 0.20–0.55 energy / 70–120 BPM perfectly). Lead vocals are the thing
+        // that actually breaks concentration, and CLAP already scores that axis; it
+        // just wasn't used here.
+        //
+        // Degrades to no-op when the library was never analyzed on this axis —
+        // otherwise every pre-attribute track fails the gate and Focus disappears.
+        let gateInstrumental = calibration?.hasAxis("instrumentalness") ?? false
+        @Sendable func instrumentalEnough(_ t: DatabaseManager.SonicTrack) -> Bool {
+            guard gateInstrumental else { return true }
+            // Missing attribute = unjudgeable, and letting it through would defeat
+            // the gate on exactly the rows we can't vouch for.
+            guard let p = calibration?.attributePercentile(t, axis: "instrumentalness") else { return false }
+            return p >= focusInstrumentalPercentile
+        }
+
         return [
+            // Workout excludes the classical family: orchestral pieces can measure
+            // high-arousal and fast (Vangelis, film scores), which is how they ended
+            // up next to Hozier in 'Stevige Rock en Klassiek voor hard werken'.
+            // Genre-based, not energy-based — the energy reading isn't wrong, it's
+            // just not what you want mid-workout.
             ActivityProfile(key: "workout", label: "Workout",
-                            matches: { ep($0) >= 0.70 && b($0) >= 120 },
+                            matches: { ep($0) >= 0.70 && b($0) >= 120 && !isClassical($0) },
                             rank: { ep($0) + b($0) / 200 }),
             ActivityProfile(key: "onderweg", label: "Onderweg",
                             matches: { ep($0) >= 0.45 && ep($0) <= 0.90 && b($0) >= 95 && b($0) <= 140 },
@@ -338,8 +385,13 @@ extension RoonClient {
                             matches: { ep($0) >= 0.72 },
                             rank: { ep($0) }),
             ActivityProfile(key: "focus", label: "Focus",
-                            matches: { ep($0) >= 0.20 && ep($0) <= 0.55 && b($0) >= 70 && b($0) <= 120 },
-                            rank: { 1 - abs(ep($0) - 0.4) }),
+                            matches: { ep($0) >= 0.20 && ep($0) <= 0.55 && b($0) >= 70 && b($0) <= 120
+                                       && instrumentalEnough($0) },
+                            // Prefer the MOST instrumental of the qualifying tracks,
+                            // then the mid-energy ones — so the top of the station is
+                            // the least distracting part of it.
+                            rank: { (calibration?.attributePercentile($0, axis: "instrumentalness") ?? 0.5)
+                                    + (1 - abs(ep($0) - 0.4)) }),
         ]
     }
 
