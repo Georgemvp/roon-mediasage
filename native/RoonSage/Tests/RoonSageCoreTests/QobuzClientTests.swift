@@ -272,4 +272,37 @@ final class QobuzClientTests: XCTestCase {
         XCTAssertEqual(waits.reduce(0, +), 7.5, accuracy: 1e-9)
         XCTAssertGreaterThan(waits.reduce(0, +), 1.2)
     }
+
+    // MARK: catastrophic-shrink guard
+
+    func testShrinkGuardBlocksAMatchingFailure() {
+        // 6 of 24 resolved against 23 existing: Qobuz search hiccup, not a real
+        // change — keep the good playlist.
+        XCTAssertTrue(QobuzClient.shouldBlockShrink(resolved: 6, submitted: 24, existing: 23))
+    }
+
+    func testShrinkGuardAllowsADeliberatelySmallerSource() {
+        // 7 of 8 resolved against 23 existing: matching is healthy, the caller
+        // simply submitted less (a producer was disabled). Must go through, or the
+        // playlist can never shrink again. This is the 2026-08-07 'Aanbevelingen'
+        // case that pinned a stale pop tracklist in place.
+        XCTAssertFalse(QobuzClient.shouldBlockShrink(resolved: 7, submitted: 8, existing: 23))
+    }
+
+    func testShrinkGuardFailsClosedOnAnUnknownBaseline() {
+        // playlistTrackCount returned nil (503) — never replace on a count we
+        // could not read.
+        XCTAssertTrue(QobuzClient.shouldBlockShrink(resolved: 20, submitted: 20, existing: nil))
+    }
+
+    func testShrinkGuardIgnoresSmallAndNonShrinkingPlaylists() {
+        // Tiny playlists have no cliff to protect…
+        XCTAssertFalse(QobuzClient.shouldBlockShrink(resolved: 1, submitted: 4, existing: 4))
+        // …and a set that isn't sharply smaller is never blocked, however it resolved.
+        XCTAssertFalse(QobuzClient.shouldBlockShrink(resolved: 20, submitted: 40, existing: 23))
+    }
+
+    func testShrinkGuardBlocksATotalResolveFailure() {
+        XCTAssertTrue(QobuzClient.shouldBlockShrink(resolved: 0, submitted: 0, existing: 23))
+    }
 }

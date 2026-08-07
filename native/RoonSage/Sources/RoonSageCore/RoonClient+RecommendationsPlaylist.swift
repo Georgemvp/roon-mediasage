@@ -194,7 +194,16 @@ extension RoonClient {
         guard let result = await QobuzClient.shared.syncPlaylist(
             name: name, description: description, tracks: tracks,
             email: email, password: password,
-            knownPlaylistID: known?.isEmpty == false ? known : nil) else { return 0 }
+            knownPlaylistID: known?.isEmpty == false ? known : nil)
+        else {
+            // syncPlaylist returning nil is a real outcome (no match, shrink guard,
+            // API failure) and it logs its own reason — but returning 0 silently
+            // here left the caller's log showing NOTHING for this playlist, which
+            // is how a guard-blocked sync went unnoticed.
+            Log.warning("\(label)-playlist: Qobuz-sync leverde niets op voor \(tracks.count) track(s) — zie de Qobuz-regel hierboven",
+                        category: .network)
+            return 0
+        }
         UserDefaults.standard.set(result.playlistID, forKey: idKey)
         Log.info("\(label)-playlist gesynct naar Qobuz: \(tracks.count) tracks", category: .network)
         return tracks.count

@@ -10,6 +10,29 @@ public actor QobuzClient {
 
     public static let shared = QobuzClient()
 
+    /// Fraction of submitted candidates that must resolve on Qobuz for a sharp
+    /// track-count drop to count as a REAL change rather than a matching failure.
+    static let healthyResolveRate = 0.8
+
+    /// Whether to refuse a destructive replace that would shrink a playlist.
+    ///
+    /// Pure so the discrimination is testable. Blocks when:
+    ///  • `existing` is unknown — fail closed; never replace on a baseline we
+    ///    couldn't read (a 503 on playlist/get looks like "empty" otherwise).
+    ///  • the new set is under half a populated playlist AND the resolve rate is
+    ///    poor — the signature of a Qobuz matching hiccup.
+    ///
+    /// Explicitly does NOT block a sharp drop that resolved cleanly: that means
+    /// the CALLER submitted fewer candidates, which is a legitimate change and
+    /// must be allowed, or the playlist can never shrink again.
+    static func shouldBlockShrink(resolved: Int, submitted: Int, existing: Int?) -> Bool {
+        guard let existing else { return true }
+        let shrankSharply = existing > 4 && resolved * 2 < existing
+        guard shrankSharply else { return false }
+        let resolveRate = submitted == 0 ? 0 : Double(resolved) / Double(submitted)
+        return resolveRate < healthyResolveRate
+    }
+
     private let base = "https://www.qobuz.com/api.json/0.2"
     private let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
     // Known working app_ids from established third-party Qobuz tools.
@@ -127,10 +150,15 @@ public actor QobuzClient {
         //    tracklist we deliberately didn't install — then bail.
         if let pid = existingID, !forceReplace {
             let current = await playlistTrackCount(playlistID: pid, session: session)
-            // Fail closed on an unknown count (transient read failure): treat it
-            // exactly like the shrink guard firing — never destructively replace a
-            // populated playlist on a baseline we could not read.
-            if current == nil || (current! > 4 && ids.count * 2 < current!) {
+            // The guard's real question is "did MATCHING fail?", and track count
+            // alone can't answer that: a caller that deliberately submits fewer
+            // candidates looks identical to a Qobuz hiccup. The resolve RATE tells
+            // them apart — near-total resolution means the shrink came from the
+            // caller's input, so it's a real change and must be allowed through.
+            // (2026-08-07: disabling a producer cut "Aanbevelingen" from 24 to 8
+            // candidates; 7/8 resolved fine, yet the guard pinned the stale, larger
+            // tracklist in place — with no way for it to ever shrink again.)
+            if Self.shouldBlockShrink(resolved: ids.count, submitted: tracks.count, existing: current) {
                 let existing = current.map(String.init) ?? "unknown"
                 Log.warning("Qobuz sync '\(name)': catastrophic-shrink guard — \(ids.count) resolved from \(tracks.count) candidates vs \(existing) existing, keeping existing tracks",
                              category: .network)
