@@ -91,4 +91,39 @@ final class DiscoveryPipelineTests: XCTestCase {
         let vocab = Set(tags)
         XCTAssertEqual(DiscoveryPipeline.genresFromTags(tags, vocabulary: vocab).count, 6)
     }
+
+    // MARK: Recency-first seeding
+
+    func testMergeRecentFirstPutsRecentAheadOfAllTimeFavourites() {
+        // The all-time leader must not displace what's actually playing now —
+        // that inversion is the whole reason discovery seeds on recency.
+        let recent  = [(artist: "Foals", count: 4), (artist: "Bob Moses", count: 2)]
+        let allTime = [(artist: "Dire Straits", count: 900), (artist: "Foals", count: 30)]
+        let out = RoonClient.mergeRecentFirst(recent: recent, allTime: allTime, limit: 10)
+        XCTAssertEqual(out.map(\.artist), ["Foals", "Bob Moses", "Dire Straits"])
+    }
+
+    func testMergeRecentFirstDedupesCaseInsensitivelyKeepingRecentSpelling() {
+        // listening_history.artist is free text from Roon AND imported Last.fm, so
+        // the same artist can differ in case between the two queries.
+        let out = RoonClient.mergeRecentFirst(
+            recent:  [(artist: "boards of canada", count: 3)],
+            allTime: [(artist: "Boards of Canada", count: 200)],
+            limit: 10)
+        XCTAssertEqual(out.map(\.artist), ["boards of canada"], "one slot, recent spelling wins")
+    }
+
+    func testMergeRecentFirstFallsBackToAllTimeWhenHistoryIsThin() {
+        // Brand-new user / empty recent window: seeds still fill from all-time.
+        let allTime = [(artist: "A", count: 9), (artist: "B", count: 8)]
+        let out = RoonClient.mergeRecentFirst(recent: [], allTime: allTime, limit: 10)
+        XCTAssertEqual(out.map(\.artist), ["A", "B"])
+    }
+
+    func testMergeRecentFirstRespectsLimitAndDropsBlanks() {
+        let recent = [(artist: "", count: 5), (artist: "A", count: 1), (artist: "B", count: 1)]
+        let out = RoonClient.mergeRecentFirst(
+            recent: recent, allTime: [(artist: "C", count: 1)], limit: 2)
+        XCTAssertEqual(out.map(\.artist), ["A", "B"], "blank artists never consume a seed slot")
+    }
 }

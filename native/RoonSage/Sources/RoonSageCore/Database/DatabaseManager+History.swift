@@ -282,6 +282,30 @@ extension DatabaseManager {
         }
     }
 
+    /// Artists from your `listenLimit` most recent plays, ordered newest-listened
+    /// first, with how often each appears *inside that window*.
+    ///
+    /// The recency counterpart to `topArtistsListened`: that one ranks all-time
+    /// plays, so a long-abandoned favourite outranks what you put on this week.
+    /// Discovery seeds on this so recommendations follow the current listening
+    /// phase. The window is over PLAYS (not artists), so an artist you've had on
+    /// all evening legitimately dominates it — that IS the current phase.
+    public func recentArtistsListened(listenLimit: Int = 50) async throws -> [(artist: String, count: Int)] {
+        try await pool.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT artist, COUNT(*) AS cnt, MAX(played_at) AS last
+                FROM (
+                    SELECT artist, played_at FROM listening_history
+                    WHERE artist IS NOT NULL AND artist <> ''
+                    ORDER BY played_at DESC LIMIT ?
+                )
+                GROUP BY artist
+                ORDER BY last DESC
+            """, arguments: [listenLimit])
+            return rows.map { (artist: $0["artist"] as String? ?? "", count: $0["cnt"] as Int? ?? 0) }
+        }
+    }
+
     public func topArtistsListened(limit: Int = 20) async throws ->[(artist: String, count: Int)] {
         try await pool.read { db in
             let rows = try Row.fetchAll(db, sql: """

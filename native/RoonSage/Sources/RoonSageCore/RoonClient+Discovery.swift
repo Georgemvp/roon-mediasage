@@ -241,6 +241,35 @@ extension RoonClient {
 
     // MARK: - Server: pipeline run
 
+    /// How many recent plays define "recent" for discovery seeding. Matches
+    /// `recentRadioSeedCount` so the Ontdek feed and the "Recent geluisterd"
+    /// radio describe the same listening phase.
+    nonisolated static let discoveryRecentListenWindow = 50
+
+    /// Recent-listened artists first (newest first), then all-time top artists
+    /// that aren't already in that head, capped at `limit`.
+    ///
+    /// Pure + case-insensitively de-duplicated: `listening_history.artist` is
+    /// free text from two sources (Roon and imported Last.fm), so the same artist
+    /// can differ in case between the two queries and would otherwise occupy two
+    /// seed slots. The recent spelling wins because it's what's playing now.
+    nonisolated static func mergeRecentFirst(
+        recent: [(artist: String, count: Int)],
+        allTime: [(artist: String, count: Int)],
+        limit: Int
+    ) -> [(artist: String, count: Int)] {
+        var out: [(artist: String, count: Int)] = []
+        var seen = Set<String>()
+        for entry in recent + allTime {
+            let key = entry.artist.lowercased()
+            guard !entry.artist.isEmpty, !seen.contains(key) else { continue }
+            seen.insert(key)
+            out.append(entry)
+            if out.count == limit { break }
+        }
+        return out
+    }
+
     /// Fire-and-forget manual run (server build). Guarded against overlap.
     public func runDiscoveryNow(mood: String? = nil, textQuery: String? = nil) {
         guard controlMode == .direct else { return }
@@ -259,8 +288,16 @@ extension RoonClient {
 
         await ensureFeedbackLoaded()
 
-        // Seeds (taste profile).
-        let playCounts = (try? await db.topArtistsListened(limit: 60)) ?? []
+        // Seeds. Primary signal is RECENT listening (user, 2026-08-07: "een
+        // playlist op basis van wat ik recent heb geluisterd") — the artists from
+        // your last `discoveryRecentListenWindow` plays, newest first. All-time
+        // top artists are appended behind them as a tail so a thin or brand-new
+        // history still yields a full seed set and nothing regresses for users who
+        // have barely listened yet.
+        let allTimeCounts = (try? await db.topArtistsListened(limit: 60)) ?? []
+        let recentCounts = (try? await db.recentArtistsListened(
+            listenLimit: Self.discoveryRecentListenWindow)) ?? []
+        let playCounts = Self.mergeRecentFirst(recent: recentCounts, allTime: allTimeCounts, limit: 60)
         var topArtists = playCounts.map { $0.artist }
         let hints = await feedbackArtistHints()
         let libraryArtists = (try? await db.libraryArtistSet()) ?? []
