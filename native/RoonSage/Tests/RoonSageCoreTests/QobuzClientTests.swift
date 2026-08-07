@@ -305,4 +305,51 @@ final class QobuzClientTests: XCTestCase {
     func testShrinkGuardBlocksATotalResolveFailure() {
         XCTAssertTrue(QobuzClient.shouldBlockShrink(resolved: 0, submitted: 0, existing: 23))
     }
+
+    // MARK: album query variants (Qobuz-id coverage)
+
+    func testBaseAlbumTitleStripsATrailingQualifier() {
+        XCTAssertEqual(QobuzClient.baseAlbumTitle("Pyramid (Sessions)"), "Pyramid")
+        XCTAssertEqual(QobuzClient.baseAlbumTitle("The Night Watch (Live at the Rijksmuseum)"),
+                       "The Night Watch")
+        XCTAssertEqual(QobuzClient.baseAlbumTitle("Legacy [Deluxe]"), "Legacy")
+    }
+
+    func testBaseAlbumTitleLeavesPlainAndQualifierOnlyTitlesAlone() {
+        XCTAssertEqual(QobuzClient.baseAlbumTitle("Human After All"), "Human After All")
+        // Only a qualifier: there is no base to fall back to, so keep it as-is
+        // rather than searching for an empty string.
+        XCTAssertEqual(QobuzClient.baseAlbumTitle("(Live)"), "(Live)")
+        // A mid-title parenthetical is not an edition suffix — untouched.
+        XCTAssertEqual(QobuzClient.baseAlbumTitle("Sgt. Pepper (Reprise) Sessions"),
+                       "Sgt. Pepper (Reprise) Sessions")
+    }
+
+    func testQueryVariantsTryTheBaseTitleAfterTheQualifiedOne() {
+        let v = QobuzClient.albumQueryVariants(artist: "The Alan Parsons Project",
+                                               album: "Pyramid (Sessions)")
+        XCTAssertEqual(v, ["The Alan Parsons Project Pyramid (Sessions)",
+                           "Pyramid (Sessions)",
+                           "The Alan Parsons Project Pyramid",
+                           "Pyramid"],
+                       "most specific first, base-title fallbacks last")
+    }
+
+    func testQueryVariantsStayMinimalWhenThereIsNoQualifier() {
+        XCTAssertEqual(QobuzClient.albumQueryVariants(artist: "Daft Punk", album: "Human After All"),
+                       ["Daft Punk Human After All", "Human After All"])
+    }
+
+    func testQueryVariantsWithoutAnArtistOnlySearchTheTitle() {
+        // No artist to confirm against, so widening would be unsafe.
+        XCTAssertEqual(QobuzClient.albumQueryVariants(artist: nil, album: "Pyramid (Sessions)"),
+                       ["Pyramid (Sessions)"])
+        XCTAssertEqual(QobuzClient.albumQueryVariants(artist: "", album: "Pyramid (Sessions)"),
+                       ["Pyramid (Sessions)"])
+    }
+
+    func testQueryVariantsNeverRepeatAQuery() {
+        let v = QobuzClient.albumQueryVariants(artist: "Sting", album: "Sting")
+        XCTAssertEqual(Set(v).count, v.count)
+    }
 }

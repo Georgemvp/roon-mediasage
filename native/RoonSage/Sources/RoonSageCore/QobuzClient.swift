@@ -1087,16 +1087,61 @@ extension QobuzClient {
     // MARK: Private
 
     private func resolveAlbum(wantArtist: String?, wantAlbum: String, session: Session) async -> ResolvedAlbum? {
-        let combined = [wantArtist, wantAlbum].compactMap { $0 }.joined(separator: " ")
-        if let r = await bestAlbumMatch(query: combined, wantArtist: wantArtist, wantAlbum: wantAlbum, session: session) {
-            return r
+        for query in Self.albumQueryVariants(artist: wantArtist, album: wantAlbum) {
+            // Every variant is scored against the ORIGINAL wanted title/artist, so
+            // widening the query never widens what counts as a match.
+            if let r = await bestAlbumMatch(query: query, wantArtist: wantArtist,
+                                            wantAlbum: wantAlbum, session: session) {
+                return r
+            }
         }
-        // Fallback: some releases only surface under an album-title-only query —
-        // the combined "artist album" string over-constrains Qobuz's search
-        // ranking. Acceptance still gates on the artist, so this only widens the
-        // candidate net, it doesn't loosen what counts as a match.
-        guard let wantArtist, !wantArtist.isEmpty else { return nil }
-        return await bestAlbumMatch(query: wantAlbum, wantArtist: wantArtist, wantAlbum: wantAlbum, session: session)
+        return nil
+    }
+
+    /// Search queries to try for one wanted album, most specific first.
+    ///
+    /// Beyond "artist album" and the bare album title, a release whose title
+    /// carries an edition qualifier gets a BASE-TITLE attempt: Qobuz commonly
+    /// stocks "Pyramid" while MusicBrainz recommended "Pyramid (Sessions)", and
+    /// searching the qualified string finds nothing at all (2026-08-07: 6 of 9
+    /// recommended albums had no Qobuz id, and the misses were all qualified
+    /// editions — "(Sessions)", "(Live at the Rijksmuseum)", a Japanese
+    /// compilation subtitle).
+    ///
+    /// This widens the SEARCH only; `scoreAlbumCandidate` still gates on the
+    /// original title + a confirmed artist, so a base-title query can't pull in a
+    /// different artist's record. It can return a different EDITION than the one
+    /// recommended — accepted deliberately: a playable neighbouring edition beats
+    /// an unplayable exact one.
+    nonisolated static func albumQueryVariants(artist: String?, album: String) -> [String] {
+        var out: [String] = []
+        func add(_ q: String) {
+            let t = q.trimmingCharacters(in: .whitespaces)
+            guard !t.isEmpty, !out.contains(t) else { return }
+            out.append(t)
+        }
+        let a = artist?.trimmingCharacters(in: .whitespaces) ?? ""
+        add(a.isEmpty ? album : "\(a) \(album)")
+        guard !a.isEmpty else { return out }
+        add(album)
+        let base = baseAlbumTitle(album)
+        if base != album {
+            add("\(a) \(base)")
+            add(base)
+        }
+        return out
+    }
+
+    /// The album title with any trailing parenthesised/bracketed qualifier
+    /// removed ("Pyramid (Sessions)" → "Pyramid"). Returns the input unchanged
+    /// when stripping would leave nothing — a title that is ONLY a qualifier has
+    /// no base to fall back to.
+    nonisolated static func baseAlbumTitle(_ title: String) -> String {
+        let stripped = title.replacingOccurrences(
+            of: #"\s*[\(\[][^\)\]]*[\)\]]\s*$"#, with: "",
+            options: [.regularExpression]
+        ).trimmingCharacters(in: .whitespaces)
+        return stripped.isEmpty ? title : stripped
     }
 
     /// Best accepted Qobuz album for one query (exact title beats a substring hit).
