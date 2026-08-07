@@ -1403,6 +1403,12 @@ extension RoonClient {
         let custom = await customRadioQobuzKeep()
         keepNames.formUnion(custom.names)
         keepQobuzIDs.formUnion(custom.ids)
+        // The "Aanbevelingen" playlist lives in this namespace too but is not a
+        // radio, so it is in no keep set of its own — without this the sweep
+        // deletes it moments after each sync recreates it.
+        let recs = recommendationsQobuzKeep()
+        keepNames.formUnion(recs.names)
+        keepQobuzIDs.formUnion(recs.ids)
         let removed = await QobuzClient.shared.deleteRadioOrphans(
             keep: keepNames, keepIDs: keepQobuzIDs, namePrefix: Self.qobuzNamePrefix, email: email, password: password)
         if removed > 0 {
@@ -1438,6 +1444,12 @@ extension RoonClient {
         let custom = await customRadioQobuzKeep()
         keepNames.formUnion(custom.names)
         keepQobuzIDs.formUnion(custom.ids)
+        // The "Aanbevelingen" playlist lives in this namespace too but is not a
+        // radio, so it is in no keep set of its own — without this the sweep
+        // deletes it moments after each sync recreates it.
+        let recs = recommendationsQobuzKeep()
+        keepNames.formUnion(recs.names)
+        keepQobuzIDs.formUnion(recs.ids)
         let removed = await QobuzClient.shared.deleteRadioOrphans(
             keep: keepNames, keepIDs: keepQobuzIDs, namePrefix: Self.qobuzNamePrefix, email: email, password: password)
         if removed > 0 {
@@ -1632,6 +1644,10 @@ extension RoonClient {
                         didSync = true
                         Log.info("Custom radio auto-sync: \(n) playlist(s) naar Qobuz", category: .network)
                     }
+                    // Mirror the Ontdek batch into the "Aanbevelingen" playlist. AFTER
+                    // the reconcile above, which protects it by name/id but would
+                    // otherwise race a just-created playlist.
+                    _ = await self.syncRecommendationsToQobuz()
                 }
                 // Re-sync on the full cadence once it's working; retry sooner while
                 // still warming up (library/features not ready yet, or no Qobuz).
