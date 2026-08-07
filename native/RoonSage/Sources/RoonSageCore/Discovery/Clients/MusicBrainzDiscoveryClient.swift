@@ -47,7 +47,7 @@ public actor MusicBrainzDiscoveryClient {
         public var tags: [String] = []
     }
 
-    public struct MBReleaseGroup: Sendable {
+    public struct MBReleaseGroup: Sendable, Codable {
         public var mbid: String
         public var title: String
         public var primaryType: String?
@@ -126,6 +126,12 @@ public actor MusicBrainzDiscoveryClient {
     public func studioAlbums(artistMbid: String) async -> [MBReleaseGroup] {
         guard !artistMbid.isEmpty else { return [] }
         if let cached = studioCache[artistMbid] { return cached }
+        let cacheKey = "mb.studio.\(artistMbid)"
+        if let data = await DiscoveryHTTPCache.shared.data(forKey: cacheKey, ttl: TTL.studio),
+           let decoded = try? JSONDecoder().decode([MBReleaseGroup].self, from: data) {
+            studioCache[artistMbid] = decoded
+            return decoded
+        }
 
         var out: [MBReleaseGroup] = []
         var offset = 0
@@ -151,6 +157,14 @@ public actor MusicBrainzDiscoveryClient {
         }
         out.sort { ($0.firstReleaseDate ?? "") > ($1.firstReleaseDate ?? "") }
         studioCache[artistMbid] = out
+        // Bank a NON-EMPTY discography only. The pagination loop `break`s on a failed
+        // page fetch, so an empty result is as likely a transient MB error as a
+        // genuinely album-less artist — persisting that would suppress the artist
+        // from gap-fill/release-radar for the whole TTL. Same rule the Cover Art
+        // Archive path above already follows (positives only).
+        if !out.isEmpty, let data = try? JSONEncoder().encode(out) {
+            await DiscoveryHTTPCache.shared.store(data, forKey: cacheKey)
+        }
         return out
     }
 
@@ -222,12 +236,21 @@ public actor MusicBrainzDiscoveryClient {
 
     // MARK: - HTTP (mirrors AnalyzerCore/MusicBrainzClient)
 
-    /// Cross-run TTLs for the immutable-ish lookups. Studio release-groups are
-    /// deliberately absent: the release-radar must see new albums the day they land.
+    /// Cross-run TTLs for the immutable-ish lookups.
     private enum TTL {
         static let artist: TimeInterval = 30 * 24 * 3600
         static let related: TimeInterval = 30 * 24 * 3600
         static let cover: TimeInterval = 30 * 24 * 3600
+        /// Studio release-groups get a SHORT window instead of the 30-day one,
+        /// because the release-radar must still see a new album the day it lands.
+        /// 6h is chosen so a DAILY scheduled run (~24h apart) always misses and
+        /// refetches — radar freshness is therefore unchanged — while the runs that
+        /// currently re-pay the full cost for nothing stop doing so: `resetCache()`
+        /// wipes the in-actor memo at the start of every run, so a manual "Ververs"
+        /// 10 minutes later, or a restart, re-paginated every artist's discography
+        /// at 1.1s per page. This is the single most expensive MB call in the
+        /// pipeline (5 call sites, paginated 100/page).
+        static let studio: TimeInterval = 6 * 3600
     }
 
     /// Rate-limited raw fetch (200 → body, one retry on 503).

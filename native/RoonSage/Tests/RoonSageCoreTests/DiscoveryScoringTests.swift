@@ -189,4 +189,48 @@ final class DiscoveryScoringTests: XCTestCase {
         XCTAssertEqual(atDefault.genreOverlap, old.genreOverlap, accuracy: 0.1)
         XCTAssertEqual(atDefault.aiConfidence, old.aiConfidence, accuracy: 0.1)
     }
+
+    // MARK: daily jitter
+
+    func testDailyJitterIsDeterministicWithinADay() {
+        let a = DiscoveryScoring.dailyJitter(dedupKey: "album|radiohead|kid a", dayKey: "2026-08-07")
+        let b = DiscoveryScoring.dailyJitter(dedupKey: "album|radiohead|kid a", dayKey: "2026-08-07")
+        XCTAssertEqual(a, b, accuracy: 1e-12)
+    }
+
+    func testDailyJitterStaysWithinItsBound() {
+        // Every candidate, every day: the lift may never reach the weight, or it
+        // could promote a weak pick over a clearly better one.
+        for day in ["2026-01-01", "2026-08-07", "2026-12-31"] {
+            for n in 0..<200 {
+                let j = DiscoveryScoring.dailyJitter(dedupKey: "album|artist\(n)|record", dayKey: day)
+                XCTAssertGreaterThanOrEqual(j, 0)
+                XCTAssertLessThan(j, DiscoveryScoring.dailyJitterWeight)
+            }
+        }
+    }
+
+    func testDailyJitterChangesAcrossDaysForMostCandidates() {
+        // The whole point: unchanged taste must not reproduce the same ordering
+        // forever. Single-candidate collisions are expected (1000 buckets), so
+        // assert on the population rather than on any one key.
+        var changed = 0
+        for n in 0..<200 {
+            let key = "album|artist\(n)|record"
+            if DiscoveryScoring.dailyJitter(dedupKey: key, dayKey: "2026-08-07")
+                != DiscoveryScoring.dailyJitter(dedupKey: key, dayKey: "2026-08-08") { changed += 1 }
+        }
+        XCTAssertGreaterThan(changed, 180)
+    }
+
+    func testDailyJitterIsZeroForAnEmptyKey() {
+        XCTAssertEqual(DiscoveryScoring.dailyJitter(dedupKey: "", dayKey: "2026-08-07"), 0, accuracy: 1e-12)
+    }
+
+    func testDayKeyIsTheUTCCalendarDay() {
+        // 2026-08-07T23:30Z is still the 7th in UTC — a local-time formatter in a
+        // positive offset would roll it to the 8th and rotate the feed early.
+        let d = Date(timeIntervalSince1970: 1_786_145_400)   // 2026-08-07T23:30:00Z
+        XCTAssertEqual(DiscoveryScoring.dayKey(d), "2026-08-07")
+    }
 }

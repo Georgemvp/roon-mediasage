@@ -41,6 +41,34 @@ struct WorkItem {
     }
 }
 
+/// What a run produced, beyond the items themselves, so the caller can record
+/// whether this batch is a full-strength result or a thin fallback.
+struct RunOutcome {
+    var items: [DatabaseManager.StoredRecommendation] = []
+    /// Enabled producers that returned at least one candidate.
+    var producersContributing: Int = 0
+    var producersEnabled: Int = 0
+    /// Items in the FINAL selection carrying at least one taste-seeded source.
+    var personalisedItems: Int = 0
+
+    /// A thin result — the batch is worth retrying sooner than the skip-guard's
+    /// normal window. Three ways to get here, all meaning "this isn't what a
+    /// healthy run looks like":
+    ///  • nothing survived at all;
+    ///  • the selection is pure chart filler (taste-seeded discovery produced
+    ///    nothing, so the feed shows what's popular rather than what's yours);
+    ///  • most enabled producers came back empty, which in practice means an
+    ///    outage or an expired credential, not an absence of music.
+    /// Without this, `shouldSkipRun` treats a degraded batch as a perfectly good
+    /// one and freezes it for the full 6h — the failure mode that leaves the feed
+    /// visibly stale after a transient outage.
+    var degraded: Bool {
+        guard !items.isEmpty else { return true }
+        if personalisedItems == 0 { return true }
+        return producersEnabled > 1 && producersContributing * 2 < producersEnabled
+    }
+}
+
 struct DiscoveryPipeline {
     var producers: [DiscoveryProducer]
     var weights: ScoringWeights = .default
@@ -59,7 +87,7 @@ struct DiscoveryPipeline {
         filterContext: DiscoveryFilterContext,
         maxItems: Int,
         now: Date
-    ) async -> [DatabaseManager.StoredRecommendation] {
+    ) async -> RunOutcome {
 
         // 1. Discover — run every enabled producer concurrently.
         await context.musicBrainz.resetCache()
@@ -71,7 +99,11 @@ struct DiscoveryPipeline {
             }
             for await c in group { raw.append(contentsOf: c) }
         }
-        guard !raw.isEmpty else { return [] }
+        // Health of this run, carried through every early return below: a producer
+        // "contributed" when at least one of its candidates reached the merge.
+        var outcome = RunOutcome(producersContributing: Set(raw.map { $0.producer }).count,
+                                 producersEnabled: enabled.count)
+        guard !raw.isEmpty else { return outcome }
 
         // 2. Merge by pre-resolution identity so cross-producer agreement becomes
         //    the consensus signal, then keep the strongest `preResolveCap`.
@@ -127,7 +159,7 @@ struct DiscoveryPipeline {
             return DiscoveryFilter.keep(kind: it.kind, artist: it.artist, album: it.album,
                                         dedupKey: dedup, score: .greatestFiniteMagnitude, context: filterContext)
         }
-        guard !resolved.isEmpty else { return [] }
+        guard !resolved.isEmpty else { return outcome }
 
         // 3a-bis. Validate `.album` candidates that carry no release-group MBID —
         // i.e. ai-picks, where an LLM names album titles freely and can hallucinate
@@ -253,10 +285,17 @@ struct DiscoveryPipeline {
             let popNudge = DiscoveryScoring.popularityNudge(popularity: it.popularity, adventurousness: adventurousness)
             let relNudge = DiscoveryScoring.producerReliabilityNudge(
                 producers: it.sources.map { $0.producer }, reliabilities: producerReliability)
-            finalScore = min(max(finalScore + popNudge + relNudge, 0), 1)
 
             let dedup = DiscoveryKey.dedupKey(kind: it.kind, artist: it.artist, album: it.album,
                                               artistMbid: it.artistMbid, releaseGroupMbid: it.releaseGroupMbid)
+            // Daily jitter (≤0.05): the skip-guard lets a scheduled run through
+            // after 6h, but with unchanged taste every input to the score is
+            // identical too — so the run reproduced the previous ordering almost
+            // exactly and the feed read as frozen. Keying a tiny lift on the UTC
+            // day rotates near-ties across days while keeping a single day's batch
+            // fully reproducible.
+            let jitter = DiscoveryScoring.dailyJitter(dedupKey: dedup, dayKey: DiscoveryScoring.dayKey(now))
+            finalScore = min(max(finalScore + popNudge + relNudge + jitter, 0), 1)
             guard DiscoveryFilter.keep(kind: it.kind, artist: it.artist, album: it.album,
                                        dedupKey: dedup, score: finalScore, context: filterContext) else { continue }
             scored.append((it, finalScore, comps, dedup))
@@ -267,17 +306,34 @@ struct DiscoveryPipeline {
         // one artist's albums or one genre neighbourhood can't dominate the batch
         // (the recurring "every Ontdek surface shows near-identical picks" issue).
         // Relevance stays dominant (λ high); this only breaks up clusters.
-        let selected = DiscoveryRerank.mmr(
-            scored, limit: maxItems,
+        //
+        // Two TIERS, though, before diversity gets a say: taste-seeded candidates
+        // are re-ranked and filled first, and generic (chart/zeitgeist) ones only
+        // top up whatever slots are left. A weight can't guarantee this — a
+        // globally huge chart artist scores well on consensus AND popularity, so
+        // on a thin day it outranked genuinely personalised picks and the feed
+        // drifted toward "what's popular" instead of "what's yours". Relevance
+        // order and MMR's diversity both still apply WITHIN each tier.
+        let personal = scored.filter { !Self.isGeneric(sources: $0.item.sources) }
+        let generic  = scored.filter {  Self.isGeneric(sources: $0.item.sources) }
+        var selected = DiscoveryRerank.mmr(
+            personal, limit: maxItems,
             relevance: { $0.score }, artist: { $0.item.artist }, genres: { $0.item.genres })
+        if selected.count < maxItems, !generic.isEmpty {
+            selected += DiscoveryRerank.mmr(
+                generic, limit: maxItems - selected.count,
+                relevance: { $0.score }, artist: { $0.item.artist }, genres: { $0.item.genres })
+        }
 
-        return selected.map { entry in
+        outcome.personalisedItems = selected.filter { !Self.isGeneric(sources: $0.item.sources) }.count
+        outcome.items = selected.map { entry in
             DatabaseManager.StoredRecommendation(
                 kind: entry.item.kind, artist: entry.item.artist, artistMbid: entry.item.artistMbid,
                 album: entry.item.album, releaseGroupMbid: entry.item.releaseGroupMbid, year: entry.item.year,
                 qobuzAlbumID: entry.item.qobuzAlbumID, imageURL: entry.item.imageURL, score: entry.score,
                 components: entry.comps, sources: entry.item.sources, genres: entry.item.genres, dedupKey: entry.dedup)
         }
+        return outcome
     }
 
     // MARK: - Popularity (C2)
@@ -321,6 +377,26 @@ struct DiscoveryPipeline {
         }
         guard !byArtist.isEmpty else { return items }
         return items.map { var it = $0; it.popularity = byArtist[it.artist.lowercased()]; return it }
+    }
+
+    // MARK: - Relevance tiers (personalised above generic)
+
+    /// Producers that do NOT seed from your taste — their candidates would be the
+    /// same for any user. `charts` is Last.fm's global chart ("No taste seed —
+    /// pure zeitgeist", ChartsProducer.swift); `dataset` is listed because it
+    /// demonstrably leaked a global-popularity list into the feed, which is why it
+    /// was disabled on 2026-08-07 (see `tasteSignature` above) — classifying it
+    /// here means re-enabling it can't silently push personalised picks aside.
+    static let genericProducers: Set<String> = ["charts", "dataset"]
+
+    /// An item is generic only when EVERY producer that surfaced it is generic.
+    /// One personalised source is enough for the top tier: it means at least one
+    /// route out of your own library reached this candidate. No sources at all
+    /// (not reachable via `merge`, which always attaches one) counts as
+    /// personalised so an unexpected shape can never be demoted silently.
+    static func isGeneric(sources: [SourceRef]) -> Bool {
+        guard !sources.isEmpty else { return false }
+        return sources.allSatisfy { genericProducers.contains($0.producer) }
     }
 
     // MARK: - Merge helpers
@@ -422,10 +498,20 @@ struct DiscoveryPipeline {
     /// repeat taps that reflect no actual change. A taste change always forces a
     /// run, regardless of how recent the last one was. Pure — no clock/DB reads,
     /// so it's directly unit-testable.
-    static func shouldSkipRun(trigger: String, tasteSig: String, lastBatchSig: String?, lastBatchCreatedAt: Date?, now: Date) -> Bool {
+    ///
+    /// `lastBatchDegraded` shortens the window sixfold. The window's whole premise
+    /// is "the last batch is still good, so don't pay for another run" — which is
+    /// false when that batch was a thin fallback (`RunOutcome.degraded`). A
+    /// producer outage or an expired credential would otherwise be frozen into the
+    /// feed for the full 6h, long after the cause cleared. Shorter, not zero: a
+    /// degraded run must still not become a retry loop.
+    static func shouldSkipRun(trigger: String, tasteSig: String, lastBatchSig: String?,
+                              lastBatchCreatedAt: Date?, lastBatchDegraded: Bool = false,
+                              now: Date) -> Bool {
         guard let lastBatchSig, lastBatchSig == tasteSig, let lastBatchCreatedAt else { return false }
         let age = now.timeIntervalSince(lastBatchCreatedAt)
-        let minInterval: TimeInterval = trigger == "manual" ? 30 * 60 : 6 * 60 * 60
+        let base: TimeInterval = trigger == "manual" ? 30 * 60 : 6 * 60 * 60
+        let minInterval = lastBatchDegraded ? base / 6 : base
         return age >= 0 && age < minInterval
     }
 }

@@ -714,6 +714,18 @@ enum Schema {
             }
         }
 
+        // Records whether a discovery batch was a full-strength run or a thin
+        // fallback (`RunOutcome.degraded` — no taste-seeded items survived, or most
+        // producers came back empty). The skip-if-unchanged guard reads it and
+        // shortens its window sixfold, so a producer outage isn't frozen into the
+        // feed for the full 6h after the cause has cleared. Defaults to 0, so every
+        // pre-existing batch keeps counting as healthy.
+        migrator.registerMigration("v45_batch_degraded") { db in
+            try db.alter(table: "recommendation_batches") { t in
+                t.add(column: "degraded", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         try migrator.migrate(db)
     }
 }

@@ -150,4 +150,40 @@ final class DiscoveryPipelineTests: XCTestCase {
             producers: ["gap-fill", "charts"])
         XCTAssertEqual(a, b, "registry order must not trigger spurious rebuilds")
     }
+
+    // MARK: Relevance tiers — personalised outranks generic
+
+    func testItemIsGenericOnlyWhenEverySourceIsGeneric() {
+        XCTAssertTrue(DiscoveryPipeline.isGeneric(sources: [SourceRef(producer: "charts")]))
+        XCTAssertTrue(DiscoveryPipeline.isGeneric(
+            sources: [SourceRef(producer: "charts"), SourceRef(producer: "dataset")]))
+        XCTAssertFalse(DiscoveryPipeline.isGeneric(sources: [SourceRef(producer: "gap-fill")]))
+    }
+
+    func testOnePersonalisedSourceLiftsAnItemOutOfTheGenericTier() {
+        // A chart artist your own library ALSO points at is a personalised pick —
+        // demoting it would throw away the strongest signal we have (consensus
+        // across a taste-seeded and a generic route).
+        XCTAssertFalse(DiscoveryPipeline.isGeneric(
+            sources: [SourceRef(producer: "charts"), SourceRef(producer: "similar-artist-web")]))
+    }
+
+    func testUnknownProducerCountsAsPersonalised() {
+        // Fail-safe direction: a producer added later is taste-seeded until it is
+        // explicitly classified, so a new source can never be silently demoted.
+        XCTAssertFalse(DiscoveryPipeline.isGeneric(sources: [SourceRef(producer: "some-new-producer")]))
+        XCTAssertFalse(DiscoveryPipeline.isGeneric(sources: []))
+    }
+
+    // `discoveryProducers` lives on the @MainActor RoonClient, so this one test
+    // hops to the main actor; the rest of the suite stays nonisolated.
+    @MainActor
+    func testEveryRegisteredGenericProducerIsAKnownProducerID() {
+        // Guards against a rename silently emptying the generic tier: every id in
+        // the set must still exist in the shipped producer registry.
+        let known = Set(RoonClient.discoveryProducers.map(\.id))
+        for id in DiscoveryPipeline.genericProducers where id != "dataset" {
+            XCTAssertTrue(known.contains(id), "generic producer '\(id)' is no longer a registered producer id")
+        }
+    }
 }

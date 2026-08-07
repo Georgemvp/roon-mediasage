@@ -37,6 +37,11 @@ public enum DiscoveryScoring {
     /// toward well-known artists, "avontuurlijk" toward obscure ones.
     static let popularityModifierWeight = 0.10
 
+    /// Max lift the daily jitter can add. Deliberately the smallest of all the
+    /// modifiers: it may only reorder candidates whose scores are already close,
+    /// never promote a weak one over a clearly better one.
+    static let dailyJitterWeight = 0.05
+
     // MARK: Components
 
     /// How many distinct sources found this candidate, capped (digarr caps at 4).
@@ -130,6 +135,38 @@ public enum DiscoveryScoring {
         let t = min(max(adventurousness, 0), 1)
         let direction = 1 - 2 * t                    // +1 at safe → −1 at bold
         return popularityModifierWeight * (pop - 0.5) * 2 * direction
+    }
+
+    // MARK: Daily jitter
+
+    /// A deterministic lift in [0, `dailyJitterWeight`), keyed on the candidate's
+    /// identity AND the calendar day.
+    ///
+    /// Same day + same candidate → the same value every time, so re-reading or
+    /// re-serving a stored batch never reshuffles under the user. A new day → a
+    /// different value, so an unchanged taste signature no longer yields the exact
+    /// same top-N indefinitely: `shouldSkipRun` lets a scheduled run through after
+    /// 6h, and before this that run reproduced the previous ordering almost
+    /// exactly. Deliberately NOT `Double.random`, which would reshuffle the feed on
+    /// every single run and make a batch irreproducible.
+    ///
+    /// Reuses `RoonClient.seed64` (FNV-1a) — the same process-independent hash
+    /// `DiscoveryExplanations.signature` relies on, so the value is stable across
+    /// launches (Swift's own `hashValue` is per-process seeded and would not be).
+    public static func dailyJitter(dedupKey: String, dayKey: String) -> Double {
+        guard !dedupKey.isEmpty else { return 0 }
+        // seed64 returns UInt64, so the dividend is never negative and `%` needs no
+        // sign correction (Swift's % truncates, like C/Go).
+        let bucket = RoonClient.seed64("\(dayKey)|\(dedupKey)") % 1000
+        return Double(bucket) / 1000.0 * dailyJitterWeight
+    }
+
+    /// The UTC calendar day ("YYYY-MM-DD") that keys `dailyJitter`'s rotation.
+    /// UTC (not local) deliberately: it only has to change once per ~24h, and a
+    /// fixed zone keeps a run reproducible regardless of where the server sits.
+    /// Matches how `runDiscoveryPipeline` already derives its seed-rotation salt.
+    public static func dayKey(_ date: Date) -> String {
+        String(ISO8601DateFormatter().string(from: date).prefix(10))
     }
 
     /// Album score = artist base + a bounded modifier from the album signals'

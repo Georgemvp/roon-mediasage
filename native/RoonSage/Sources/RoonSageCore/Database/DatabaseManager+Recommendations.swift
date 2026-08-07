@@ -75,14 +75,14 @@ extension DatabaseManager {
     /// latest complete batch.
     @discardableResult
     public func storeRecommendationBatch(_ items: [StoredRecommendation], trigger: String,
-                                         tasteSig: String?) async throws -> Int64 {
+                                         tasteSig: String?, degraded: Bool = false) async throws -> Int64 {
         let iso = Self.isoFormatter.string(from: Date())
         let enc = JSONEncoder()
         return try await pool.write { db in
             try db.execute(sql: """
-                INSERT INTO recommendation_batches (created_at, status, trigger, item_count, taste_sig)
-                VALUES (?, 'complete', ?, ?, ?)
-            """, arguments: [iso, trigger, items.count, tasteSig])
+                INSERT INTO recommendation_batches (created_at, status, trigger, item_count, taste_sig, degraded)
+                VALUES (?, 'complete', ?, ?, ?, ?)
+            """, arguments: [iso, trigger, items.count, tasteSig, degraded])
             let batchID = db.lastInsertedRowID
             for it in items {
                 let scoreJSON = (try? enc.encode(it.components)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
@@ -175,17 +175,19 @@ extension DatabaseManager {
         }
     }
 
-    /// The newest batch's id + taste signature + timestamp — used by the
+    /// The newest batch's id + taste signature + timestamp + health — used by the
     /// scheduler's skip-if-unchanged guard (`DiscoveryPipeline.shouldSkipRun`) so
     /// it can compare against the currently-computed taste signature without
-    /// re-running the pipeline.
-    public func latestBatchInfo() async throws -> (id: Int64, tasteSig: String?, createdAt: Date)? {
+    /// re-running the pipeline. `degraded` shortens that guard's window: a thin
+    /// batch is not a reason to skip the next run for the full window.
+    public func latestBatchInfo() async throws -> (id: Int64, tasteSig: String?, createdAt: Date, degraded: Bool)? {
         try await pool.read { db in
             guard let row = try Row.fetchOne(db, sql: """
-                SELECT id, taste_sig, created_at FROM recommendation_batches ORDER BY id DESC LIMIT 1
+                SELECT id, taste_sig, created_at, degraded FROM recommendation_batches ORDER BY id DESC LIMIT 1
             """), let id = row["id"] as Int64?, let createdAtStr = row["created_at"] as String?,
             let createdAt = Self.isoFormatter.date(from: createdAtStr) else { return nil }
-            return (id: id, tasteSig: row["taste_sig"] as String?, createdAt: createdAt)
+            return (id: id, tasteSig: row["taste_sig"] as String?, createdAt: createdAt,
+                    degraded: row["degraded"] as Bool? ?? false)
         }
     }
 

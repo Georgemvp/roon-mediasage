@@ -402,7 +402,8 @@ extension RoonClient {
             producers: Self.discoveryProducers.map(\.id))
         if mood == nil, textQuery == nil, let last = try? await db.latestBatchInfo(),
            DiscoveryPipeline.shouldSkipRun(trigger: trigger, tasteSig: tasteSig,
-                                          lastBatchSig: last.tasteSig, lastBatchCreatedAt: last.createdAt, now: Date()) {
+                                          lastBatchSig: last.tasteSig, lastBatchCreatedAt: last.createdAt,
+                                          lastBatchDegraded: last.degraded, now: Date()) {
             Log.info("Ontdekkingen (\(trigger)): smaak ongewijzigd sinds recente batch — overgeslagen", category: .roon)
             return last.id
         }
@@ -463,11 +464,12 @@ extension RoonClient {
 
         let pipeline = DiscoveryPipeline(producers: activeDiscoveryProducers,
                                          weights: .tuned(adventurousness: discoveryAdventurousness))
-        let ranked = await pipeline.run(
+        let outcome = await pipeline.run(
             seeds: seeds, context: context, qobuzCreds: qobuz,
             libraryGenres: libraryGenres, genreVocabulary: genreVocabulary, feedbackGenreRates: rates,
             producerReliability: producerReliability, adventurousness: discoveryAdventurousness,
             filterContext: filterCtx, maxItems: Self.discoveryMaxItems, now: Date())
+        let ranked = outcome.items
 
         // CLAP long-tail (fase 1): sonic-fit re-rank of the batch head — score the
         // top candidates by how their Deezer-preview CLAP embedding cosines with
@@ -499,7 +501,16 @@ extension RoonClient {
             Log.info("Ontdekkingen (\(effectiveTrigger)): 0 aanbevelingen na resolve/score/filter", category: .roon)
             return nil
         }
-        let batchID = try? await db.storeRecommendationBatch(stored, trigger: effectiveTrigger, tasteSig: tasteSig)
+        if outcome.degraded {
+            Log.info("""
+                Ontdekkingen (\(effectiveTrigger)): DEGRADEERD — \
+                \(outcome.producersContributing)/\(outcome.producersEnabled) producers leverden iets, \
+                \(outcome.personalisedItems) van \(stored.count) items zijn smaakgestuurd; \
+                de skip-guard verkort zijn venster tot een zesde
+                """, category: .roon)
+        }
+        let batchID = try? await db.storeRecommendationBatch(stored, trigger: effectiveTrigger,
+                                                            tasteSig: tasteSig, degraded: outcome.degraded)
         // Kept at 14 (not 3) so the weekly digest (F12b) — which draws from every
         // RETAINED batch, not just the newest — has a full week of daily runs to
         // pick highlights from even right before its own scheduled day.

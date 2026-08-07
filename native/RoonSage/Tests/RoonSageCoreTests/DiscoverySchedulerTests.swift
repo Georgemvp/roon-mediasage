@@ -81,4 +81,77 @@ final class DiscoverySchedulerTests: XCTestCase {
             trigger: "manual", tasteSig: "same", lastBatchSig: "same",
             lastBatchCreatedAt: now.addingTimeInterval(120), now: now))
     }
+
+    // MARK: shouldSkipRun — a degraded batch shortens the window
+
+    func testDegradedScheduledBatchRetriesWellBeforeSixHours() {
+        let now = Date()
+        let twoHoursAgo = now.addingTimeInterval(-2 * 60 * 60)
+        // Identical inputs, one bit apart: a healthy batch still holds the 6h
+        // window; a degraded one (producer outage, chart-only fallback) is retried
+        // instead of being frozen in the feed until the cause is long gone.
+        XCTAssertTrue(DiscoveryPipeline.shouldSkipRun(
+            trigger: "scheduled", tasteSig: "same", lastBatchSig: "same",
+            lastBatchCreatedAt: twoHoursAgo, lastBatchDegraded: false, now: now))
+        XCTAssertFalse(DiscoveryPipeline.shouldSkipRun(
+            trigger: "scheduled", tasteSig: "same", lastBatchSig: "same",
+            lastBatchCreatedAt: twoHoursAgo, lastBatchDegraded: true, now: now))
+    }
+
+    func testDegradedRunsAreStillRateLimited() {
+        // Shorter, not zero — a degraded run must not become a retry loop that
+        // re-pays the MB/LLM cost on every scheduler tick.
+        let now = Date()
+        XCTAssertTrue(DiscoveryPipeline.shouldSkipRun(
+            trigger: "scheduled", tasteSig: "same", lastBatchSig: "same",
+            lastBatchCreatedAt: now.addingTimeInterval(-10 * 60), lastBatchDegraded: true, now: now))
+    }
+
+    func testDegradedFlagDefaultsToHealthy() {
+        // Callers that predate the flag (and every pre-v45 batch row) keep the
+        // original window.
+        let now = Date()
+        XCTAssertTrue(DiscoveryPipeline.shouldSkipRun(
+            trigger: "scheduled", tasteSig: "same", lastBatchSig: "same",
+            lastBatchCreatedAt: now.addingTimeInterval(-2 * 60 * 60), now: now))
+    }
+
+    // MARK: RunOutcome.degraded
+
+    func testOutcomeIsDegradedWhenNothingSurvived() {
+        XCTAssertTrue(RunOutcome(producersContributing: 5, producersEnabled: 6).degraded)
+    }
+
+    func testOutcomeIsDegradedWhenTheSelectionIsPureChartFiller() {
+        let outcome = RunOutcome(items: [Self.stubItem()], producersContributing: 6,
+                                 producersEnabled: 6, personalisedItems: 0)
+        XCTAssertTrue(outcome.degraded, "a feed of only generic picks is not a healthy run")
+    }
+
+    func testOutcomeIsDegradedWhenMostProducersCameBackEmpty() {
+        let outcome = RunOutcome(items: [Self.stubItem()], producersContributing: 2,
+                                 producersEnabled: 11, personalisedItems: 1)
+        XCTAssertTrue(outcome.degraded)
+    }
+
+    func testHealthyRunIsNotDegraded() {
+        let outcome = RunOutcome(items: [Self.stubItem()], producersContributing: 8,
+                                 producersEnabled: 11, personalisedItems: 1)
+        XCTAssertFalse(outcome.degraded)
+    }
+
+    func testSingleEnabledProducerIsNotDegradedByTheRatioRule() {
+        // Only one producer configured (e.g. Last.fm alone) and it delivered: the
+        // majority rule must not label that an outage.
+        let outcome = RunOutcome(items: [Self.stubItem()], producersContributing: 1,
+                                 producersEnabled: 1, personalisedItems: 1)
+        XCTAssertFalse(outcome.degraded)
+    }
+
+    private static func stubItem() -> DatabaseManager.StoredRecommendation {
+        DatabaseManager.StoredRecommendation(
+            kind: .artist, artist: "Foals", artistMbid: nil, album: nil, releaseGroupMbid: nil,
+            year: nil, qobuzAlbumID: nil, imageURL: nil, score: 0.5, components: ScoreComponents(),
+            sources: [SourceRef(producer: "similar-artist-web")], genres: [], dedupKey: "artist|foals")
+    }
 }
