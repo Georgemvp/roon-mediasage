@@ -92,4 +92,26 @@ public struct MoodCalibration: Sendable {
         guard let v = moods.first(where: { $0.key.lowercased() == key })?.value else { return false }
         return (v - st.mean) / st.std >= zFloor
     }
+
+    /// Library-relative z-score for one mood value; the raw value when we have
+    /// no usable statistic (small/unloaded library). The building block for
+    /// ranking a track's moods "by how unusually high they are for THIS
+    /// library" instead of by raw cosine (which the per-label text-prior skews).
+    public func calibratedScore(_ mood: String, _ value: Float) -> Float {
+        guard let st = stats[mood.lowercased()], st.std > 1e-4 else { return value }
+        return (value - st.mean) / st.std
+    }
+
+    /// A track's mood keys ranked by calibrated z-score (descending) — the
+    /// calibrated replacement for a raw `sorted { $0.value > $1.value }` in
+    /// UI badges, so "danceable"/"relaxed" no longer dominate every track.
+    /// Iterates sorted keys for determinism. Falls back to raw ordering when
+    /// no label has usable statistics.
+    public func ranked(_ moods: [String: Float]) -> [String] {
+        moods.sorted {
+            let sa = calibratedScore($0.key, $0.value)
+            let sb = calibratedScore($1.key, $1.value)
+            return sa == sb ? $0.key < $1.key : sa > sb
+        }.map { $0.key }
+    }
 }

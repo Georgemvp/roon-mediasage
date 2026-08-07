@@ -909,6 +909,14 @@ extension RoonClient {
         return await sonicCache.tracks(from: db)
     }
 
+    /// Library-calibrated mood stats (z-score per mood over the analyzed
+    /// library) for UI mood badges. nil only when no database is attached.
+    /// Cached; loads off-main on first use.
+    public func moodCalibration() async -> MoodCalibration? {
+        guard let db = database else { return nil }
+        return await sonicCache.moodCalibration(from: db)
+    }
+
     /// Compute the PCA-2D Music Map projection over the CLAP embeddings, persist
     /// map_x/map_y, and invalidate the cache so the next load carries coords.
     /// Returns the number of tracks projected (0 when too few embeddings exist).

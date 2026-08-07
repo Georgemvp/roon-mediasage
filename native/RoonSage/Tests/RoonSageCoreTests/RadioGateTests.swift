@@ -4,10 +4,12 @@ import XCTest
 final class RadioGateTests: XCTestCase {
 
     private func st(_ id: String, artist: String = "A", energy: Double? = nil, bpm: Double? = nil,
-                    moods: [String: Float] = [:], matchKey: String? = nil) -> DatabaseManager.SonicTrack {
+                    moods: [String: Float] = [:], matchKey: String? = nil,
+                    genres: [String] = []) -> DatabaseManager.SonicTrack {
         DatabaseManager.SonicTrack(id: id, title: "T\(id)", artist: artist, album: nil, imageKey: nil,
                                    matchKey: matchKey ?? "mk\(id)", bpm: bpm, camelot: "8A",
-                                   rmsEnergy: energy, tags: [], embedding: nil, moods: moods)
+                                   rmsEnergy: energy, tags: [], embedding: nil, moods: moods,
+                                   genres: genres)
     }
 
     func testActivityGateMatchesProfile() throws {
@@ -39,10 +41,11 @@ final class RadioGateTests: XCTestCase {
     }
 
     func testGenreGate() throws {
-        let genres: [String: Set<String>] = ["1": ["House", "Techno"], "2": ["Jazz"]]
-        let gate = try XCTUnwrap(RoonClient.bucketGate(radioID: "genre:house", genres: genres))
-        XCTAssertTrue(gate(st("1")))
-        XCTAssertFalse(gate(st("2")))
+        // Genre membership is the track's own REAL genres (MusicBrainz ∪ Deezer,
+        // lowercased on the SonicTrack), not the coarse Roon map.
+        let gate = try XCTUnwrap(RoonClient.bucketGate(radioID: "genre:house"))
+        XCTAssertTrue(gate(st("1", genres: ["house", "techno"])))
+        XCTAssertFalse(gate(st("2", genres: ["jazz"])))
         XCTAssertFalse(gate(st("3")))
     }
 

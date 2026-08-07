@@ -230,11 +230,15 @@ public enum SonicDNA {
             .prefix(5)
             .map { GenreShare(name: genreLabel[$0.key] ?? $0.key.capitalized, share: min(1, $0.value / totalW)) }
 
-        // Mood DNA: weighted argmax mood per seed.
+        // Mood DNA: weighted CALIBRATED-dominant mood per seed. Library-relative
+        // z-score (not raw argmax) so the per-label text-prior doesn't make every
+        // profile read "danceable"/"relaxed"; dominantMood falls back to the old
+        // raw 0.3-floor argmax when the library is too small for statistics.
+        let moodCal = MoodCalibration(tracks: library)
         var moodW: [String: Double] = [:]
         for s in seeds {
-            if let top = s.track.moods.max(by: { $0.value < $1.value }), top.value >= 0.25 {
-                moodW[top.key.lowercased(), default: 0] += s.weight
+            if let top = moodCal.dominantMood(s.track.moods) {
+                moodW[top, default: 0] += s.weight
             }
         }
         let topMoods = moodW.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }

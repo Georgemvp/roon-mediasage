@@ -51,4 +51,25 @@ final class MoodCalibrationTests: XCTestCase {
         XCTAssertEqual(cal.dominantMood(["party": 0.6, "sad": 0.2]), "party")
         XCTAssertNil(cal.dominantMood(["party": 0.1]), "onder de rauwe 0.3-floor")
     }
+
+    /// UI-badges: `ranked` ordent op z-score, niet op rauwe cosine — dezelfde
+    /// bias-correctie als `dominantMood`, maar dan de volledige volgorde.
+    func testRankedOrdersByCalibratedScoreNotRawValue() {
+        var lib: [DatabaseManager.SonicTrack] = []
+        for i in 0..<20 {
+            lib.append(t("bg\(i)", moods: ["danceable": 0.60 + Float(i % 5) * 0.01,
+                                           "sad": 0.15 + Float(i % 5) * 0.01]))
+        }
+        let cal = MoodCalibration(tracks: lib)
+        let probe: [String: Float] = ["danceable": 0.58, "sad": 0.40]
+        XCTAssertEqual(cal.ranked(probe).first, "sad",
+                       "gekalibreerd staat sad vooraan; rauw zou danceable zeggen")
+        XCTAssertEqual(probe.sorted { $0.value > $1.value }.first?.key, "danceable")
+    }
+
+    /// Zonder bruikbare statistiek valt `ranked` terug op rauwe volgorde.
+    func testRankedFallsBackToRawOrderingWithoutStats() {
+        let cal = MoodCalibration(tracks: (0..<3).map { t("s\($0)", moods: ["party": 0.5]) })
+        XCTAssertEqual(cal.ranked(["happy": 0.7, "sad": 0.2]).first, "happy")
+    }
 }

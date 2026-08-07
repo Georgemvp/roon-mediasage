@@ -15,6 +15,7 @@ struct TrackInfoSheet: View {
     @State private var features: DatabaseManager.AudioFeatureRow?
     @State private var playCount: Int = 0
     @State private var lastPlayed: String?
+    @State private var moodCal: MoodCalibration?
     @State private var loaded = false
 
     var body: some View {
@@ -70,7 +71,7 @@ struct TrackInfoSheet: View {
                             if !tags.isEmpty {
                                 LabeledContent("Tags", value: tags.prefix(6).joined(separator: ", "))
                             }
-                            let moods = topMoods(f.moods)
+                            let moods = topMoods(f.moods, calibration: moodCal)
                             if !moods.isEmpty {
                                 LabeledContent("Stemming", value: moods)
                             }
@@ -111,6 +112,7 @@ struct TrackInfoSheet: View {
             let mk = track.matchKey
                 ?? TrackIdentity.matchKey(artist: track.artist, album: track.album, title: track.title)
             features = await client.database?.audioFeatureRow(matchKey: mk)
+            moodCal = await client.moodCalibration()
             let stats = await client.playStats()
             if let stat = stats.first(where: { $0.matchKey == mk }) {
                 playCount = stat.count
@@ -146,10 +148,14 @@ struct TrackInfoSheet: View {
         return arr.compactMap { $0 as? String }
     }
 
-    private func topMoods(_ json: String?) -> String {
+    private func topMoods(_ json: String?, calibration: MoodCalibration?) -> String {
         guard let json, let data = json.data(using: .utf8),
               let map = try? JSONDecoder().decode([String: Float].self, from: data) else { return "" }
-        return map.sorted { $0.value > $1.value }.prefix(3)
-            .map { RoonClient.moodLabel($0.key) }.joined(separator: ", ")
+        // Calibrated ranking (library-relative z-score) so a track's genuinely
+        // distinctive moods surface, not the per-label-inflated "danceable"/
+        // "relaxed"; raw ordering only as fallback before calibration loads.
+        let ordered = calibration?.ranked(map)
+            ?? map.sorted { $0.value > $1.value }.map { $0.key }
+        return ordered.prefix(3).map { RoonClient.moodLabel($0) }.joined(separator: ", ")
     }
 }

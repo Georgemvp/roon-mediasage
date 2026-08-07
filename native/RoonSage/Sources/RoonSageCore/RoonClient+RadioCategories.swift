@@ -62,6 +62,19 @@ extension RoonClient {
     /// from exploding when the library has dozens of genres/decades).
     nonisolated static let categoryRadioMax = 8
 
+    /// Over-broad / redundant MusicBrainz∪Deezer genre tokens that make poor radio
+    /// buckets. Genre buckets are drawn from the finer real genres (see
+    /// `genreBuckets`); without this the count-ranked cap would just surface the
+    /// umbrella "rock"/"pop" family and drown out discriminating genres. Chosen
+    /// deny-list (user, 2026-07-26): the rock/pop/dance umbrellas + rock variants,
+    /// plus near-duplicate tokens collapsed into their canonical bucket
+    /// ("electro"→electronic, "films/games"→film scores).
+    nonisolated static let genreBucketDenyList: Set<String> = [
+        "rock", "pop", "pop rock", "alternative", "dance",
+        "soft rock", "classic rock", "hard rock", "art rock", "alternative rock",
+        "electro", "films/games",
+    ]
+
     // MARK: Bucket building (gathers on main, computes off-main)
 
     /// Build the radio buckets for a non-artist category. Returns `[]` for
@@ -148,23 +161,22 @@ extension RoonClient {
         lib: [DatabaseManager.SonicTrack], genres: [String: Set<String>],
         disliked: Set<String>, daySeed: String
     ) -> [RadioBucket] {
-        // Roon's `track_genres` ONLY — the analyzer's free-text `tags`
-        // ("peak-time", "warmup", "high-energy", "atmospheric", …) are energy/DJ
-        // descriptors, not genres, and would otherwise drown out the real genres.
-        // Key on the lowercased form; keep Roon's properly-cased label.
+        // REAL genres (MusicBrainz ∪ Deezer, already on the SonicTrack, lowercased)
+        // — finer and more accurate than Roon's ~21 coarse buckets, where "Pop/Rock"
+        // alone is ~72% of the library. The Roon `genres` param stays for artist-radio
+        // affinity ranking upstream; genre BUCKETS use the track's own union so a
+        // "genre:jazz" station means MB/Deezer jazz, not everything Roon tagged Jazz.
+        // Over-broad/redundant tokens are dropped (genreBucketDenyList) so the count-
+        // ranked cap surfaces discriminating genres, not a rock/pop-variant pile-up.
         var byGenre: [String: [DatabaseManager.SonicTrack]] = [:]
-        var labelFor: [String: String] = [:]
         for t in lib {
-            guard let gs = genres[t.id] else { continue }
-            for raw in gs {
-                let key = raw.lowercased().trimmingCharacters(in: .whitespaces)
-                guard !key.isEmpty else { continue }
+            for key in t.genres {
+                guard !key.isEmpty, !genreBucketDenyList.contains(key) else { continue }
                 byGenre[key, default: []].append(t)
-                if labelFor[key] == nil { labelFor[key] = raw }
             }
         }
         let buckets = byGenre.compactMap { (key, tracks) -> RadioBucket? in
-            makeBucket(id: "genre:\(key)", label: labelFor[key] ?? key.capitalized,
+            makeBucket(id: "genre:\(key)", label: key.capitalized,
                        tracks: tracks, disliked: disliked, daySeed: daySeed)
         }
         return Array(buckets.sorted { $0.trackCount > $1.trackCount }.prefix(categoryRadioMax))
@@ -345,7 +357,11 @@ extension RoonClient {
                 MoodCalibration.matches(key, in: t.moods, calibration: calibration?.moods)
             }
         case "genre":
-            return { t in genres[t.id]?.contains { $0.lowercased() == key } ?? false }
+            // REAL genres (MusicBrainz ∪ Deezer) on the track, not Roon's coarse
+            // `track_genres`: a "genre:jazz" station then rejects tracks Roon merely
+            // tagged Jazz (e.g. Daft Punk). `t.genres` is already lowercased; the
+            // `genres` param is unused here now (it feeds affinity ranking upstream).
+            return { t in t.genres.contains(key) }
         case "decade":
             guard let decade = Int(key) else { return nil }
             return { t in years[t.matchKey].map { ($0 / 10) * 10 == decade } ?? false }

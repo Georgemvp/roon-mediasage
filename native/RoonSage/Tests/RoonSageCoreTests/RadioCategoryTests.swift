@@ -7,33 +7,34 @@ final class RadioCategoryTests: XCTestCase {
 
     private func st(
         _ i: Int, tags: [String] = [], moods: [String: Float] = [:],
-        energy: Double? = nil, bpm: Double? = nil, matchKey: String? = nil
+        energy: Double? = nil, bpm: Double? = nil, matchKey: String? = nil,
+        genres: [String] = []
     ) -> DatabaseManager.SonicTrack {
         DatabaseManager.SonicTrack(
             id: "t\(i)", title: "T\(i)", artist: "A\(i)", album: nil, imageKey: nil,
             matchKey: matchKey ?? "m\(i)", bpm: bpm, camelot: "", rmsEnergy: energy,
-            tags: tags, moods: moods)
+            tags: tags, moods: moods, genres: genres)
     }
 
     // MARK: Genre
 
-    func testGenreBucketsUseRoonGenresAndFloor() {
+    func testGenreBucketsFromRealGenresWithDenyListAndFloor() {
         var lib: [DatabaseManager.SonicTrack] = []
-        var genres: [String: Set<String>] = [:]
-        for i in 0..<10  { lib.append(st(i)); genres["t\(i)"] = ["Rock"] }            // qualifies
-        for i in 100..<109 { lib.append(st(i)); genres["t\(i)"] = ["Jazz"] }          // qualifies (9)
-        for i in 200..<205 { lib.append(st(i)); genres["t\(i)"] = ["Pop"] }           // below the 8-track floor
-        // Analyzer tags must NOT create genre buckets — only Roon genres count.
+        // Real genres (MusicBrainz ∪ Deezer) on the track drive the buckets now.
+        for i in 0..<10  { lib.append(st(i, genres: ["rock"])) }          // deny-listed → NO bucket
+        for i in 100..<109 { lib.append(st(i, genres: ["jazz"])) }        // qualifies (9)
+        for i in 200..<205 { lib.append(st(i, genres: ["house"])) }       // below the 8-track floor
+        // Tracks without real genres (only analyzer tags) create no bucket.
         for i in 300..<312 { lib.append(st(i, tags: ["peak-time", "high-energy"])) }
 
         let buckets = RoonClient.buildBuckets(
-            category: .genre, lib: lib, genres: genres, years: [:], disliked: [], daySeed: "test")
+            category: .genre, lib: lib, genres: [:], years: [:], disliked: [], daySeed: "test")
 
-        XCTAssertEqual(Set(buckets.map(\.label)), ["Rock", "Jazz"])
-        let rock = buckets.first { $0.label == "Rock" }
-        XCTAssertEqual(rock?.trackCount, 10)
-        XCTAssertFalse(rock?.seedIds.isEmpty ?? true)
-        XCTAssertEqual(rock?.id, "genre:rock")
+        XCTAssertEqual(Set(buckets.map(\.label)), ["Jazz"], "rock is deny-listed, house below floor")
+        let jazz = buckets.first { $0.label == "Jazz" }
+        XCTAssertEqual(jazz?.trackCount, 9)
+        XCTAssertFalse(jazz?.seedIds.isEmpty ?? true)
+        XCTAssertEqual(jazz?.id, "genre:jazz")
     }
 
     // MARK: Mood

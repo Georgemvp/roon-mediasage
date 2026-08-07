@@ -68,6 +68,23 @@ public actor SonicLibraryCache {
         return stats
     }
 
+    private var cachedMoodCalibration: MoodCalibration?
+    private var moodCalibrationBuilt = false
+
+    /// Library-wide per-mood z-score calibration (μ, σ per mood label), built
+    /// once off the cached tracks and memoized. Lets UI badges rank a track's
+    /// moods by how unusually high they are for THIS library instead of by raw
+    /// cosine (whose per-label text-prior makes "danceable"/"relaxed" dominate).
+    /// Invalidated with everything else on feature/library sync.
+    public func moodCalibration(from db: DatabaseManager) async -> MoodCalibration {
+        if moodCalibrationBuilt, let c = cachedMoodCalibration { return c }
+        let tracks = await tracks(from: db)
+        let cal = MoodCalibration(tracks: tracks)
+        cachedMoodCalibration = cal
+        moodCalibrationBuilt = true
+        return cal
+    }
+
     /// The analyzed library, loading (off-main) and caching on first use.
     public func tracks(from db: DatabaseManager) async -> [DatabaseManager.SonicTrack] {
         if let cached { return cached }
@@ -93,6 +110,8 @@ public actor SonicLibraryCache {
         clustersBuilt = false
         cachedNNStats = nil
         nnStatsBuilt = false
+        cachedMoodCalibration = nil
+        moodCalibrationBuilt = false
     }
 
     /// All cached tracks (loads from `db` on first call). Equivalent to

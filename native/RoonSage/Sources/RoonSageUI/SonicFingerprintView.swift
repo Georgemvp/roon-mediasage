@@ -21,7 +21,7 @@ public struct SonicFingerprintView: View {
                 if !fp.recommendations.isEmpty { recommendationsCard(fp).plainCardRow() }
             } else if isLoading {
                 Section {
-                    ContentUnavailableView("Je sonische DNA berekenen…", systemImage: "waveform.path.ecg")
+                    ContentUnavailableView(LS("sonicFingerprint.computingTitle"), systemImage: "waveform.path.ecg")
                         .listRowBackground(Color.clear)
                 }
                 .listRowSeparator(.hidden)

@@ -17,7 +17,10 @@ public final class CLAPModel: @unchecked Sendable {
     private let textModel: MLModel
     private let mel: CLAPMel
     private let moodLabels: [String]
-    private let moodEmbeds: [[Float]]   // [label][512], L2-normalized
+    // [label][512], L2-normalized. Loaded from the baked `clap_mood_embeds.f32`
+    // (bare label words), then overwritten by `prepareMoodProbes()` with richer
+    // prompt embeddings when the text tower is available.
+    private var moodEmbeds: [[Float]]
     private let tokenizer: RobertaBPETokenizer?
     public static let textTokenLength = 64   // must match the converted text model
 
@@ -53,7 +56,8 @@ public final class CLAPModel: @unchecked Sendable {
         sweepStaleTempBundles()
         do {
             let model = try CLAPModel(dir: dir)
-            model.prepareProbes()   // build attribute probes once (best-effort)
+            model.prepareProbes()       // build attribute probes once (best-effort)
+            model.prepareMoodProbes()   // richer mood prompts over the baked embeds
             return model
         } catch {
             NSLog("[CLAP] failed to load model: \(error) — embeddings disabled")
@@ -292,6 +296,38 @@ public final class CLAPModel: @unchecked Sendable {
         return result
     }
 
+    /// Richer text prompts per mood label, replacing the bare label words the
+    /// baked `clap_mood_embeds.f32` used. The single words collapsed concepts in
+    /// CLAP's shared space (e.g. "happy" barely separated from "danceable"/
+    /// "party", so raw argmax under-picked it); phrases separate them better.
+    /// Keyed by label; `prepareMoodProbes()` builds embeds in `moodLabels` order.
+    /// Heuristic — validate the resulting mood distribution after a re-tag.
+    static let moodPrompts: [String: [String]] = [
+        "danceable":  ["danceable groovy music with a strong steady beat", "an upbeat club track you can dance to"],
+        "aggressive": ["aggressive intense heavy music", "an angry hard-hitting powerful song"],
+        "happy":      ["happy joyful cheerful feel-good music", "a bright upbeat positive song"],
+        "party":      ["energetic celebratory party music", "a festive crowd-pleasing anthem"],
+        "relaxed":    ["calm relaxed mellow gentle music", "a soft soothing laid-back song"],
+        "sad":        ["sad melancholic emotional music", "a sorrowful heartbreaking song"],
+    ]
+
+    /// Recompute `moodEmbeds` from `moodPrompts` via the text tower so mood
+    /// scoring uses richer prompts than the baked single-word embeds. No-op
+    /// (keeps the baked embeds) when the text tower is unavailable; per label it
+    /// falls back to the baked embed if that prompt fails to embed. Changing a
+    /// prompt shifts stored moods until the library is re-tagged. Call once after
+    /// load, alongside `prepareProbes()`.
+    func prepareMoodProbes() {
+        guard canEmbedText else { return }
+        var rebuilt = moodEmbeds
+        for (i, label) in moodLabels.enumerated() {
+            guard let phrases = Self.moodPrompts[label],
+                  let v = meanUnitEmbedding(phrases) else { continue }
+            rebuilt[i] = v
+        }
+        moodEmbeds = rebuilt
+    }
+
     // MARK: - Attribute axes (zero-shot text probes)
 
     /// One interpretable 0…1 axis defined by contrasting text prompts, scored from
@@ -326,20 +362,25 @@ public final class CLAPModel: @unchecked Sendable {
     /// right after load); `attributes(forEmbedding:)` then reads them concurrently.
     private var attrProbes: [(name: String, pos: [Float], neg: [Float])] = []
 
+    /// L2-normalized mean of the text embeddings of `phrases` (nil if none
+    /// embed). Shared by the attribute (`prepareProbes`) and mood
+    /// (`prepareMoodProbes`) probe builders.
+    private func meanUnitEmbedding(_ phrases: [String]) -> [Float]? {
+        var acc = [Float](repeating: 0, count: Self.embeddingDim); var n = 0
+        for p in phrases {
+            guard let e = try? textEmbedding(p), e.count == Self.embeddingDim else { continue }
+            vDSP_vadd(acc, 1, e, 1, &acc, 1, vDSP_Length(Self.embeddingDim)); n += 1
+        }
+        return n > 0 ? Self.l2(acc) : nil
+    }
+
     /// Build the attribute probe vectors via the text model. Call once after load.
     func prepareProbes() {
         guard canEmbedText else { return }
-        func meanUnit(_ phrases: [String]) -> [Float]? {
-            var acc = [Float](repeating: 0, count: Self.embeddingDim); var n = 0
-            for p in phrases {
-                guard let e = try? textEmbedding(p), e.count == Self.embeddingDim else { continue }
-                vDSP_vadd(acc, 1, e, 1, &acc, 1, vDSP_Length(Self.embeddingDim)); n += 1
-            }
-            return n > 0 ? Self.l2(acc) : nil
-        }
         var probes: [(name: String, pos: [Float], neg: [Float])] = []
         for axis in Self.attributeAxes {
-            guard let pos = meanUnit(axis.positive), let neg = meanUnit(axis.negative) else { continue }
+            guard let pos = meanUnitEmbedding(axis.positive),
+                  let neg = meanUnitEmbedding(axis.negative) else { continue }
             probes.append((axis.name, pos, neg))
         }
         attrProbes = probes
