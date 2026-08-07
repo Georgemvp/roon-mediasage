@@ -398,7 +398,8 @@ extension RoonClient {
         // request for a specific vibe, never a redundant repeat tap.
         let tasteSig = DiscoveryPipeline.tasteSignature(
             topArtists: topArtists, liked: hints.liked, disliked: hints.disliked,
-            watchlist: watchlist.map(\.artist))
+            watchlist: watchlist.map(\.artist),
+            producers: Self.discoveryProducers.map(\.id))
         if mood == nil, textQuery == nil, let last = try? await db.latestBatchInfo(),
            DiscoveryPipeline.shouldSkipRun(trigger: trigger, tasteSig: tasteSig,
                                           lastBatchSig: last.tasteSig, lastBatchCreatedAt: last.createdAt, now: Date()) {

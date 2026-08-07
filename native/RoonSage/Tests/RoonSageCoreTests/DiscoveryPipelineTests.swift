@@ -126,4 +126,28 @@ final class DiscoveryPipelineTests: XCTestCase {
             recent: recent, allTime: [(artist: "C", count: 1)], limit: 2)
         XCTAssertEqual(out.map(\.artist), ["A", "B"], "blank artists never consume a seed slot")
     }
+    // MARK: Skip-guard covers configuration, not just taste
+
+    func testTasteSignatureChangesWhenTheProducerSetChanges() {
+        // Disabling a producer changes what a run can output, so it must not be
+        // skippable as "smaak ongewijzigd" — that is exactly what left the batch
+        // full of the items the change was meant to remove (2026-08-07).
+        let base = DiscoveryPipeline.tasteSignature(
+            topArtists: ["Foals"], liked: [], disliked: [], watchlist: [],
+            producers: ["charts", "dataset"])
+        let without = DiscoveryPipeline.tasteSignature(
+            topArtists: ["Foals"], liked: [], disliked: [], watchlist: [],
+            producers: ["charts"])
+        XCTAssertNotEqual(base, without)
+    }
+
+    func testTasteSignatureIsStableForTheSameProducerSetInAnyOrder() {
+        let a = DiscoveryPipeline.tasteSignature(
+            topArtists: ["Foals"], liked: [], disliked: [], watchlist: [],
+            producers: ["charts", "gap-fill"])
+        let b = DiscoveryPipeline.tasteSignature(
+            topArtists: ["Foals"], liked: [], disliked: [], watchlist: [],
+            producers: ["gap-fill", "charts"])
+        XCTAssertEqual(a, b, "registry order must not trigger spurious rebuilds")
+    }
 }

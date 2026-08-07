@@ -396,11 +396,20 @@ struct DiscoveryPipeline {
     /// reduced to a lowercased Set before hashing, so re-ranking within an
     /// unchanged set (e.g. play-count shuffling the top-artists order) does NOT
     /// flip the signature — only an actual membership change does.
-    static func tasteSignature(topArtists: [String], liked: [String], disliked: [String], watchlist: [String]) -> String {
+    /// `producers` is the set of producer ids that will actually run. It belongs in
+    /// the signature because the skip-guard's real question is "could this run
+    /// produce something different?", and taste is only half of that: on
+    /// 2026-08-07 `DatasetProducer` was disabled to stop a global-popularity list
+    /// leaking into recommendations, and because taste hadn't moved, BOTH the
+    /// scheduled and the manual run skipped — leaving the batch full of exactly
+    /// the items the change was meant to remove. Any enable/disable now forces a
+    /// rebuild.
+    static func tasteSignature(topArtists: [String], liked: [String], disliked: [String],
+                               watchlist: [String], producers: [String] = []) -> String {
         func norm(_ xs: [String]) -> String {
             Set(xs.map { $0.lowercased().trimmingCharacters(in: .whitespaces) }).sorted().joined(separator: ",")
         }
-        let parts = [norm(topArtists), norm(liked), norm(disliked), norm(watchlist)]
+        let parts = [norm(topArtists), norm(liked), norm(disliked), norm(watchlist), norm(producers)]
         return String(RoonClient.seed64(parts.joined(separator: "|")))
     }
 
