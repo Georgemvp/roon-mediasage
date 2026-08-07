@@ -1406,7 +1406,7 @@ extension RoonClient {
         // The "Aanbevelingen" playlist lives in this namespace too but is not a
         // radio, so it is in no keep set of its own — without this the sweep
         // deletes it moments after each sync recreates it.
-        let recs = recommendationsQobuzKeep()
+        let recs = discoveryPlaylistsQobuzKeep()
         keepNames.formUnion(recs.names)
         keepQobuzIDs.formUnion(recs.ids)
         let removed = await QobuzClient.shared.deleteRadioOrphans(
@@ -1447,7 +1447,7 @@ extension RoonClient {
         // The "Aanbevelingen" playlist lives in this namespace too but is not a
         // radio, so it is in no keep set of its own — without this the sweep
         // deletes it moments after each sync recreates it.
-        let recs = recommendationsQobuzKeep()
+        let recs = discoveryPlaylistsQobuzKeep()
         keepNames.formUnion(recs.names)
         keepQobuzIDs.formUnion(recs.ids)
         let removed = await QobuzClient.shared.deleteRadioOrphans(
@@ -1644,10 +1644,10 @@ extension RoonClient {
                         didSync = true
                         Log.info("Custom radio auto-sync: \(n) playlist(s) naar Qobuz", category: .network)
                     }
-                    // Mirror the Ontdek batch into the "Aanbevelingen" playlist. AFTER
+                    // Mirror the Ontdek batch into the discovery playlists. AFTER
                     // the reconcile above, which protects it by name/id but would
                     // otherwise race a just-created playlist.
-                    _ = await self.syncRecommendationsToQobuz()
+                    _ = await self.syncDiscoveryPlaylistsToQobuz()
                 }
                 // Re-sync on the full cadence once it's working; retry sooner while
                 // still warming up (library/features not ready yet, or no Qobuz).

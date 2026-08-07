@@ -40,11 +40,22 @@ extension RoonClient {
     /// needs a new client + the user's own account) land later. Public so the
     /// analyzer's tuning settings can list `id`s for the enable/disable toggles
     /// without hand-duplicating them.
+    /// `DatasetProducer` is DELIBERATELY ABSENT (user, 2026-08-07: "rare
+    /// aanbevelingen die ik niet kan plaatsen"). It read `ds_candidates ORDER BY
+    /// fans DESC` and then used that same global fan count AS its similarity
+    /// score, so the world's most famous artists scored HIGHEST as "matches for
+    /// you" — Ariana Grande 0.897 and Shawn Mendes 0.873 outranked genuine
+    /// taste hits like Pink Floyd (0.86, listenbrainz-exploration) on a library
+    /// of Dire Straits / Knopfler / Chris Rea. Its only filter was Deezer's
+    /// coarse `AlbumGenreName` ∈ the library's top genres, which on a ~72%
+    /// pop/rock library filters nothing — the same umbrella trap that broke the
+    /// genre radios. Re-enabling requires scoring on real genre/taste overlap
+    /// instead of popularity, not just a lower weight.
     public static var discoveryProducers: [DiscoveryProducer] {
         [SimilarArtistWebProducer(), ChartsProducer(), ReleaseRadarProducer(),
          GapFillProducer(), ArtistRelationshipsProducer(), ListenBrainzRadioProducer(),
          ListenBrainzExplorationProducer(), AIPicksProducer(),
-         DiscogsLabelsProducer(), DeezerRelatedProducer(), QobuzCatalogProducer(), DatasetProducer()]
+         DiscogsLabelsProducer(), DeezerRelatedProducer(), QobuzCatalogProducer()]
     }
 
     /// Whether a Discogs personal access token is configured (Settings → Externe
