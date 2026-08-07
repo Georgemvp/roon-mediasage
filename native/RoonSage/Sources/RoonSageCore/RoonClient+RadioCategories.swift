@@ -21,7 +21,7 @@ extension RoonClient {
 
     /// One way to slice the library into radios. `artist` is the legacy default.
     public enum RadioCategory: String, CaseIterable, Sendable, Identifiable {
-        case artist, genre, mood, activity, decade, sonic
+        case artist, genre, mood, activity, decade, sonic, recent
         public var id: String { rawValue }
         var idPrefix: String { "\(rawValue):" }
 
@@ -42,6 +42,7 @@ extension RoonClient {
             case .activity: return "Activiteit"
             case .decade:   return "Decennium"
             case .sonic:    return "Buurten"
+            case .recent:   return "Recent"
             }
         }
     }
@@ -61,6 +62,10 @@ extension RoonClient {
     /// Cap on non-artist buckets surfaced per category (keeps the grid + Qobuz set
     /// from exploding when the library has dozens of genres/decades).
     nonisolated static let categoryRadioMax = 8
+    /// How many of your most recent distinct plays seed the `.recent` station.
+    /// Distinct tracks, not raw plays — a song on repeat shouldn't crowd out the
+    /// rest of the listening session.
+    nonisolated static let recentRadioSeedCount = 50
 
     /// Over-broad / redundant MusicBrainz∪Deezer genre tokens that make poor radio
     /// buckets. Genre buckets are drawn from the finer real genres (see
@@ -85,6 +90,18 @@ extension RoonClient {
         guard !lib.isEmpty else { return [] }
         let stamp = Self.rotationStamp()
         let disliked = radioDislikedMatchKeys
+
+        // Recent: a RECENCY slice, not a metadata slice — one station seeded on the
+        // tracks you actually played last, so it follows the current listening
+        // session instead of the all-time taste profile the other categories lean
+        // on. No gate (bucketGate's default → nil): proximity to those seeds IS the
+        // definition, so the station grows outward into whatever sounds like what
+        // you've been playing.
+        if category == .recent {
+            guard let bucket = await recentListeningBucket(lib: lib, disliked: disliked, stamp: stamp)
+            else { return [] }
+            return [bucket]
+        }
 
         // Sonic neighborhoods are discovered by clustering the CLAP embeddings, so
         // they need the index (cached). Each cluster becomes a station via the same
@@ -133,6 +150,7 @@ extension RoonClient {
         case .activity: return activityBuckets(lib: lib, disliked: disliked, daySeed: daySeed, calibration: calibration)
         case .decade:   return decadeBuckets(lib: lib, years: years, disliked: disliked, daySeed: daySeed)
         case .sonic:    return []   // needs the embedding index — built in radioBuckets(_:)
+        case .recent:   return []   // needs play history (async db) — built in radioBuckets(_:)
         }
     }
 
@@ -153,6 +171,49 @@ extension RoonClient {
         let img = shuffled.first(where: { $0.imageKey?.isEmpty == false })?.imageKey
         return RadioBucket(id: id, label: label, imageKey: img,
                            seedIds: seeds.map(\.id), trackCount: usable.count)
+    }
+
+    // MARK: Recent
+
+    /// The single `.recent` bucket: your last `recentRadioSeedCount` DISTINCT
+    /// plays, newest first, intersected with the analyzed library.
+    ///
+    /// Seeds come from `playStatsByMatchKey()` (match_key + MAX(played_at)) rather
+    /// than `recentListens()` — that one returns raw history rows with only
+    /// title/artist strings, so it would need re-deriving match keys and would let
+    /// one track on repeat fill the whole seed set. Grouped-by-match_key gives
+    /// distinct tracks and the key the library is already indexed on.
+    ///
+    /// Returns nil when there's too little history to make a real station; the
+    /// caller then simply surfaces no `.recent` radio (rather than a thin one).
+    private func recentListeningBucket(
+        lib: [DatabaseManager.SonicTrack], disliked: Set<String>, stamp: String
+    ) async -> RadioBucket? {
+        guard let db = database else { return nil }
+        let stats = (try? await db.playStatsByMatchKey()) ?? []
+        let recentKeys = Self.recentSeedKeys(from: stats, limit: Self.recentRadioSeedCount)
+        guard !recentKeys.isEmpty else { return nil }
+        let byKey = Dictionary(lib.map { ($0.matchKey, $0) }, uniquingKeysWith: { a, _ in a })
+        let tracks = recentKeys.compactMap { byKey[$0] }
+        return Self.makeBucket(id: "recent:listened", label: "Recent geluisterd",
+                               tracks: tracks, disliked: disliked, daySeed: stamp)
+    }
+
+    /// The `limit` most recently played match keys, newest first — pure so the
+    /// recency ordering is testable without a database.
+    ///
+    /// Ordering is by `lastPlayed` ONLY: a 300-play favourite last heard in March
+    /// must not outrank something played an hour ago, which is the whole point of
+    /// this station versus the play-count-driven artist radios.
+    nonisolated static func recentSeedKeys(
+        from stats: [(matchKey: String, count: Int, lastPlayed: String)], limit: Int
+    ) -> [String] {
+        // played_at is stored ISO8601 UTC, so lexicographic ordering IS chronological.
+        stats
+            .filter { !$0.matchKey.isEmpty && !$0.lastPlayed.isEmpty }
+            .sorted { $0.lastPlayed > $1.lastPlayed }
+            .prefix(limit)
+            .map(\.matchKey)
     }
 
     // MARK: Genre
@@ -392,7 +453,7 @@ extension RoonClient {
         }
         guard let cat = RadioCategory(radioID: radioID) else { return nil }
         switch cat {
-        case .artist, .sonic:
+        case .artist, .sonic, .recent:
             return nil
         case .genre:
             let genres = (try? await db.genresByTrackID()) ?? [:]

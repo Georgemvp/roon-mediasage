@@ -220,6 +220,7 @@ public struct SonicRadioView: View {
         case .activity: return "Eindeloze stations voor wat je aan het doen bent: workout, focus, chillen en meer."
         case .decade:   return "Eindeloze stations per decennium, op basis van het releasejaar."
         case .sonic:    return "Sonische buurten — clusters die je bibliotheek zelf vormt, puur op hoe de muziek klinkt."
+        case .recent:   return "Aanbevelingen uit je bibliotheek, gebouwd rond wat je de laatste tijd hebt geluisterd."
         }
     }
 

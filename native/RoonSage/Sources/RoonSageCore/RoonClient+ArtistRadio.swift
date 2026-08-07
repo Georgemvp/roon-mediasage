@@ -899,6 +899,9 @@ extension RoonClient {
         case .sonic:
             return (label,
                     "Een eindeloze radio rond de sonische buurt ‘\(label)’ — tracks die op klank bij elkaar horen.")
+        case .recent:
+            return (label,
+                    "Aanbevelingen uit je bibliotheek op basis van wat je de laatste tijd hebt geluisterd.")
         }
     }
 
@@ -929,6 +932,7 @@ extension RoonClient {
         case .activity: subject = "voor de activiteit \"\(label)\""
         case .decade:   subject = "met muziek uit de \(label.lowercased())"
         case .sonic:    subject = "rond de sonische buurt \"\(label)\""
+        case .recent:   subject = "met aanbevelingen die aansluiten op wat de luisteraar de laatste tijd draaide"
         }
 
         let examples = sample.prefix(8)
@@ -1065,6 +1069,7 @@ extension RoonClient {
             case .activity: return "voor de activiteit \"\(r.label)\""
             case .decade:   return "met muziek uit de \(r.label.lowercased())"
             case .sonic:    return "rond de sonische buurt \"\(r.label)\""
+            case .recent:   return "met aanbevelingen die aansluiten op wat de luisteraar de laatste tijd draaide"
             }
         }
         func block(_ i: Int, _ r: TitleRequest) -> String {

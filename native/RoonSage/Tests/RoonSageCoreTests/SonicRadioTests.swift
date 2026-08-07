@@ -111,4 +111,51 @@ final class SonicRadioTests: XCTestCase {
             items, disliked: ["bad"], salt: "day", keepEvery: 4, matchKey: { $0 })
         XCTAssertEqual(out.filter { $0 != "bad" }, ["a", "b", "c"], "neutral items always pass")
     }
+
+    // MARK: Recent-listening seeds
+
+    func testRecentSeedKeysOrderByRecencyNotPlayCount() {
+        // The heavy favourite is stale; the one-off is fresh. Recency must win —
+        // otherwise this station is just the artist radio with extra steps.
+        let stats = [
+            (matchKey: "favourite", count: 300, lastPlayed: "2026-03-01T12:00:00Z"),
+            (matchKey: "oneoff",    count: 1,   lastPlayed: "2026-08-07T19:00:00Z"),
+            (matchKey: "middling",  count: 20,  lastPlayed: "2026-08-01T08:00:00Z"),
+        ]
+        XCTAssertEqual(RoonClient.recentSeedKeys(from: stats, limit: 10),
+                       ["oneoff", "middling", "favourite"])
+    }
+
+    func testRecentSeedKeysCapAtLimitAndSkipUnusableRows() {
+        var stats: [(matchKey: String, count: Int, lastPlayed: String)] = (0..<80).map {
+            // Descending timestamps: index 0 is the newest.
+            (matchKey: "t\($0)", count: 1, lastPlayed: String(format: "2026-08-07T%02d:00:00Z", 23 - ($0 % 24)))
+        }
+        // A never-played row and a row with no key must not consume a seed slot.
+        stats.append((matchKey: "nostamp", count: 5, lastPlayed: ""))
+        stats.append((matchKey: "", count: 5, lastPlayed: "2026-08-07T23:59:00Z"))
+
+        let keys = RoonClient.recentSeedKeys(from: stats, limit: 50)
+        XCTAssertEqual(keys.count, 50, "capped at the requested limit")
+        XCTAssertFalse(keys.contains("nostamp"), "rows without a play timestamp are unusable seeds")
+        XCTAssertFalse(keys.contains(""), "rows without a match key are unusable seeds")
+    }
+
+    func testRecentSeedKeysEmptyHistoryYieldsNoSeeds() {
+        // Drives the caller's "no .recent station at all" path rather than a thin one.
+        XCTAssertTrue(RoonClient.recentSeedKeys(from: [], limit: 50).isEmpty)
+    }
+
+    // MARK: Rotation cadence
+
+    func testRotationStampBucketsWithinTheRefreshInterval() {
+        // Same 3h bucket → same seed (a sync mid-window must not reshuffle);
+        // crossing into the next bucket → a different seed.
+        XCTAssertEqual(RoonClient.rotationBucketStamp(date: "2026-08-07", hour: 12),
+                       RoonClient.rotationBucketStamp(date: "2026-08-07", hour: 14))
+        XCTAssertNotEqual(RoonClient.rotationBucketStamp(date: "2026-08-07", hour: 14),
+                          RoonClient.rotationBucketStamp(date: "2026-08-07", hour: 15))
+        XCTAssertNotEqual(RoonClient.rotationBucketStamp(date: "2026-08-07", hour: 12),
+                          RoonClient.rotationBucketStamp(date: "2026-08-08", hour: 12))
+    }
 }

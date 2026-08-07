@@ -133,7 +133,10 @@ extension RoonClient {
         case .mood:     cfg.moods = [key]
         case .activity: cfg.activities = [key]
         case .decade:   if let y = Int(key) { cfg.decades = [y] }
-        case .sonic:    break
+        // No facet mapping: a sonic cluster is an embedding neighbourhood and
+        // `.recent` is a recency slice — neither is expressible as a RadioConfig
+        // filter, so both fork into a bare, named config the user then fills in.
+        case .sonic, .recent: break
         }
         return cfg
     }

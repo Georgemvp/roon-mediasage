@@ -546,12 +546,19 @@ extension RoonClient {
     /// (was `dayStamp`/`yyyy-MM-dd` — user report 2026-08-07: the daily seed
     /// meant a radio's tracks were identical all day despite the 3-hourly sync).
     nonisolated static func rotationStamp() -> String {
+        let now = Date()
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
-        let hour = Calendar.current.component(.hour, from: Date())
+        return rotationBucketStamp(date: f.string(from: now),
+                                   hour: Calendar.current.component(.hour, from: now))
+    }
+
+    /// The stamp for one `date` + `hour` — split out from `rotationStamp()` so the
+    /// bucketing is testable without freezing the clock.
+    nonisolated static func rotationBucketStamp(date: String, hour: Int) -> String {
         let bucket = (hour / radioRotationHours) * radioRotationHours
-        return "\(f.string(from: Date()))-\(String(format: "%02d", bucket))"
+        return "\(date)-\(String(format: "%02d", bucket))"
     }
 
     /// FNV-1a 64-bit — a stable string hash (unlike `String.hashValue`, which is
