@@ -27,12 +27,12 @@ public struct MusicMapView: View {
     public var body: some View {
         Group {
             if isLoading {
-                ContentUnavailableView("Je bibliotheek in kaart brengen…", systemImage: "map")
+                ContentUnavailableView(LS("musicMap.mappingLibrary"), systemImage: "map")
             } else if tracks.isEmpty && loaded {
                 ContentUnavailableView(
-                    "Nog geen geanalyseerde tracks",
+                    LS("musicMap.noAnalyzedTracks"),
                     systemImage: "map",
-                    description: Text("Draai de audio-analyzer en synchroniseer in Instellingen om je bibliotheek hier te plotten.")
+                    description: LT("musicMap.analyzerHint")
                 )
             } else {
                 mapBody
@@ -41,7 +41,7 @@ public struct MusicMapView: View {
         .navigationTitle("Music Map")
         .toolbar {
             Button { Task { await load(force: true) } } label: { Image(systemName: "arrow.clockwise") }
-                .help("Ververs").disabled(isLoading)
+                .help(LS("musicMap.refresh")).disabled(isLoading)
         }
         .task { await load(force: false) }
     }
@@ -49,10 +49,10 @@ public struct MusicMapView: View {
     private var mapBody: some View {
         VStack(spacing: Spacing.sm) {
             HStack {
-                Text("\(tracks.count) geanalyseerde tracks")
+                LT("\(tracks.count) geanalyseerde tracks")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text(usingMap ? "Sonische gelijkenis" : "Energie ↑   ·   Tempo →")
+                (usingMap ? LT("musicMap.sonicSimilarity") : LT("musicMap.energyTempoAxes"))
                     .font(.caption).foregroundStyle(.tertiary)
             }
             .padding(.horizontal, Spacing.lg)
@@ -117,7 +117,7 @@ public struct MusicMapView: View {
     /// map was colour-coding silently with no key.
     private var colorLegend: some View {
         HStack(spacing: Spacing.sm) {
-            Text("Kleur = toonsoort")
+            LT("musicMap.colorIsKey")
                 .font(.caption2).foregroundStyle(.secondary)
             LinearGradient(
                 colors: (0..<12).map { Color(hue: Double($0) / 12.0, saturation: 0.7, brightness: 0.9) },
@@ -130,7 +130,7 @@ public struct MusicMapView: View {
             Spacer()
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Kleur van elk punt staat voor de toonsoort (Camelot 1 tot 12)")
+        .accessibilityLabel(LS("musicMap.colorLegendAccessibility"))
     }
 
     // MARK: - Selection card
@@ -141,7 +141,7 @@ public struct MusicMapView: View {
             AlbumArtView(imageKey: t.imageKey, size: 36)
             VStack(alignment: .leading, spacing: 1) {
                 Text(t.title).font(.caption.weight(.semibold)).lineLimit(1)
-                Text(t.artist ?? "Onbekend").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(t.artist ?? LS("musicMap.unknownArtist")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 HStack(spacing: 4) {
                     if let bpm = t.bpm, bpm > 0 { Text("\(Int(bpm)) BPM") }
                     if !t.camelot.isEmpty { Text(t.camelot) }
@@ -154,16 +154,16 @@ public struct MusicMapView: View {
             } label: { Image(systemName: "dot.radiowaves.left.and.right").tappable44() }
             .buttonStyle(.borderless)
             .disabled(client.selectedZone == nil)
-            .accessibilityLabel("Start station vanaf \(t.title)")
-            .help(client.selectedZone == nil ? "Kies eerst een zone" : "Start een sonisch station vanaf deze plek op de kaart")
+            .accessibilityLabel(LS("Start station vanaf \(t.title)"))
+            .help(client.selectedZone == nil ? LS("musicMap.pickZoneFirst") : LS("musicMap.startStationHelp"))
             Button {
                 guard let zone = client.selectedZone else { return }
                 Task { await client.playTrack(id: t.id, title: t.title, artist: t.artist, zoneID: zone.id) }
             } label: { Image(systemName: "play.fill").tappable44() }
             .buttonStyle(.borderless)
             .disabled(client.selectedZone == nil)
-            .accessibilityLabel("Speel \(t.title)")
-            .help(client.selectedZone == nil ? "Kies eerst een zone" : "Speel nu")
+            .accessibilityLabel(LS("Speel \(t.title)"))
+            .help(client.selectedZone == nil ? LS("musicMap.pickZoneFirst") : LS("bm.playNow"))
         }
         .frame(width: 240)
         .padding(Spacing.sm)

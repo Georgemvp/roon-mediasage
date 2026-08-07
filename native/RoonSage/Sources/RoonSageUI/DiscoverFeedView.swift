@@ -28,7 +28,7 @@ public struct DiscoverFeedView: View {
     enum KindFilter: String, CaseIterable, Identifiable {
         case all, artist, album
         var id: String { rawValue }
-        var label: String { switch self { case .all: "Alles"; case .artist: "Artiesten"; case .album: "Albums" } }
+        var label: String { switch self { case .all: LS("discoverFeed.filterAll"); case .artist: LS("bm.section.artists"); case .album: LS("bm.section.albums") } }
         var kind: RecommendationKind? { switch self { case .all: nil; case .artist: .artist; case .album: .album } }
     }
 
@@ -38,7 +38,7 @@ public struct DiscoverFeedView: View {
         case all, releases, charts
         var id: String { rawValue }
         var label: String {
-            switch self { case .all: "Alle bronnen"; case .releases: "Nieuwe releases"; case .charts: "In de charts" }
+            switch self { case .all: LS("discoverFeed.sourceAll"); case .releases: LS("discoverFeed.sourceReleases"); case .charts: LS("discoverFeed.sourceCharts") }
         }
         /// The producer id a facet keys on (nil = no filter).
         var producer: String? {
@@ -65,7 +65,7 @@ public struct DiscoverFeedView: View {
     public var body: some View {
         Group {
             if loading {
-                ProgressView("Nieuw voor jou laden…")
+                ProgressView(LS("discoverFeed.loading"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let errorText, items.isEmpty {
                 ErrorStateView(errorText) { Task { await load() } }
@@ -73,7 +73,7 @@ public struct DiscoverFeedView: View {
                 emptyState
             } else {
                 List {
-                    Picker("Soort", selection: $kind) {
+                    Picker(LS("discoverFeed.pickerKind"), selection: $kind) {
                         ForEach(KindFilter.allCases) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.segmented)
@@ -92,7 +92,7 @@ public struct DiscoverFeedView: View {
                         // dodge). Buttons stay for macOS / accessibility.
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
                             Button { accept(item) } label: {
-                                Label(item.kind == .album ? "Bewaar" : "Volg",
+                                Label(item.kind == .album ? LS("discoverFeed.save") : LS("discoverFeed.follow"),
                                       systemImage: "plus.circle.fill")
                             }
                             .tint(.roonSuccess)
@@ -102,11 +102,11 @@ public struct DiscoverFeedView: View {
                         // stays as a revealed second button.
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button { reject(item) } label: {
-                                Label("Overslaan", systemImage: "hand.thumbsdown")
+                                Label(LS("discoverFeed.skip"), systemImage: "hand.thumbsdown")
                             }
                             .tint(.roonWarning)
                             Button { play(item) } label: {
-                                Label("Speel", systemImage: "play.fill")
+                                Label(LS("discoverFeed.play"), systemImage: "play.fill")
                             }
                             .tint(.roonInfo)
                         }
@@ -115,26 +115,26 @@ public struct DiscoverFeedView: View {
                 .listStyle(.plain)
             }
         }
-        .navigationTitle("Nieuw voor jou")
+        .navigationTitle(LS("discoverFeed.navTitle"))
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Picker("Bron", selection: $source) {
+                    Picker(LS("discoverFeed.pickerSource"), selection: $source) {
                         ForEach(SourceFilter.allCases) { Label($0.label, systemImage: icon(for: $0)).tag($0) }
                     }
                 } label: {
                     Image(systemName: source == .all ? "line.3.horizontal.decrease.circle"
                               : "line.3.horizontal.decrease.circle.fill")
                 }
-                .help("Filter op bron (nieuwe releases / charts)")
-                .accessibilityLabel("Filter op bron")
+                .help(LS("discoverFeed.filterSourceHelp"))
+                .accessibilityLabel(LS("discoverFeed.filterSourceLabel"))
             }
             ToolbarItem(placement: .primaryAction) {
                 Button { showInsights = true } label: {
                     Image(systemName: "chart.bar")
                 }
-                .help("Ontdek-inzichten")
-                .accessibilityLabel("Ontdek-inzichten")
+                .help(LS("discoverFeed.insights"))
+                .accessibilityLabel(LS("discoverFeed.insights"))
             }
             ToolbarItem(placement: .primaryAction) {
                 // F12a: "iets als mijn smaak, maar [stemming]" — a one-off mood-
@@ -147,8 +147,8 @@ public struct DiscoverFeedView: View {
                     Image(systemName: "theatermasks")
                 }
                 .disabled(refreshing)
-                .help("Ontdek op stemming")
-                .accessibilityLabel("Ontdek op stemming")
+                .help(LS("discoverFeed.moodDiscover"))
+                .accessibilityLabel(LS("discoverFeed.moodDiscover"))
             }
             ToolbarItem(placement: .primaryAction) {
                 Button { Task { await refresh() } } label: {
@@ -159,8 +159,8 @@ public struct DiscoverFeedView: View {
                     }
                 }
                 .disabled(refreshing)
-                .help("Nieuwe ontdekkingen bouwen")
-                .accessibilityLabel(refreshing ? "Ontdekkingen worden gebouwd" : "Ververs ontdekkingen")
+                .help(LS("discoverFeed.buildNew"))
+                .accessibilityLabel(refreshing ? LS("discoverFeed.building") : LS("discoverFeed.refreshDiscoveries"))
             }
         }
         .ambientSurface()
@@ -174,7 +174,7 @@ public struct DiscoverFeedView: View {
                 DiscoverInsightsView()
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Klaar") { showInsights = false }
+                            Button(LS("discoverFeed.done")) { showInsights = false }
                         }
                     }
             }
@@ -208,11 +208,11 @@ public struct DiscoverFeedView: View {
             HStack(spacing: Spacing.md) {
                 Image(systemName: "hand.thumbsdown")
                     .foregroundStyle(.secondary)
-                Text("\(item.album ?? item.artist) overgeslagen")
+                LT("\(item.album ?? item.artist) overgeslagen")
                     .font(.subheadline)
                     .lineLimit(1)
                 Spacer(minLength: Spacing.md)
-                Button("Ongedaan maken") { undoReject() }
+                Button(LS("discoverFeed.undo")) { undoReject() }
                     .font(.subheadline.weight(.semibold))
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.roonGold)
@@ -230,14 +230,14 @@ public struct DiscoverFeedView: View {
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("Nog geen ontdekkingen", systemImage: "wand.and.stars.inverse")
+            Label(LS("discoverFeed.emptyTitle"), systemImage: "wand.and.stars.inverse")
         } description: {
             Text(refreshing
-                 ? "De server bouwt een nieuwe set — dit kan even duren."
-                 : "Nieuw voor jou zoekt artiesten en albums búiten je bibliotheek, op basis van je smaak en meteen speelbaar via Qobuz. (Ontdek Wekelijks put juist uit wat je al hebt.) De server bouwt dagelijks een verse set — veeg om te bewaren of over te slaan.")
+                 ? LS("discoverFeed.emptyBuilding")
+                 : LS("discoverFeed.emptyDescription"))
         } actions: {
             Button { Task { await refresh() } } label: {
-                Label(refreshing ? "Bezig…" : "Ververs", systemImage: "arrow.clockwise")
+                Label(refreshing ? LS("discoverFeed.busy") : LS("discoverFeed.refresh"), systemImage: "arrow.clockwise")
             }
             .disabled(refreshing)
         }
@@ -266,8 +266,8 @@ public struct DiscoverFeedView: View {
         // without this banner + the toolbar spinner the button reads as dead.
         let moodLabel = mood.map { RoonClient.moodLabel($0) }
         withAnimation(Motion.quick) {
-            message = moodLabel.map { "Nieuwe ontdekkingen (\($0)) worden gebouwd — dit kan ~2 min duren…" }
-                ?? "Nieuwe ontdekkingen worden gebouwd — dit kan ~2 min duren…"
+            message = moodLabel.map { LS("Nieuwe ontdekkingen (\($0)) worden gebouwd — dit kan ~2 min duren…") }
+                ?? LS("discoverFeed.buildingFull")
         }
         await client.triggerDiscoveryRun(mood: mood)
         // Poll up to ~2 minutes for the batch to finish (MB resolve is slow).
@@ -282,7 +282,7 @@ public struct DiscoverFeedView: View {
         catch { errorText = error.localizedDescription }
         withAnimation(Motion.quick) {
             message = errorText != nil
-                ? "Verversen mislukt — probeer het later opnieuw."
+                ? LS("discoverFeed.refreshFailed")
                 : "Klaar — \(items.count) ontdekkingen\(moodLabel.map { " (\($0))" } ?? "")."
         }
         clearMessageSoon()
@@ -301,14 +301,14 @@ public struct DiscoverFeedView: View {
         let name = item.album ?? item.artist
         Haptics.tap()
         _ = playing.insert(item.id)
-        withAnimation(Motion.quick) { message = "Bezig met afspelen — ‘\(name)’ opzoeken…" }
+        withAnimation(Motion.quick) { message = LS("Bezig met afspelen — ‘\(name)’ opzoeken…") }
         Task {
             let ok = await client.playRecommendation(item.id, zoneID: client.selectedZone?.id)
             playing.remove(item.id)
             withAnimation(Motion.quick) {
                 message = ok
-                    ? "Afspelen gestart — ‘\(name)’."
-                    : "Afspelen mislukt — ‘\(name)’ kon niet starten."
+                    ? LS("Afspelen gestart — ‘\(name)’.")
+                    : LS("Afspelen mislukt — ‘\(name)’ kon niet starten.")
             }
             clearMessageSoon()
         }
@@ -402,7 +402,7 @@ private struct RecommendationCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if item.kind == .album, (item.qobuzAlbumID ?? "").isEmpty {
-                    Label("Niet op Qobuz gevonden", systemImage: "exclamationmark.triangle")
+                    Label(LS("discoverFeed.notOnQobuz"), systemImage: "exclamationmark.triangle")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -469,19 +469,19 @@ private struct RecommendationCard: View {
         .padding(6)
         .background(.ultraThinMaterial, in: Circle())
         .padding(Spacing.sm)
-        .accessibilityLabel("Match \(pct) procent")
+        .accessibilityLabel(LS("Match \(pct) procent"))
     }
 
     private var actionRow: some View {
         HStack(spacing: Spacing.sm) {
             Button(action: onAccept) {
-                Label(item.kind == .album ? "Bewaar" : "Volg", systemImage: "plus.circle.fill")
+                Label(item.kind == .album ? LS("discoverFeed.save") : LS("discoverFeed.follow"), systemImage: "plus.circle.fill")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
 
             Button(action: onPlay) {
-                Label("Speel", systemImage: "play.fill")
+                Label(LS("discoverFeed.play"), systemImage: "play.fill")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -493,8 +493,8 @@ private struct RecommendationCard: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .accessibilityLabel("Overslaan")
-            .help("Overslaan — even niet meer tonen")
+            .accessibilityLabel(LS("discoverFeed.skip"))
+            .help(LS("discoverFeed.skipHelp"))
         }
     }
 
@@ -528,16 +528,16 @@ private struct ScoreBreakdownView: View {
     let components: ScoreComponents
 
     private var rows: [(label: String, value: Double)] {
-        [("Consensus", components.consensus),
-         ("Gelijkenis", components.similarity),
-         ("Genre", components.genreOverlap),
-         ("AI", components.aiConfidence),
-         ("Feedback", components.feedbackBoost)]
+        [(LS("discoverFeed.scoreConsensus"), components.consensus),
+         (LS("discoverFeed.scoreSimilarity"), components.similarity),
+         (LS("discoverFeed.scoreGenre"), components.genreOverlap),
+         (LS("discoverFeed.scoreAI"), components.aiConfidence),
+         (LS("discoverFeed.scoreFeedback"), components.feedbackBoost)]
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text("Score-opbouw")
+            LT("discoverFeed.scoreBreakdown")
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
             ForEach(rows, id: \.label) { row in
@@ -551,7 +551,7 @@ private struct ScoreBreakdownView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Score-opbouw")
+        .accessibilityLabel(LS("discoverFeed.scoreBreakdown"))
     }
 }
 

@@ -33,7 +33,7 @@ public struct ConnectView: View {
     /// In server mode the app talks to the RoonSage server (not Roon directly),
     /// so the connect copy targets the server.
     var isServerMode: Bool { client.controlMode == .server }
-    var discoverLabel: String { isServerMode ? "Zoek RoonSage-server" : "Zoek Roon Core" }
+    var discoverLabel: String { isServerMode ? LS("connect.discoverServer") : LS("connect.discoverCore") }
 
     public var body: some View {
         VStack(spacing: 28) {
@@ -47,11 +47,11 @@ public struct ConnectView: View {
                 Text("RoonSage")
                     .font(.largeTitle.bold())
                 #if os(macOS)
-                Text("Native macOS-client")
+                LT("connect.subtitleMac")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                 #else
-                Text("Native iOS-client")
+                LT("connect.subtitleIOS")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                 #endif
@@ -70,7 +70,7 @@ public struct ConnectView: View {
                     Button {
                         Task { await client.connect(host: saved, port: client.savedPort) }
                     } label: {
-                        Label("Opnieuw verbinden met \(saved)", systemImage: "arrow.clockwise")
+                        Label(LS("Opnieuw verbinden met \(saved)"), systemImage: "arrow.clockwise")
                             .frame(minWidth: 240)
                     }
                     .buttonStyle(.borderedProminent)
@@ -88,7 +88,7 @@ public struct ConnectView: View {
                     .disabled(isWorking)
                 } else {
                     Button { Task { await client.discoverAndConnect() } } label: {
-                        Label(isServerMode ? discoverLabel : "Zoek op lokaal netwerk", systemImage: "magnifyingglass").frame(minWidth: 240)
+                        Label(isServerMode ? discoverLabel : LS("connect.discoverLocal"), systemImage: "magnifyingglass").frame(minWidth: 240)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
@@ -96,7 +96,7 @@ public struct ConnectView: View {
                 }
 
                 // Manual entry toggle
-                Button("Voer IP-adres handmatig in") {
+                Button(LS("connect.enterIPManually")) {
                     withAnimation { showManual.toggle() }
                 }
                 .buttonStyle(.plain)
@@ -106,9 +106,9 @@ public struct ConnectView: View {
                 if client.savedHost != nil {
                     Toggle(isOn: $autoConnectEnabled) {
                         HStack(spacing: 6) {
-                            Text("Automatisch verbinden")
+                            LT("connect.autoConnect")
                             if let s = retryCountdown, !isWorking {
-                                Text("(opnieuw over \(s)s)")
+                                LT("(opnieuw over \(s)s)")
                                     .foregroundStyle(.secondary)
                                     .monospacedDigit()
                             }
@@ -131,11 +131,11 @@ public struct ConnectView: View {
             // Help
             Group {
                 if isServerMode {
-                    Text("Deze app bedient Roon via de RoonSage-server (de analyzer op je always-on Mac). Zorg dat die draait; afspelen en bediening lopen erdoorheen.")
+                    LT("connect.helpServer")
                 } else if let saved = client.savedHost {
                     Text("Op afstand? Gebruik \u{201C}Opnieuw verbinden met \(saved)\u{201D} — werkt via ZeroTier/VPN.\nOp hetzelfde netwerk? Gebruik dan \u{201C}Zoek op lokaal netwerk\u{201D}.")
                 } else {
-                    Text("Zorg dat Roon op hetzelfde netwerk draait.\nOpen na het verbinden Roon → Settings → Extensions en schakel RoonSage in.")
+                    LT("connect.helpLocal")
                 }
             }
             .font(.caption)
@@ -173,13 +173,13 @@ public struct ConnectView: View {
 
     var manualEntry: some View {
         HStack(spacing: Spacing.sm) {
-            TextField(isServerMode ? "Server-IP" : "Roon Core IP", text: $host)
+            TextField(isServerMode ? LS("connect.serverIPPlaceholder") : LS("connect.coreIPPlaceholder"), text: $host)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 180)
-            TextField("Poort", text: $port)
+            TextField(LS("connect.portPlaceholder"), text: $port)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 70)
-            Button("Verbind") {
+            Button(LS("connect.connect")) {
                 let h = host.trimmingCharacters(in: .whitespacesAndNewlines)
                 let p = UInt16(port.trimmingCharacters(in: .whitespacesAndNewlines))
                 guard let p, !h.isEmpty else { return }

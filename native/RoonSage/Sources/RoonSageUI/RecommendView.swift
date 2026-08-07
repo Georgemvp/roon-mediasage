@@ -26,17 +26,17 @@ public struct RecommendView: View {
     @State private var pendingDelete: DatabaseManager.RecommendationSummary? = nil
 
     private let ideas = [
-        "Albums voor een regenachtige zondagmiddag",
-        "Diepe, meeslepende platen om van begin tot eind te luisteren",
-        "Iets jazzy voor laat op de avond",
-        "Energieke albums om de dag mee te beginnen",
+        LS("recommend.ideaRainySunday"),
+        LS("recommend.ideaDeepImmersive"),
+        LS("recommend.ideaJazzyLateNight"),
+        LS("recommend.ideaEnergeticMorning"),
     ]
 
     public var body: some View {
         List {
             if client.genreCount == 0 {
                 Section {
-                    Label("Genres zijn niet gesynchroniseerd. Ga naar Instellingen → “Synchroniseer genres” voor betere aanbevelingen.",
+                    Label(LS("recommend.genresNotSynced"),
                           systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(Color.roonWarning)
@@ -49,7 +49,7 @@ public struct RecommendView: View {
             recommendSection
 
             if !albums.isEmpty {
-                Section("Aanbevolen albums (\(albums.count))") {
+                Section(LS("Aanbevolen albums (\(albums.count))")) {
                     if let resultFilters {
                         FilterChips(filters: resultFilters).padding(.vertical, 2)
                     }
@@ -62,20 +62,20 @@ public struct RecommendView: View {
             historySection
         }
         .animation(Motion.standard, value: albums.map(\.albumKey))
-        .navigationTitle("Aanbevelen")
+        .navigationTitle(LS("nav.recommend"))
         .confirmationDialog(
-            "Aanbeveling verwijderen?",
+            LS("recommend.deleteConfirmTitle"),
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
             presenting: pendingDelete
         ) { entry in
-            Button("Verwijderen", role: .destructive) {
+            Button(LS("recommend.delete"), role: .destructive) {
                 client.deleteRecommendation(id: entry.id)
                 history.removeAll { $0.id == entry.id }
                 if expandedHistoryID == entry.id { expandedHistoryID = nil; historyAlbums = [] }
                 Haptics.success()
                 pendingDelete = nil
             }
-            Button("Annuleer", role: .cancel) { pendingDelete = nil }
+            Button(LS("recommend.cancel"), role: .cancel) { pendingDelete = nil }
         } message: { entry in
             Text(entry.prompt)
         }
@@ -85,9 +85,9 @@ public struct RecommendView: View {
     // MARK: Form
 
     private var promptSection: some View {
-        Section("Waar heb je zin in?") {
+        Section(LS("recommend.promptSectionTitle")) {
             AIPromptField(text: $prompt,
-                          placeholder: "Beschrijf een sfeer of gelegenheid… bijv. “diepe platen voor een lange avond”",
+                          placeholder: LS("recommend.promptPlaceholder"),
                           minHeight: 70)
                 .listRowInsets(EdgeInsets())
                 .padding(.vertical, Spacing.xs)
@@ -100,15 +100,15 @@ public struct RecommendView: View {
     private var optionsSection: some View {
         Section {
             HStack {
-                Text("Aantal albums")
+                LT("recommend.albumCount")
                 Spacer()
-                Picker("Albums", selection: $count) {
+                Picker(LS("bm.section.albums"), selection: $count) {
                     ForEach([5, 8, 12], id: \.self) { Text("\($0)").tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 180)
             }
             HStack {
-                Text("Afspelen op")
+                LT("recommend.playOn")
                 Spacer()
                 ZonePicker()
             }
@@ -118,7 +118,7 @@ public struct RecommendView: View {
     private var recommendSection: some View {
         Section {
             Button { Task { await recommend() } } label: {
-                Label(isWorking ? "Denken…" : "Beveel albums aan", systemImage: "sparkles")
+                Label(isWorking ? LS("recommend.thinking") : LS("recommend.recommendAlbums"), systemImage: "sparkles")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -144,9 +144,9 @@ public struct RecommendView: View {
     private var idleSection: some View {
         Section {
             ContentUnavailableView {
-                Label("Ontdek albums uit je bibliotheek", systemImage: "sparkles.rectangle.stack")
+                Label(LS("recommend.discoverAlbums"), systemImage: "sparkles.rectangle.stack")
             } description: {
-                Text("Beschrijf een sfeer en RoonSage kiest hele albums die erbij passen — ideaal om van begin tot eind te luisteren.")
+                LT("recommend.idleDescription")
             }
             .listRowBackground(Color.clear)
         }
@@ -158,7 +158,7 @@ public struct RecommendView: View {
     @ViewBuilder
     private var historySection: some View {
         if !history.isEmpty {
-            Section("Eerdere aanbevelingen") {
+            Section(LS("recommend.historyTitle")) {
                 ForEach(history, id: \.id) { entry in
                     historyRow(entry)
                     if expandedHistoryID == entry.id {
@@ -181,14 +181,14 @@ public struct RecommendView: View {
                 Image(systemName: expandedHistoryID == entry.id ? "chevron.up" : "chevron.down")
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel(expandedHistoryID == entry.id ? "Inklappen" : "Uitklappen")
+            .accessibilityLabel(expandedHistoryID == entry.id ? LS("recommend.collapse") : LS("recommend.expand"))
             Button(role: .destructive) { pendingDelete = entry } label: {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
-            .accessibilityLabel("Verwijder aanbeveling")
-            .help("Verwijder deze aanbeveling")
+            .accessibilityLabel(LS("recommend.deleteRecommendation"))
+            .help(LS("recommend.deleteRecommendationHelp"))
         }
         .contentShape(Rectangle())
         .onTapGesture { Task { await toggleHistory(entry) } }
@@ -198,7 +198,7 @@ public struct RecommendView: View {
     private func albumList(_ items: [DatabaseManager.AlbumResult]) -> some View {
         ForEach(items, id: \.albumKey) { album in
             AIResultRow(title: album.album,
-                        subtitle: "\(album.artist ?? "Onbekend")\(album.year.map { " · \($0)" } ?? "")",
+                        subtitle: "\(album.artist ?? LS("recommend.unknownArtist"))\(album.year.map { " · \($0)" } ?? "")",
                         imageKey: album.imageKey) {
                 HStack(spacing: Spacing.xs) {
                     Button {
@@ -210,8 +210,8 @@ public struct RecommendView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(client.selectedZone == nil)
-                    .accessibilityLabel("Speel \(album.album) af")
-                    .help(client.selectedZone == nil ? "Kies eerst een zone" : "Speel dit album af")
+                    .accessibilityLabel(LS("Speel \(album.album) af"))
+                    .help(client.selectedZone == nil ? LS("recommend.pickZoneFirst") : LS("recommend.playAlbumHelp"))
 
                     Button {
                         Haptics.tap()
@@ -220,8 +220,8 @@ public struct RecommendView: View {
                         Image(systemName: "iphone")
                     }
                     .buttonStyle(.bordered)
-                    .accessibilityLabel("Speel \(album.album) op dit apparaat")
-                    .help("Speel dit album lokaal af op dit apparaat")
+                    .accessibilityLabel(LS("Speel \(album.album) op dit apparaat"))
+                    .help(LS("recommend.playLocalHelp"))
                 }
             }
         }
@@ -260,7 +260,7 @@ public struct RecommendView: View {
         phase = .candidates
         let candidates = await client.candidateAlbums(filters: filters, limit: 60)
         guard !candidates.isEmpty else {
-            errorMessage = "Geen albums om aan te bevelen — synchroniseer eerst je bibliotheek."
+            errorMessage = LS("recommend.noAlbumsError")
             return
         }
 
@@ -286,7 +286,7 @@ public struct RecommendView: View {
                 temperature: 0.3, maxTokens: 256)
             let numbers = PlaylistAssembler.picks(from: resp, max: candidates.count)
             guard !numbers.isEmpty else {
-                errorMessage = "Kon de aanbeveling niet verwerken — probeer opnieuw."
+                errorMessage = LS("recommend.processError")
                 return
             }
             albums = numbers.compactMap { n in (n >= 1 && n <= candidates.count) ? candidates[n - 1] : nil }

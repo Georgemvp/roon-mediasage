@@ -18,9 +18,9 @@ public struct CreateHubView: View {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .generate: "Genereer"
-            case .ask:      "Snel"
-            case .albums:   "Albums"
+            case .generate: LS("nav.generate")
+            case .ask:      LS("createHub.modeQuick")
+            case .albums:   LS("bm.section.albums")
             }
         }
     }
@@ -31,7 +31,7 @@ public struct CreateHubView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Picker("Modus", selection: $mode) {
+            Picker(LS("createHub.mode"), selection: $mode) {
                 ForEach(Mode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)

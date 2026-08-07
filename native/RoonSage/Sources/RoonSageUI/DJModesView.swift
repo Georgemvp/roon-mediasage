@@ -34,15 +34,15 @@ public struct DJModesView: View {
                         .font(.subheadline.weight(.semibold))
                     Spacer()
                 }
-                Text("Laat de DJ automatisch overnemen wanneer je wachtrij bijna leeg is — hij bouwt eindeloos verder op het nummer dat speelt.")
+                LT("dJModes.autoplayDescription")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle(isOn: $client.djAutoplayEnabled) {
-                    Text("Autoplay via de gekozen DJ").font(.caption)
+                    LT("dJModes.autoplayToggle").font(.caption)
                 }
                 .toggleStyle(.switch)
                 Toggle(isOn: $client.djAutoplayAutoPersona) {
-                    Text("Kies persona automatisch op tijdstip").font(.caption)
+                    LT("dJModes.autoPersonaToggle").font(.caption)
                 }
                 .toggleStyle(.switch)
                 .disabled(!client.djAutoplayEnabled)
@@ -59,7 +59,7 @@ public struct DJModesView: View {
             .plainCardRow()
 
             if !canStart {
-                Text("Speel eerst een nummer op de gekozen zone — een DJ start op wat er nú speelt.")
+                LT("dJModes.needNowPlaying")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .plainCardRow()
@@ -70,7 +70,7 @@ public struct DJModesView: View {
             }
             .plainCardRow()
         }
-        .navigationTitle("DJ-modi")
+        .navigationTitle(LS("dJModes.title"))
     }
 
     // MARK: Sections
@@ -78,11 +78,11 @@ public struct DJModesView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Label {
-                Text("DJ-modi").font(.headline)
+                LT("dJModes.title").font(.headline)
             } icon: {
                 Image(systemName: "person.wave.2").foregroundStyle(Color.roonGold)
             }
-            Text("Kies een DJ met een eigen specialiteit — dichtbij blijven, op avontuur, dezelfde artiest, hetzelfde tijdperk of de stemming vasthouden.")
+            LT("dJModes.headerBlurb")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -94,7 +94,7 @@ public struct DJModesView: View {
                 .font(.title3)
                 .foregroundStyle(Color.roonGold)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Radio speelt").font(.caption).foregroundStyle(.secondary)
+                LT("dJModes.radioPlaying").font(.caption).foregroundStyle(.secondary)
                 Text(radio.artist).font(.headline)
             }
             Spacer()
@@ -102,7 +102,7 @@ public struct DJModesView: View {
                 Haptics.tap()
                 client.stopRadio()
             } label: {
-                Label("Stop", systemImage: "stop.fill")
+                Label(LS("dJModes.stop"), systemImage: "stop.fill")
             }
             .buttonStyle(.bordered)
         }

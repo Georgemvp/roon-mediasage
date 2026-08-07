@@ -21,9 +21,9 @@ public struct SonicLabView: View {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .search: "Zoek"
-            case .mix:    "Mix"
-            case .bridge: "Brug"
+            case .search: LS("sonicLab.modeSearch")
+            case .mix:    LS("sonicLab.modeMix")
+            case .bridge: LS("sonicLab.modeBridge")
             }
         }
     }
@@ -32,7 +32,7 @@ public struct SonicLabView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Picker("Modus", selection: $mode) {
+            Picker(LS("sonicLab.modePickerTitle"), selection: $mode) {
                 ForEach(Mode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)

@@ -22,7 +22,7 @@ public struct DiscoverInsightsView: View {
     public var body: some View {
         Group {
             if loading {
-                ProgressView("Inzichten laden…")
+                ProgressView(LS("discoverInsights.loading"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let errorText, stats == nil {
                 ErrorStateView(errorText) { Task { await load() } }
@@ -32,7 +32,7 @@ public struct DiscoverInsightsView: View {
                 emptyState
             }
         }
-        .navigationTitle("Ontdek-inzichten")
+        .navigationTitle(LS("discoverInsights.title"))
         .ambientSurface()
         .task { await load() }
     }
@@ -50,14 +50,14 @@ public struct DiscoverInsightsView: View {
             metrics(s).plainCardRow()
 
             if !s.producers.isEmpty {
-                Section("Bron-effectiviteit") {
+                Section(LS("discoverInsights.sourceEffectiveness")) {
                     ForEach(s.producers) { ProducerRow(stat: $0).plainCardRow() }
                 }
                 .headerProminence(.increased)
             }
 
             if !s.topGenres.isEmpty {
-                Section("Meest bewaarde genres") {
+                Section(LS("discoverInsights.topSavedGenres")) {
                     let maxCount = s.topGenres.map(\.count).max() ?? 1
                     ForEach(s.topGenres) { g in
                         GenreRow(genre: g, fraction: Double(g.count) / Double(maxCount)).plainCardRow()
@@ -71,18 +71,18 @@ public struct DiscoverInsightsView: View {
 
     private func metrics(_ s: DiscoveryStatsDTO) -> some View {
         HStack(spacing: Spacing.md) {
-            MetricTile(label: "Goedgekeurd", value: "\(Int((s.approvalRate * 100).rounded()))%",
+            MetricTile(label: LS("discoverInsights.approved"), value: "\(Int((s.approvalRate * 100).rounded()))%",
                        tint: s.accepted + s.rejected > 0 ? .roonGold : .secondary)
-            MetricTile(label: "Bewaard", value: "\(s.accepted)", tint: .roonSuccess)
-            MetricTile(label: "Overgeslagen", value: "\(s.rejected)", tint: .secondary)
+            MetricTile(label: LS("nav.bookmarks"), value: "\(s.accepted)", tint: .roonSuccess)
+            MetricTile(label: LS("discoverInsights.skipped"), value: "\(s.rejected)", tint: .secondary)
         }
     }
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("Nog geen inzichten", systemImage: "chart.bar")
+            Label(LS("discoverInsights.emptyTitle"), systemImage: "chart.bar")
         } description: {
-            Text("Zodra je aanbevelingen bewaart of overslaat, verschijnen hier je goedkeur-ratio en welke bronnen het beste bij je smaak passen.")
+            LT("discoverInsights.emptyDescription")
         }
     }
 }
@@ -124,7 +124,7 @@ private struct ProducerRow: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.roonGold)
                 } else {
-                    Text("nog geen beslissingen")
+                    LT("discoverInsights.noDecisions")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

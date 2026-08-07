@@ -68,3 +68,661 @@
 "radio.steer.placeholder"  = "Steer it: ‘more adventurous’, ‘safer’…";
 "radio.steer.send"         = "Steer the station";
 "radio.steer.unrecognised" = "Couldn’t read ‘%@’ — try e.g. ‘avontuurlijker’ or ‘veiliger’.";
+
+
+/* ─── C7 sweep: strings lifted out of the views (2026-08-07) ─── */
+
+/* aIComponents */
+"aIComponents.chooseZone"   = "Choose zone";
+"aIComponents.wholeLibrary" = "whole library";
+
+/* ask */
+"ask.cancel"                  = "Cancel";
+"ask.emptyDescription"        = "Type a mood, genre or tempo and RoonSage finds matching tracks from your library.";
+"ask.emptyTitle"              = "Ask your library";
+"ask.interpreting"            = "Interpreting…";
+"ask.nothingFound"            = "Nothing found — try rephrasing or sync your library.";
+"ask.playAll"                 = "Play all";
+"ask.playlistNamePlaceholder" = "Playlist name";
+"ask.refineHelp"              = "Take this question to Generate for a curated, flow-ordered playlist";
+"ask.refineToPlaylist"        = "Refine into playlist →";
+"ask.save"                    = "Save";
+"ask.saveAlertTitle"          = "Save as playlist";
+"ask.saveHelp"                = "Save these tracks as a playlist";
+"ask.searchPrompt"            = "Describe a mood… e.g. “dark and hypnotic around 122 BPM”";
+
+/* commandPalette */
+"commandPalette.clearSearch"       = "Clear search";
+"commandPalette.dislike"           = "Dislike";
+"commandPalette.done"              = "Done";
+"commandPalette.jumpSidebar"       = "Jump to a section in the sidebar";
+"commandPalette.like"              = "Like";
+"commandPalette.nextTrack"         = "Next track";
+"commandPalette.openPalette"       = "Open command palette";
+"commandPalette.pause"             = "Pause";
+"commandPalette.play"              = "Play";
+"commandPalette.playPause"         = "Play / pause";
+"commandPalette.prevTrack"         = "Previous track";
+"commandPalette.searchPlaceholder" = "Search for an action or track…";
+"commandPalette.sectionGeneral"    = "General";
+"commandPalette.shortcutsTitle"    = "Keyboard shortcuts";
+"commandPalette.showShortcuts"     = "Show keyboard shortcuts";
+"commandPalette.shuffleOff"        = "Turn shuffle off";
+"commandPalette.shuffleOn"         = "Turn shuffle on";
+"commandPalette.sleepTimerOff"     = "Turn sleep timer off";
+"commandPalette.startSonicRadio"   = "Start Sonic Radio";
+"commandPalette.toggleRepeat"      = "Toggle repeat mode";
+"commandPalette.visualizerOff"     = "Turn visualizer off";
+"commandPalette.visualizerOn"      = "Turn visualizer on";
+"commandPalette.volumeDown"        = "Volume down";
+"commandPalette.volumeUp"          = "Volume up";
+
+/* connect */
+"connect.connect"             = "Connect";
+"connect.coreIPPlaceholder"   = "Roon Core IP";
+"connect.discoverCore"        = "Find Roon Core";
+"connect.discoverLocal"       = "Search local network";
+"connect.discoverServer"      = "Find RoonSage server";
+"connect.enterIPManually"     = "Enter IP address manually";
+"connect.portPlaceholder"     = "Port";
+"connect.serverIPPlaceholder" = "Server IP";
+
+/* createHub */
+"createHub.mode"      = "Mode";
+"createHub.modeQuick" = "Quick";
+
+/* customRadio */
+"customRadio.adoptAsEditable"    = "Adopt as an editable custom radio";
+"customRadio.awaitingSync"       = "awaiting sync";
+"customRadio.category"           = "Category";
+"customRadio.hiddenOnMain"       = "Hidden on the main screen — tap to show";
+"customRadio.hideOnMain"         = "Hide on the main screen";
+"customRadio.newRadioHelp"       = "Build a new radio";
+"customRadio.noSourceChosen"     = "No source chosen yet";
+"customRadio.notSyncing"         = "not syncing";
+"customRadio.onQobuz"            = "on Qobuz";
+"customRadio.play"               = "Play";
+"customRadio.qobuzNotConfigured" = "Qobuz is not set up — you can build and play radios, but syncing to Qobuz only works once you enter your credentials in Settings.";
+"customRadio.radioOff"           = "Radio is off";
+"customRadio.radioOn"            = "Radio is on";
+"customRadio.statusOff"          = "Off";
+"customRadio.statusOn"           = "On";
+"customRadio.stop"               = "Stop";
+"customRadio.syncToQobuz"        = "Sync radios to Qobuz";
+"customRadio.title"              = "My radios";
+"customRadio.unnamedRadio"       = "Unnamed radio";
+"customRadio.willSync"           = "Will sync to Qobuz";
+"customRadio.wontSync"           = "Will not sync";
+
+/* customRadioEditor */
+"customRadioEditor.adventureDiscovery" = "Exploring far";
+"customRadioEditor.adventureExploring" = "Exploring";
+"customRadioEditor.adventureFamiliar"  = "Mostly familiar";
+"customRadioEditor.adventureLight"     = "Light exploration";
+"customRadioEditor.all"                = "All";
+"customRadioEditor.cancel"             = "Cancel";
+"customRadioEditor.clearSelection"     = "Clear selection";
+"customRadioEditor.facetGenres"        = "Genres";
+"customRadioEditor.favorites"          = "Favourites";
+"customRadioEditor.namePlaceholder"    = "E.g. Summer evening or Focus house";
+"customRadioEditor.navTitleEdit"       = "Edit radio";
+"customRadioEditor.navTitleNew"        = "New radio";
+"customRadioEditor.none"               = "None";
+"customRadioEditor.save"               = "Save";
+"customRadioEditor.searchPrompt"       = "Search";
+"customRadioEditor.sectionActivity"    = "Activity";
+"customRadioEditor.sectionDecade"      = "Decade";
+"customRadioEditor.sectionMood"        = "Mood";
+"customRadioEditor.sectionName"        = "Name";
+"customRadioEditor.sectionSync"        = "Sync";
+"customRadioEditor.toggleEnabled"      = "Radio on";
+"customRadioEditor.toggleSyncQobuz"    = "Sync to Qobuz automatically";
+
+/* dJ */
+"dJ.mode" = "Mode";
+
+/* dJModes */
+"dJModes.stop"  = "Stop";
+"dJModes.title" = "DJ modes";
+
+/* dJSet */
+"dJSet.analysis"            = "Analysis";
+"dJSet.avgTempo"            = "Avg. tempo";
+"dJSet.buildSet"            = "Build DJ Set";
+"dJSet.cancel"              = "Cancel";
+"dJSet.chooseZone"          = "Choose zone…";
+"dJSet.chooseZoneFirst"     = "Choose a zone first";
+"dJSet.energy"              = "energy";
+"dJSet.equalTempo"          = "equal tempo";
+"dJSet.export"              = "Export";
+"dJSet.exportHelp"          = "Share the setlist (with BPM and key)";
+"dJSet.harmonic"            = "Harmonic";
+"dJSet.harmonicMix"         = "harmonic mix";
+"dJSet.harmonicTransitions" = "Harmonic transitions";
+"dJSet.legendHarmonic"      = "harmonic";
+"dJSet.legendSameKey"       = "same key";
+"dJSet.mixPlan"             = "Mix plan";
+"dJSet.mixing"              = "Mixing…";
+"dJSet.noAnalyzedTracks"    = "No analysed tracks yet";
+"dJSet.noTracksFound"       = "No tracks found — widen the BPM range or drop the tags.";
+"dJSet.play"                = "Play";
+"dJSet.playSetHelp"         = "Play the set";
+"dJSet.playlistName"        = "Playlist name";
+"dJSet.range"               = "Range";
+"dJSet.rebuild"             = "Rebuild";
+"dJSet.rebuildConfirm"      = "Rebuild the set? The current set will be replaced.";
+"dJSet.sameKey"             = "same key";
+"dJSet.save"                = "Save";
+"dJSet.tagsPlaceholder"     = "optional, comma-separated (e.g. driving, deep house)";
+"dJSet.tempo"               = "tempo";
+"dJSet.tempoEnergy"         = "Tempo & energy";
+"dJSet.tempoOnly"           = "tempo only";
+"dJSet.zone"                = "Zone";
+
+/* discoverFeed */
+"discoverFeed.buildNew"           = "Build new discoveries";
+"discoverFeed.building"           = "Building discoveries";
+"discoverFeed.buildingFull"       = "Building new discoveries — this can take ~2 min…";
+"discoverFeed.busy"               = "Working…";
+"discoverFeed.done"               = "Done";
+"discoverFeed.emptyBuilding"      = "The server is building a new set — this may take a moment.";
+"discoverFeed.emptyDescription"   = "New for you looks for artists and albums outside your library, based on your taste and playable straight away via Qobuz. (Discover Weekly draws on what you already have.) The server builds a fresh set daily — swipe to save or skip.";
+"discoverFeed.emptyTitle"         = "No discoveries yet";
+"discoverFeed.filterAll"          = "All";
+"discoverFeed.filterSourceHelp"   = "Filter by source (new releases / charts)";
+"discoverFeed.filterSourceLabel"  = "Filter by source";
+"discoverFeed.follow"             = "Follow";
+"discoverFeed.insights"           = "Discovery insights";
+"discoverFeed.loading"            = "Loading New for you…";
+"discoverFeed.moodDiscover"       = "Discover by mood";
+"discoverFeed.navTitle"           = "New for you";
+"discoverFeed.notOnQobuz"         = "Not found on Qobuz";
+"discoverFeed.pickerKind"         = "Kind";
+"discoverFeed.pickerSource"       = "Source";
+"discoverFeed.play"               = "Play";
+"discoverFeed.refresh"            = "Refresh";
+"discoverFeed.refreshDiscoveries" = "Refresh discoveries";
+"discoverFeed.refreshFailed"      = "Refresh failed — please try again later.";
+"discoverFeed.save"               = "Save";
+"discoverFeed.scoreAI"            = "AI";
+"discoverFeed.scoreBreakdown"     = "Score breakdown";
+"discoverFeed.scoreConsensus"     = "Consensus";
+"discoverFeed.scoreFeedback"      = "Feedback";
+"discoverFeed.scoreGenre"         = "Genre";
+"discoverFeed.scoreSimilarity"    = "Similarity";
+"discoverFeed.skip"               = "Skip";
+"discoverFeed.skipHelp"           = "Skip — hide this for now";
+"discoverFeed.sourceAll"          = "All sources";
+"discoverFeed.sourceCharts"       = "In the charts";
+"discoverFeed.sourceReleases"     = "New releases";
+"discoverFeed.undo"               = "Undo";
+
+/* discoverInsights */
+"discoverInsights.approved"            = "Approved";
+"discoverInsights.emptyTitle"          = "No insights yet";
+"discoverInsights.loading"             = "Loading insights…";
+"discoverInsights.skipped"             = "Skipped";
+"discoverInsights.sourceEffectiveness" = "Source effectiveness";
+"discoverInsights.title"               = "Discovery insights";
+"discoverInsights.topSavedGenres"      = "Most saved genres";
+
+/* discoverWeekly */
+"discoverWeekly.busy"          = "Working…";
+"discoverWeekly.emptyTitle"    = "No weekly discovery playlist yet";
+"discoverWeekly.generateNow"   = "Generate now";
+"discoverWeekly.loading"       = "Loading Discover Weekly…";
+"discoverWeekly.navTitle"      = "Discover Weekly";
+"discoverWeekly.refreshA11y"   = "Refresh the weekly selection";
+"discoverWeekly.refreshHelp"   = "Refresh the weekly selection now";
+"discoverWeekly.refreshNow"    = "Refresh now";
+"discoverWeekly.tracksSection" = "Tracks";
+"discoverWeekly.unknownArtist" = "Unknown";
+
+/* discovery */
+"discovery.albumOfDay"               = "Album of the day";
+"discovery.decadeCardTitle"          = "Tracks per decade";
+"discovery.emptyTitle"               = "No library data";
+"discovery.playAll"                  = "Play all";
+"discovery.playLocallyHelp"          = "Play locally on this device";
+"discovery.playOnThisDevice"         = "Play on this device";
+"discovery.rediscover"               = "Rediscover";
+"discovery.refresh"                  = "Refresh";
+"discovery.refreshHint"              = "Refresh discovery overview";
+"discovery.shelfForgottenFavorites"  = "Forgotten favourites";
+"discovery.shelfNeverHeard"          = "Not heard yet";
+"discovery.shelfPlayAgain"           = "Play again";
+"discovery.shelfTopTracks"           = "Your top tracks";
+"discovery.showAnotherSelection"     = "Show another selection";
+"discovery.showOtherForgottenAlbums" = "Show other forgotten albums";
+"discovery.statTracks"               = "Tracks";
+"discovery.title"                    = "Discover";
+"discovery.topGenres"                = "Top genres";
+
+/* filteredTracks */
+"filteredTracks.emptyTitle" = "No tracks";
+"filteredTracks.playAll"    = "Play all";
+"filteredTracks.shuffle"    = "Shuffle";
+
+/* generate */
+"generate.advDiscovering"     = "Exploring far";
+"generate.advExploring"       = "Exploring";
+"generate.advLightExplore"    = "Light exploration";
+"generate.advMostlyKnown"     = "Mostly familiar";
+"generate.allTemplates"       = "All templates";
+"generate.arc"                = "Arc";
+"generate.arcHelp"            = "The energy shape the playlist is ordered into — Auto derives it from your description";
+"generate.autoAssembled"      = "Assembled automatically — the AI selection didn't fully succeed.";
+"generate.close"              = "Close";
+"generate.copyDiagnostics"    = "Copy diagnostics";
+"generate.diagnostics"        = "Diagnostics";
+"generate.generatePlaylist"   = "Generate playlist";
+"generate.generating"         = "Generating…";
+"generate.idleTitle"          = "Describe what you want to hear";
+"generate.moveDown"           = "Move down";
+"generate.moveUp"             = "Move up";
+"generate.namePlaceholder"    = "Playlist name";
+"generate.navTitle"           = "Generate playlist";
+"generate.none"               = "None";
+"generate.playAll"            = "Play all";
+"generate.playNext"           = "Play next";
+"generate.playtime"           = "Playing time";
+"generate.promptPlaceholder"  = "Describe the mood, genre or occasion… e.g. “warm jazz for a rainy Sunday morning”";
+"generate.promptSection"      = "What kind of playlist?";
+"generate.qobuzFailed"        = "Saving to Qobuz failed — check your account in Settings.";
+"generate.qobuzHelp"          = "Also save this playlist to your Qobuz account";
+"generate.qobuzSaving"        = "Saving to Qobuz…";
+"generate.regenerate"         = "Regenerate";
+"generate.removeFromPlaylist" = "Remove from playlist";
+"generate.save"               = "Save";
+"generate.saved"              = "Saved!";
+"generate.sectionSave"        = "Save";
+"generate.size"               = "Size";
+"generate.stop"               = "Stop";
+"generate.templatesTitle"     = "Templates";
+"generate.trackCount"         = "Number of tracks";
+
+/* labelExplorer */
+"labelExplorer.cancel"        = "Cancel";
+"labelExplorer.labelOfWeek"   = "Label of the week";
+"labelExplorer.labels"        = "Labels";
+"labelExplorer.mergeNavTitle" = "Merge with…";
+"labelExplorer.mergeWith"     = "Merge with…";
+"labelExplorer.noLabelsTitle" = "No labels yet";
+"labelExplorer.sort"          = "Sort";
+"labelExplorer.undo"          = "Undo";
+
+/* library */
+"library.addToQueue"             = "Add to queue";
+"library.browseBy"               = "Browse by";
+"library.cancel"                 = "Cancel";
+"library.chooseZoneFirst"        = "Choose a zone or device first";
+"library.clear"                  = "Clear";
+"library.closeSelection"         = "Close selection";
+"library.decades"                = "Decades";
+"library.discoverWeeklySubtitle" = "Fresh discoveries from your own library — refreshed every week.";
+"library.discoverWeeklyTitle"    = "Discover Weekly";
+"library.favoritesOnly"          = "Favourites only";
+"library.forgottenFavorites"     = "Forgotten favourites";
+"library.genres"                 = "Genres";
+"library.modeOverview"           = "Overview";
+"library.mood"                   = "Mood";
+"library.myRadiosSubtitle"       = "Your own custom sonic radios.";
+"library.myRadiosTitle"          = "My radios";
+"library.noLibraryYet"           = "No library yet";
+"library.noMatchingTracks"       = "No matching tracks";
+"library.notConnected"           = "Not connected";
+"library.play"                   = "Play";
+"library.playAll"                = "Play all";
+"library.playlistName"           = "Playlist name";
+"library.radioStations"          = "Radio stations";
+"library.recentlyAdded"          = "Recently added";
+"library.recentlyPlayedShelf"    = "Recently played";
+"library.recommendSubtitle"      = "Describe a vibe → albums from your library.";
+"library.save"                   = "Save";
+"library.saveAsPlaylist"         = "Save as playlist";
+"library.saveAsPlaylistMenu"     = "Save as playlist…";
+"library.searchAlbums"           = "Search by album or artist…";
+"library.searchArtists"          = "Search by artist…";
+"library.searchOverview"         = "Search your library…";
+"library.searchTracks"           = "Search by title, artist or album…";
+"library.selectMultiple"         = "Select multiple";
+"library.selectMultipleAlbums"   = "Select multiple albums";
+"library.selectMultipleTracks"   = "Select multiple tracks";
+"library.showAll"                = "Show all";
+"library.sonicallySimilar"       = "Sonically similar";
+"library.sort"                   = "Sort";
+"library.sortAlbum"              = "Album";
+"library.sortArtist"             = "Artist";
+"library.sortMostPlayed"         = "Most played";
+"library.sortRandom"             = "Random";
+"library.sortRecentlyPlayed"     = "Recently played";
+"library.sortTitle"              = "Title";
+"library.sortTracksHelp"         = "Sort tracks";
+"library.sortYear"               = "Year";
+"library.syncLibrary"            = "Sync library";
+"library.tracks"                 = "Tracks";
+"library.undiscoveredAlbums"     = "Undiscovered albums";
+"library.yourTopTracks"          = "Your top tracks";
+
+/* libraryDetail */
+"libraryDetail.aboutAlbum"       = "About this album";
+"libraryDetail.addToQueue"       = "Add to queue";
+"libraryDetail.albumRadio"       = "Album radio";
+"libraryDetail.albumRadioHelp"   = "Album radio — endless radio around this album";
+"libraryDetail.info"             = "Info";
+"libraryDetail.markFavorite"     = "Mark as favourite";
+"libraryDetail.otherVersions"    = "Other versions in your library";
+"libraryDetail.play"             = "Play";
+"libraryDetail.playAll"          = "Play all";
+"libraryDetail.playAllLocalHelp" = "Play everything locally on this device";
+"libraryDetail.playOnThisDevice" = "Play on this device";
+"libraryDetail.removeFavorite"   = "Remove from favourites";
+"libraryDetail.sonicallySimilar" = "Sonically similar";
+
+/* liveDJ */
+"liveDJ.harmonic"       = "Harmonic";
+"liveDJ.noFeatures"     = "No audio features for this track";
+"liveDJ.nothingPlaying" = "Nothing playing";
+"liveDJ.queueNext"      = "Queue next";
+"liveDJ.sameKey"        = "Same key";
+
+/* localNowPlaying */
+"localNowPlaying.deviceNounDevice"  = "this device";
+"localNowPlaying.deviceNounMac"     = "this Mac";
+"localNowPlaying.dislike"           = "Dislike — skip it and learn from it";
+"localNowPlaying.like"              = "Like";
+"localNowPlaying.lyrics"            = "Lyrics";
+"localNowPlaying.mute"              = "Mute";
+"localNowPlaying.nextTrack"         = "Next track";
+"localNowPlaying.off"               = "off";
+"localNowPlaying.on"                = "on";
+"localNowPlaying.pause"             = "Pause";
+"localNowPlaying.play"              = "Play";
+"localNowPlaying.playbackPosition"  = "Playback position";
+"localNowPlaying.previousTrack"     = "Previous track";
+"localNowPlaying.stopLocalPlayback" = "Stop local playback";
+"localNowPlaying.tapToContinue"     = "Tap to keep playing";
+"localNowPlaying.unmute"            = "Unmute";
+
+/* localPlayButton */
+"localPlayButton.deviceNounDevice" = "this device";
+"localPlayButton.deviceNounMac"    = "this Mac";
+
+/* logConsole */
+"logConsole.clear"        = "Clear";
+"logConsole.copied"       = "Copied ✓";
+"logConsole.copyAll"      = "Copy all";
+"logConsole.emptyLog"     = "No log lines yet.";
+"logConsole.refresh"      = "Refresh";
+"logConsole.shareSave"    = "Share / save";
+"logConsole.showInFinder" = "Show in Finder";
+"logConsole.title"        = "Log";
+
+/* lyrics */
+"lyrics.done"         = "Done";
+"lyrics.instrumental" = "Instrumental";
+"lyrics.loading"      = "Loading lyrics…";
+"lyrics.notFound"     = "No lyrics found";
+"lyrics.title"        = "Lyrics";
+
+/* multitag */
+"multitag.allGenresToggle"  = "All genres (crossover)";
+"multitag.decade"           = "Decade";
+"multitag.noCrossoverTitle" = "No crossover found";
+"multitag.play"             = "Play";
+"multitag.searchTracks"     = "Search tracks";
+"multitag.searching"        = "Searching…";
+
+/* musicMap */
+"musicMap.colorLegendAccessibility" = "The colour of each point represents the key (Camelot 1 to 12)";
+"musicMap.mappingLibrary"           = "Mapping your library…";
+"musicMap.noAnalyzedTracks"         = "No analysed tracks yet";
+"musicMap.pickZoneFirst"            = "Choose a zone first";
+"musicMap.refresh"                  = "Refresh";
+"musicMap.startStationHelp"         = "Start a sonic station from this spot on the map";
+"musicMap.unknownArtist"            = "Unknown";
+
+/* nowPlaying */
+"nowPlaying.chooseOutput"     = "Choose output";
+"nowPlaying.chooseOutputHint" = "Tap to choose another zone or this device";
+"nowPlaying.chooseZone"       = "Choose a zone";
+"nowPlaying.close"            = "Close";
+"nowPlaying.discoverMusic"    = "Discover music";
+"nowPlaying.dislike"          = "Dislike — skip it and learn from it";
+"nowPlaying.journey"          = "Journey";
+"nowPlaying.journeyHelp"      = "A sonic journey drifting from this track into an entirely different soundscape";
+"nowPlaying.keepPlayingHint"  = "Tap to keep playing";
+"nowPlaying.like"             = "Like";
+"nowPlaying.lyrics"           = "Lyrics";
+"nowPlaying.makePlaylist"     = "Make a playlist";
+"nowPlaying.moodAcoustic"     = "Acoustic";
+"nowPlaying.moodDanceable"    = "Danceable";
+"nowPlaying.moodElectronic"   = "Electronic";
+"nowPlaying.moodHappy"        = "Happy";
+"nowPlaying.moodInstrumental" = "Instrumental";
+"nowPlaying.moodMelancholic"  = "Melancholic";
+"nowPlaying.mute"             = "Mute";
+"nowPlaying.nextTrack"        = "Next track";
+"nowPlaying.noActiveZones"    = "No active zones";
+"nowPlaying.none"             = "none";
+"nowPlaying.off"              = "off";
+"nowPlaying.on"               = "on";
+"nowPlaying.pause"            = "Pause";
+"nowPlaying.play"             = "Play";
+"nowPlaying.playbackPosition" = "Playback position";
+"nowPlaying.previousTrack"    = "Previous track";
+"nowPlaying.repeatAll"        = "Repeat all";
+"nowPlaying.repeatOff"        = "Repeat off";
+"nowPlaying.repeatOne"        = "Repeat this track";
+"nowPlaying.scrubHint"        = "Swipe up or down to scrub";
+"nowPlaying.sonicRadioHelp"   = "Play a station of tracks that sound like this one";
+"nowPlaying.sonicallySimilar" = "Sonically similar";
+"nowPlaying.startJourney"     = "Start a sonic journey";
+"nowPlaying.unmute"           = "Unmute";
+"nowPlaying.wallDisplay"      = "Wall display";
+"nowPlaying.wallDisplayHelp"  = "Full screen — wall display";
+
+/* nowPlayingBar */
+"nowPlayingBar.nextTrack"  = "Next track";
+"nowPlayingBar.pause"      = "Pause";
+"nowPlayingBar.play"       = "Play";
+"nowPlayingBar.stopLocal"  = "Stop local playback";
+"nowPlayingBar.thisDevice" = "This device";
+"nowPlayingBar.thisMac"    = "This Mac";
+
+/* onboarding */
+"onboarding.back"                 = "Back";
+"onboarding.bulletAudioText"      = "BPM, key, energy and tags — the basis for DJ sets and Sonic DNA.";
+"onboarding.bulletAudioTitle"     = "Audio analysis";
+"onboarding.bulletSettingsText"   = "Set up your AI provider, Last.fm and Qobuz here.";
+"onboarding.bulletSettingsTitle"  = "One place for settings";
+"onboarding.bulletSyncText"       = "Library, settings and analyses are shared with every device.";
+"onboarding.bulletSyncTitle"      = "Sync";
+"onboarding.connect"              = "Connect";
+"onboarding.featDiscoverText"     = "New releases, recommendations and smart radios made to measure.";
+"onboarding.featDiscoverTitle"    = "Discovering";
+"onboarding.featDjText"           = "Beatmatched, harmonically mixed sets — automatic or live.";
+"onboarding.featDnaText"          = "Discover your musical DNA and navigate your collection by sound.";
+"onboarding.featPlaylistsText"    = "Generate a playlist or ask your library a question — in plain language.";
+"onboarding.featPlaylistsTitle"   = "AI playlists";
+"onboarding.skip"                 = "Skip";
+"onboarding.stepConnectSubtitle"  = "Connect to your Roon Core";
+"onboarding.stepConnectTitle"     = "Getting started";
+"onboarding.stepFeaturesSubtitle" = "Curation, discovery and DJ tools";
+"onboarding.stepFeaturesTitle"    = "What you can do";
+"onboarding.stepIntroSubtitle"    = "Your AI music curator for Roon";
+"onboarding.stepIntroTitle"       = "Welcome to RoonSage";
+"onboarding.stepServerSubtitle"   = "The analyzer on an always-on Mac";
+"onboarding.stepServerTitle"      = "What you need";
+
+/* playActionsMenu */
+"playActionsMenu.playNext"         = "Play next";
+"playActionsMenu.playOnThisDevice" = "Play on this device";
+"playActionsMenu.playShuffled"     = "Play shuffled";
+"playActionsMenu.queueLast"        = "Add to end of queue";
+"playActionsMenu.radioOnTrack"     = "Radio on this track";
+"playActionsMenu.startAsDJ"        = "Start as DJ…";
+
+/* playlists */
+"playlists.cancel"                = "Cancel";
+"playlists.chooseZoneFirst"       = "Choose a zone first";
+"playlists.deleteConfirmTitle"    = "Delete playlist?";
+"playlists.deletePlaylist"        = "Delete playlist";
+"playlists.emptyTitle"            = "No saved playlists";
+"playlists.generatePlaylist"      = "Generate a playlist";
+"playlists.hideTracks"            = "Hide tracks";
+"playlists.nothingLocalToPlay"    = "Nothing to play locally — these tracks are not on disk (Qobuz/stream).";
+"playlists.playLocallyThisIPhone" = "Play locally on this iPhone";
+"playlists.playOnThisIPhone"      = "Play on this iPhone";
+"playlists.playPlaylist"          = "Play playlist";
+"playlists.refresh"               = "Refresh";
+"playlists.saveToQobuz"           = "Save to Qobuz";
+"playlists.saveToQobuzFailed"     = "Saving to Qobuz failed — check your account in Settings.";
+"playlists.showTracks"            = "Show tracks";
+
+/* queue */
+"queue.cancel"                  = "Cancel";
+"queue.emptyTitle"              = "Queue is empty";
+"queue.noZoneTitle"             = "No zone chosen";
+"queue.nowPlaying"              = "Now playing";
+"queue.playFromHereHint"        = "Tap to play from here";
+"queue.playlistNamePlaceholder" = "Playlist name";
+"queue.save"                    = "Save";
+"queue.saveAsPlaylist"          = "Save queue as playlist";
+"queue.saveQueueHelp"           = "Save the queue as a playlist";
+"queue.shuffle"                 = "Shuffle";
+"queue.shuffleOff"              = "Shuffle is off";
+"queue.shuffleOn"               = "Shuffle is on";
+"queue.sonicallySimilar"        = "Sonically similar";
+
+/* recommend */
+"recommend.cancel"                   = "Cancel";
+"recommend.collapse"                 = "Collapse";
+"recommend.delete"                   = "Delete";
+"recommend.deleteConfirmTitle"       = "Delete recommendation?";
+"recommend.deleteRecommendation"     = "Delete recommendation";
+"recommend.deleteRecommendationHelp" = "Delete this recommendation";
+"recommend.discoverAlbums"           = "Discover albums from your library";
+"recommend.expand"                   = "Expand";
+"recommend.genresNotSynced"          = "Genres are not synced. Go to Settings → “Sync genres” for better recommendations.";
+"recommend.historyTitle"             = "Earlier recommendations";
+"recommend.ideaDeepImmersive"        = "Deep, immersive records to listen to from start to finish";
+"recommend.ideaEnergeticMorning"     = "Energetic albums to start the day with";
+"recommend.ideaJazzyLateNight"       = "Something jazzy for late at night";
+"recommend.ideaRainySunday"          = "Albums for a rainy Sunday afternoon";
+"recommend.noAlbumsError"            = "No albums to recommend — sync your library first.";
+"recommend.pickZoneFirst"            = "Choose a zone first";
+"recommend.playAlbumHelp"            = "Play this album";
+"recommend.playLocalHelp"            = "Play this album locally on this device";
+"recommend.processError"             = "Couldn't process the recommendation — please try again.";
+"recommend.promptPlaceholder"        = "Describe a mood or occasion… e.g. “deep records for a long evening”";
+"recommend.promptSectionTitle"       = "What are you in the mood for?";
+"recommend.recommendAlbums"          = "Recommend albums";
+"recommend.thinking"                 = "Thinking…";
+"recommend.unknownArtist"            = "Unknown";
+
+/* root */
+"root.chooseOutput"       = "Choose output";
+"root.chooseZoneHelp"     = "Choose a zone or this device";
+"root.commandPalette"     = "Command palette";
+"root.commandPaletteHelp" = "Command palette (⌘K)";
+"root.createHubLabel"     = "Create (generate · quick · albums)";
+"root.discoverWeekly"     = "Discover Weekly";
+"root.nextTrack"          = "Next track";
+"root.none"               = "none";
+"root.pause"              = "Pause";
+"root.play"               = "Play";
+"root.previousTrack"      = "Previous track";
+"root.savedForLater"      = "Saved for later";
+"root.savedPlaylists"     = "Saved playlists";
+"root.sectionAICuration"  = "AI curation";
+"root.sectionDiscovering" = "Discovering";
+"root.sectionSonicTools"  = "Sonic tools";
+"root.stationsHubLabel"   = "Stations (radios · DJ modes · journeys)";
+"root.tasteHubLabel"      = "Taste (DNA · profile · history · year)";
+
+/* shareCard */
+"shareCard.shareAsImage" = "Share as image";
+
+/* shelves */
+"shelves.playOnThisDevice" = "Play on this device";
+
+/* similarTracks */
+"similarTracks.done"              = "Done";
+"similarTracks.navTitle"          = "Similar";
+"similarTracks.noMatchTitle"      = "No sonic match";
+"similarTracks.playThisMix"       = "Play this mix";
+"similarTracks.sectionSoundsLike" = "Sounds like this";
+
+/* songAlchemy */
+"songAlchemy.bucketAdd"         = "Add";
+"songAlchemy.bucketSubtract"    = "Subtract";
+"songAlchemy.mix"               = "Mix";
+"songAlchemy.mixing"            = "Mixing…";
+"songAlchemy.noResultTitle"     = "Nothing to mix";
+"songAlchemy.playTop20"         = "Play top 20";
+"songAlchemy.remix"             = "Remix — same taste, different tracks";
+"songAlchemy.searchPlaceholder" = "Search a track to add…";
+"songAlchemy.sectionBuckets"    = "Buckets";
+"songAlchemy.sectionSearch"     = "Search tracks";
+
+/* songPaths */
+"songPaths.buildBridge"            = "Build bridge";
+"songPaths.change"                 = "Change";
+"songPaths.chooseTracks"           = "Choose tracks";
+"songPaths.from"                   = "From";
+"songPaths.noBridgeTitle"          = "No bridge found";
+"songPaths.playPath"               = "Play path";
+"songPaths.qobuzDescription"       = "A sonic bridge, assembled in RoonSage.";
+"songPaths.searchTrackPlaceholder" = "Search track…";
+"songPaths.searching"              = "Searching…";
+"songPaths.syncFailed"             = "Sync to Qobuz failed — check your Qobuz settings.";
+"songPaths.syncToQobuz"            = "Sync to Qobuz";
+"songPaths.syncing"                = "Syncing…";
+"songPaths.to"                     = "To";
+
+/* sonicFingerprint */
+"sonicFingerprint.computingTitle" = "Computing your Sonic DNA…";
+
+/* sonicJourneys */
+"sonicJourneys.building"         = "Working…";
+"sonicJourneys.noYearTracks"     = "No tracks with a year found — tag or analyse more music first.";
+"sonicJourneys.noYearTracksSync" = "No tracks with a year found to sync.";
+"sonicJourneys.qobuzDescription" = "A journey from old to new, assembled in RoonSage.";
+"sonicJourneys.qobuzSyncFailed"  = "Sync to Qobuz failed — check your Qobuz settings.";
+"sonicJourneys.startJourney"     = "Start journey";
+"sonicJourneys.syncToQobuz"      = "Sync to Qobuz";
+"sonicJourneys.syncing"          = "Syncing…";
+
+/* sonicLab */
+"sonicLab.modeBridge"      = "Bridge";
+"sonicLab.modeMix"         = "Mix";
+"sonicLab.modePickerTitle" = "Mode";
+"sonicLab.modeSearch"      = "Search";
+
+/* sonicRadio */
+"sonicRadio.navTitle"    = "Radios";
+"sonicRadio.refreshHelp" = "Refresh today's radios";
+
+/* sonicSearch */
+"sonicSearch.emptyTitle"        = "No results";
+"sonicSearch.example1"          = "dreamy ambient piano";
+"sonicSearch.example2"          = "energetic funk with horns";
+"sonicSearch.example3"          = "dark melancholic synthwave";
+"sonicSearch.example4"          = "warm acoustic Sunday morning";
+"sonicSearch.search"            = "Search";
+"sonicSearch.searchPlaceholder" = "e.g. dreamy ambient piano";
+"sonicSearch.searching"         = "Searching…";
+
+/* state */
+"state.errorTitle" = "Something went wrong";
+"state.retry"      = "Try again";
+
+/* stationsHub */
+"stationsHub.djModes" = "DJ modes";
+"stationsHub.mode"    = "Mode";
+"stationsHub.radios"  = "Radios";
+
+/* tasteHub */
+"tasteHub.modeHistory" = "History";
+"tasteHub.modeYear"    = "Year";

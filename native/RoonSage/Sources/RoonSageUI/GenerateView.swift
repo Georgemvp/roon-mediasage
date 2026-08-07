@@ -123,13 +123,13 @@ final class GenerateModel {
     func saveToQobuz(client: RoonClient) {
         let name = playlistName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty, !tracks.isEmpty else { return }
-        qobuzStatus = "Bewaren in Qobuz…"
+        qobuzStatus = LS("generate.qobuzSaving")
         let snapshot = tracks
         Task { [weak self] in
             if let r = await client.saveToQobuz(name: name, tracks: snapshot) {
                 self?.qobuzStatus = "Bewaard in Qobuz — \(r.matched)/\(r.total) tracks gematcht."
             } else {
-                self?.qobuzStatus = "Bewaren in Qobuz mislukt — controleer je account in Instellingen."
+                self?.qobuzStatus = LS("generate.qobuzFailed")
             }
         }
     }
@@ -215,7 +215,7 @@ public struct GenerateView: View {
         }
         .animation(Motion.standard, value: model.result?.title)
         .animation(Motion.quick, value: model.errorMessage)
-        .navigationTitle("Playlist genereren")
+        .navigationTitle(LS("generate.navTitle"))
         .task {
             if model.prompt.isEmpty, let seed = initialPrompt, !seed.isEmpty { model.prompt = seed }
             await client.ensureFeedbackLoaded()
@@ -232,9 +232,9 @@ public struct GenerateView: View {
     // MARK: Form
 
     private var promptSection: some View {
-        Section("Wat voor playlist?") {
+        Section(LS("generate.promptSection")) {
             AIPromptField(text: $model.prompt,
-                          placeholder: "Beschrijf de sfeer, het genre of de gelegenheid… bijv. “warme jazz voor een regenachtige zondagochtend”")
+                          placeholder: LS("generate.promptPlaceholder"))
                 .listRowInsets(EdgeInsets())
                 .padding(.vertical, Spacing.xs)
                 .listRowBackground(Color.clear)
@@ -264,10 +264,10 @@ public struct GenerateView: View {
             .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: 0))
         } header: {
             HStack {
-                Text("Snelle sjablonen")
+                LT("generate.quickTemplates")
                 Spacer()
                 Button { showTemplates = true } label: {
-                    Label("Alle sjablonen", systemImage: "square.grid.2x2").font(.caption)
+                    Label(LS("generate.allTemplates"), systemImage: "square.grid.2x2").font(.caption)
                 }
                 .buttonStyle(.borderless)
                 .textCase(nil)
@@ -282,24 +282,24 @@ public struct GenerateView: View {
         if let opts = model.facetOptions, !opts.artists.isEmpty || !opts.tracks.isEmpty {
             Section {
                 NavigationLink {
-                    FacetMultiSelectView(title: "Artiesten",
+                    FacetMultiSelectView(title: LS("bm.section.artists"),
                                          options: opts.artists.map { .init(key: $0, label: $0) },
                                          featured: opts.featuredArtists.map { .init(key: $0, label: $0) },
                                          selection: $model.seedArtists.asSet)
                 } label: {
-                    seedRow("Artiesten", systemImage: "music.mic", count: model.seedArtists.count)
+                    seedRow(LS("bm.section.artists"), systemImage: "music.mic", count: model.seedArtists.count)
                 }
                 NavigationLink {
-                    FacetMultiSelectView(title: "Nummers", options: opts.tracks,
+                    FacetMultiSelectView(title: LS("bm.section.tracks"), options: opts.tracks,
                                          featured: opts.featuredTracks,
                                          selection: $model.seedTrackKeys.asSet)
                 } label: {
-                    seedRow("Nummers", systemImage: "music.note", count: model.seedTrackKeys.count)
+                    seedRow(LS("bm.section.tracks"), systemImage: "music.note", count: model.seedTrackKeys.count)
                 }
             } header: {
-                Text("Seeds (optioneel)")
+                LT("generate.seedsOptional")
             } footer: {
-                Text("Kies artiesten of nummers om de klank te sturen — de playlist klinkt als deze seeds én je omschrijving.")
+                LT("generate.seedsFooter")
             }
         }
     }
@@ -308,22 +308,22 @@ public struct GenerateView: View {
         HStack {
             Label(title, systemImage: systemImage)
             Spacer()
-            Text(count == 0 ? "Geen" : "\(count)").foregroundStyle(.secondary)
+            Text(count == 0 ? LS("generate.none") : "\(count)").foregroundStyle(.secondary)
         }
     }
 
     private var optionsSection: some View {
         Section {
-            Picker("Omvang", selection: $model.useDuration) {
-                Text("Aantal").tag(false)
-                Text("Duur").tag(true)
+            Picker(LS("generate.size"), selection: $model.useDuration) {
+                LT("generate.count").tag(false)
+                LT("generate.duration").tag(true)
             }
             .pickerStyle(.segmented)
             if model.useDuration {
                 HStack {
-                    Text("Speelduur")
+                    LT("generate.playtime")
                     Spacer()
-                    Picker("Speelduur", selection: $model.targetMinutes) {
+                    Picker(LS("generate.playtime"), selection: $model.targetMinutes) {
                         Text("30 min").tag(30)
                         Text("60 min").tag(60)
                         Text("90 min").tag(90)
@@ -335,9 +335,9 @@ public struct GenerateView: View {
                 }
             } else {
                 HStack {
-                    Text("Aantal tracks")
+                    LT("generate.trackCount")
                     Spacer()
-                    Picker("Aantal tracks", selection: $model.targetCount) {
+                    Picker(LS("generate.trackCount"), selection: $model.targetCount) {
                         Text("10").tag(10)
                         Text("20").tag(20)
                         Text("30").tag(30)
@@ -350,7 +350,7 @@ public struct GenerateView: View {
             }
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack {
-                    Text("Avontuurlijkheid")
+                    LT("generate.adventurousness")
                     Spacer()
                     Text(adventureLabel).font(.caption).foregroundStyle(Color.roonGold)
                 }
@@ -358,21 +358,21 @@ public struct GenerateView: View {
                     .tint(Color.roonGold)
             }
             HStack {
-                Text("Verloop")
+                LT("generate.arc")
                 Spacer()
-                Picker("Verloop", selection: $model.arc) {
-                    Text("Auto").tag(RadioSequencer.Arc?.none)
-                    Text("Vloeiend").tag(RadioSequencer.Arc?.some(.smooth))
-                    Text("Oplopend").tag(RadioSequencer.Arc?.some(.gentleRise))
-                    Text("Piek").tag(RadioSequencer.Arc?.some(.peak))
+                Picker(LS("generate.arc"), selection: $model.arc) {
+                    LT("generate.arcAuto").tag(RadioSequencer.Arc?.none)
+                    LT("generate.arcSmooth").tag(RadioSequencer.Arc?.some(.smooth))
+                    LT("generate.arcRise").tag(RadioSequencer.Arc?.some(.gentleRise))
+                    LT("generate.arcPeak").tag(RadioSequencer.Arc?.some(.peak))
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: 260)
-                .help("De energie-vorm waarin de playlist wordt geordend — Auto leidt die af uit je omschrijving")
+                .help(LS("generate.arcHelp"))
             }
             HStack {
-                Text("Afspelen op")
+                LT("generate.playOn")
                 Spacer()
                 ZonePicker()
             }
@@ -383,10 +383,10 @@ public struct GenerateView: View {
     /// everywhere.
     private var adventureLabel: String {
         switch model.adventurousness {
-        case ..<0.2:  return "Vooral bekend"
-        case ..<0.45: return "Lichte verkenning"
-        case ..<0.7:  return "Verkennend"
-        default:      return "Op ontdekking"
+        case ..<0.2:  return LS("generate.advMostlyKnown")
+        case ..<0.45: return LS("generate.advLightExplore")
+        case ..<0.7:  return LS("generate.advExploring")
+        default:      return LS("generate.advDiscovering")
         }
     }
 
@@ -405,7 +405,7 @@ public struct GenerateView: View {
 
             if model.isGenerating {
                 Button(role: .cancel) { model.stop() } label: {
-                    Label("Stop", systemImage: "stop.fill").frame(maxWidth: .infinity)
+                    Label(LS("generate.stop"), systemImage: "stop.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .transition(.opacity)
@@ -428,8 +428,8 @@ public struct GenerateView: View {
     }
 
     private var generateButtonTitle: String {
-        if model.isGenerating { return "Genereren…" }
-        return model.result == nil ? "Genereer playlist" : "Opnieuw genereren"
+        if model.isGenerating { return LS("generate.generating") }
+        return model.result == nil ? LS("generate.generatePlaylist") : LS("generate.regenerate")
     }
 
     /// Mirrors the empty-state idiom used elsewhere (e.g. `PlaylistsView`) so
@@ -437,9 +437,9 @@ public struct GenerateView: View {
     private var idleSection: some View {
         Section {
             ContentUnavailableView {
-                Label("Beschrijf wat je wilt horen", systemImage: "wand.and.stars")
+                Label(LS("generate.idleTitle"), systemImage: "wand.and.stars")
             } description: {
-                Text("RoonSage analyseert je verzoek, kiest passende tracks uit jouw bibliotheek en stelt een gevarieerde playlist samen — die je daarna kunt bijschaven.")
+                LT("generate.idleDescription")
             }
             .listRowBackground(Color.clear)
         }
@@ -455,23 +455,23 @@ public struct GenerateView: View {
             FilterChips(filters: r.filters, poolSize: r.poolSize)
                 .padding(.vertical, 2)
         } header: {
-            Text("Resultaat")
+            LT("generate.result")
         }
 
-        Section("Bewaren") {
+        Section(LS("generate.sectionSave")) {
             saveRow(name)
             if let qobuzStatus = model.qobuzStatus {
                 Text(qobuzStatus).font(.caption).foregroundStyle(.secondary)
             }
         }
 
-        Section("Afspelen") {
+        Section(LS("section.playback")) {
             playRow
         }
 
         if let trace = r.trace, !trace.isEmpty {
             Section {
-                DisclosureGroup("Diagnostiek") {
+                DisclosureGroup(LS("generate.diagnostics")) {
                     Text(trace)
                         .font(.system(.caption2, design: .monospaced))
                         .textSelection(.enabled)
@@ -486,11 +486,11 @@ public struct GenerateView: View {
                         #endif
                         Haptics.tap()
                     } label: {
-                        Label("Kopieer diagnostiek", systemImage: "doc.on.doc").font(.caption)
+                        Label(LS("generate.copyDiagnostics"), systemImage: "doc.on.doc").font(.caption)
                     }
                 }
             } footer: {
-                Text("Laat zien hoe deze playlist is opgebouwd — ook terug te vinden in Instellingen → Logboek.")
+                LT("generate.diagnosticsFooter")
             }
         }
 
@@ -502,24 +502,24 @@ public struct GenerateView: View {
                         Button { model.playOne(t, client: client) } label: { Image(systemName: "play.fill") }
                             .buttonStyle(.borderless)
                             .disabled(client.selectedZone == nil)
-                            .accessibilityLabel("Speel \(t.title)")
+                            .accessibilityLabel(LS("Speel \(t.title)"))
                     }
                 }
                 .contextMenu {
-                    Button { model.playOne(t, client: client) } label: { Label("Speel nu", systemImage: "play.fill") }
+                    Button { model.playOne(t, client: client) } label: { Label(LS("bm.playNow"), systemImage: "play.fill") }
                         .disabled(client.selectedZone == nil)
                     Button { model.queueOne(t, next: true, client: client) } label: {
-                        Label("Speel hierna", systemImage: "text.line.first.and.arrowtriangle.forward")
+                        Label(LS("generate.playNext"), systemImage: "text.line.first.and.arrowtriangle.forward")
                     }
                     .disabled(client.selectedZone == nil)
                     Divider()
-                    Button { model.move(t, by: -1) } label: { Label("Omhoog", systemImage: "arrow.up") }
+                    Button { model.move(t, by: -1) } label: { Label(LS("generate.moveUp"), systemImage: "arrow.up") }
                         .disabled(i == 0)
-                    Button { model.move(t, by: 1) } label: { Label("Omlaag", systemImage: "arrow.down") }
+                    Button { model.move(t, by: 1) } label: { Label(LS("generate.moveDown"), systemImage: "arrow.down") }
                         .disabled(i == model.tracks.count - 1)
                     Divider()
                     Button(role: .destructive) { model.remove(t) } label: {
-                        Label("Verwijder uit playlist", systemImage: "trash")
+                        Label(LS("generate.removeFromPlaylist"), systemImage: "trash")
                     }
                 }
             }
@@ -544,12 +544,12 @@ public struct GenerateView: View {
                 }
                 HStack(spacing: 5) {
                     Text("\(model.tracks.count) tracks")
-                    if model.justSaved { Text("· opgeslagen").foregroundStyle(Color.roonGold) }
+                    if model.justSaved { LT("generate.savedInline").foregroundStyle(Color.roonGold) }
                 }
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 if !r.aiCurated {
-                    Label("Automatisch samengesteld — de AI-selectie lukte niet helemaal.",
+                    Label(LS("generate.autoAssembled"),
                           systemImage: "info.circle")
                         .font(.caption)
                         .foregroundStyle(Color.roonWarning)
@@ -575,11 +575,11 @@ public struct GenerateView: View {
 
     private func saveRow(_ name: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            TextField("Naam playlist", text: name)
+            TextField(LS("generate.namePlaceholder"), text: name)
                 .textFieldStyle(.roundedBorder)
             HStack(spacing: Spacing.sm) {
                 Button { model.save(client: client) } label: {
-                    Label(model.justSaved ? "Bewaard!" : "Bewaar",
+                    Label(model.justSaved ? LS("generate.saved") : LS("generate.save"),
                           systemImage: model.justSaved ? "checkmark" : "square.and.arrow.down")
                         .frame(maxWidth: .infinity)
                 }
@@ -593,7 +593,7 @@ public struct GenerateView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(!model.canSave)
-                    .help("Bewaar deze playlist ook in je Qobuz-account")
+                    .help(LS("generate.qobuzHelp"))
                 }
             }
         }
@@ -614,7 +614,7 @@ public struct GenerateView: View {
                         model.playAll(client: client)
                     }
                 } label: {
-                    Label("Speel alles", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    Label(LS("generate.playAll"), systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!client.hasActiveOutput || model.tracks.isEmpty)
@@ -626,7 +626,7 @@ public struct GenerateView: View {
                     .frame(maxWidth: .infinity)
             }
             if !client.hasActiveOutput {
-                Text("Geen zone gekozen — “Op dit apparaat” speelt lokaal af.")
+                LT("generate.noZone")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -690,12 +690,12 @@ private struct TemplatePicker: View {
                     .padding(Spacing.lg)
                 }
             }
-            .navigationTitle("Sjablonen")
+            .navigationTitle(LS("generate.templatesTitle"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                Button("Sluit") { dismiss() }
+                Button(LS("generate.close")) { dismiss() }
             }
         }
     }

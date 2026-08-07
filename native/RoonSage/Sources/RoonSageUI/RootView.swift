@@ -446,43 +446,43 @@ struct RootView: View {
                     // whole bar and let the artwork run to the top.
                     .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem { Label { Text("Nu speelt") } icon: { Image(systemName: "play.circle.fill") } }
+            .tabItem { Label { LT("nav.nowPlaying") } icon: { Image(systemName: "play.circle.fill") } }
             .tag(SidebarItem.nowPlaying)
 
             NavigationStack {
                 LibraryView()
-                    .navigationTitle("Bibliotheek (\(client.trackCount))")
+                    .navigationTitle(LS("Bibliotheek (\(client.trackCount))"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { navToolbar }
                     .ambientSurface()
             }
             .nowPlayingBarDocked()
-            .tabItem { Label { Text("Bibliotheek") } icon: { Image(systemName: "music.note.list") } }
+            .tabItem { Label { LT("nav.library") } icon: { Image(systemName: "music.note.list") } }
             .tag(SidebarItem.library)
 
             NavigationStack {
                 iOSCreateHub.toolbar { navToolbar }.ambientSurface()
             }
             .nowPlayingBarDocked()
-            .tabItem { Label { Text("Maak") } icon: { Image(systemName: "wand.and.stars") } }
+            .tabItem { Label { LT("section.create") } icon: { Image(systemName: "wand.and.stars") } }
             .tag(SidebarItem.generate)
 
             NavigationStack {
                 iOSExploreHub.toolbar { navToolbar }.ambientSurface()
             }
             .nowPlayingBarDocked()
-            .tabItem { Label { Text("Ontdek") } icon: { Image(systemName: "sparkles") } }
+            .tabItem { Label { LT("section.explore") } icon: { Image(systemName: "sparkles") } }
             .tag(SidebarItem.discovery)
 
             NavigationStack {
                 SettingsView()
-                    .navigationTitle("Instellingen")
+                    .navigationTitle(LS("nav.settings"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { navToolbar }
                     .ambientSurface()
             }
             .nowPlayingBarDocked()
-            .tabItem { Label { Text("Instellingen") } icon: { Image(systemName: "gearshape") } }
+            .tabItem { Label { LT("nav.settings") } icon: { Image(systemName: "gearshape") } }
             .tag(SidebarItem.settings)
         }
         .onChange(of: client.zones) { _, _ in
@@ -510,50 +510,50 @@ struct RootView: View {
     @ViewBuilder
     private var iOSCreateHub: some View {
         List {
-            Section("AI-curatie") {
-                NavigationLink { CreateHubView().navigationTitle("Maak").navigationBarTitleDisplayMode(.inline) } label: {
-                    Label("Maak (genereer · snel · albums)", systemImage: SidebarItem.generate.icon)
+            Section(LS("root.sectionAICuration")) {
+                NavigationLink { CreateHubView().navigationTitle(LS("section.create")).navigationBarTitleDisplayMode(.inline) } label: {
+                    Label(LS("root.createHubLabel"), systemImage: SidebarItem.generate.icon)
                 }
             }
-            Section("Afspelen") {
-                NavigationLink { QueueView().navigationTitle("Wachtrij").navigationBarTitleDisplayMode(.inline) } label: {
-                    Label("Wachtrij", systemImage: SidebarItem.queue.icon)
+            Section(LS("section.playback")) {
+                NavigationLink { QueueView().navigationTitle(LS("nav.queue")).navigationBarTitleDisplayMode(.inline) } label: {
+                    Label(LS("nav.queue"), systemImage: SidebarItem.queue.icon)
                 }
-                NavigationLink { PlaylistsView().navigationTitle("Playlists").navigationBarTitleDisplayMode(.inline) } label: {
-                    Label("Bewaarde playlists", systemImage: SidebarItem.playlists.icon)
+                NavigationLink { PlaylistsView().navigationTitle(LS("nav.playlists")).navigationBarTitleDisplayMode(.inline) } label: {
+                    Label(LS("root.savedPlaylists"), systemImage: SidebarItem.playlists.icon)
                 }
                 NavigationLink { BookmarksView() } label: {
-                    Label("Bewaard voor later", systemImage: SidebarItem.bookmarks.icon)
+                    Label(LS("root.savedForLater"), systemImage: SidebarItem.bookmarks.icon)
                 }
             }
         }
-        .navigationTitle("Maak")
+        .navigationTitle(LS("section.create"))
         .navigationBarTitleDisplayMode(.large)
     }
 
     @ViewBuilder
     private var iOSExploreHub: some View {
         List {
-            Section("Ontdekken") {
+            Section(LS("root.sectionDiscovering")) {
                 NavigationLink { DiscoverWeeklyView().navigationBarTitleDisplayMode(.large) } label: {
-                    Label("Ontdek Wekelijks", systemImage: "sparkles")
+                    Label(LS("root.discoverWeekly"), systemImage: "sparkles")
                 }
-                NavigationLink { DiscoverFeedView().navigationTitle("Nieuw voor jou").navigationBarTitleDisplayMode(.large) } label: {
-                    Label("Nieuw voor jou", systemImage: SidebarItem.discover.icon)
+                NavigationLink { DiscoverFeedView().navigationTitle(LS("nav.discover")).navigationBarTitleDisplayMode(.large) } label: {
+                    Label(LS("nav.discover"), systemImage: SidebarItem.discover.icon)
                 }
-                NavigationLink { DiscoveryView().navigationTitle("Herontdek").navigationBarTitleDisplayMode(.large) } label: {
-                    Label("Herontdek", systemImage: SidebarItem.discovery.icon)
+                NavigationLink { DiscoveryView().navigationTitle(LS("nav.discovery")).navigationBarTitleDisplayMode(.large) } label: {
+                    Label(LS("nav.discovery"), systemImage: SidebarItem.discovery.icon)
                 }
             }
-            Section("Stations") {
-                NavigationLink { StationsHubView().navigationTitle("Stations").navigationBarTitleDisplayMode(.large) } label: {
-                    Label("Stations (radio's · DJ-modi · journeys)", systemImage: SidebarItem.stationsHub.icon)
+            Section(LS("section.stations")) {
+                NavigationLink { StationsHubView().navigationTitle(LS("section.stations")).navigationBarTitleDisplayMode(.large) } label: {
+                    Label(LS("root.stationsHubLabel"), systemImage: SidebarItem.stationsHub.icon)
                 }
                 NavigationLink { DJView().navigationTitle("DJ").navigationBarTitleDisplayMode(.large) } label: {
                     Label("DJ (set · live)", systemImage: SidebarItem.dj.icon)
                 }
             }
-            Section("Sonic-tools") {
+            Section(LS("root.sectionSonicTools")) {
                 NavigationLink { SonicLabView().navigationTitle("Sonic Lab").navigationBarTitleDisplayMode(.large) } label: {
                     Label("Sonic Lab", systemImage: SidebarItem.sonicLab.icon)
                 }
@@ -564,13 +564,13 @@ struct RootView: View {
                     Label("Multitag", systemImage: SidebarItem.multitag.icon)
                 }
             }
-            Section("Jouw smaak") {
-                NavigationLink { TasteHubView().navigationTitle("Smaak").navigationBarTitleDisplayMode(.large) } label: {
-                    Label("Smaak (DNA · profiel · historie · jaar)", systemImage: SidebarItem.tasteHub.icon)
+            Section(LS("section.you")) {
+                NavigationLink { TasteHubView().navigationTitle(LS("nav.tasteHub")).navigationBarTitleDisplayMode(.large) } label: {
+                    Label(LS("root.tasteHubLabel"), systemImage: SidebarItem.tasteHub.icon)
                 }
             }
         }
-        .navigationTitle("Ontdek")
+        .navigationTitle(LS("section.explore"))
         .navigationBarTitleDisplayMode(.large)
     }
     #endif
@@ -624,7 +624,7 @@ struct RootView: View {
         }
         .padding(10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Verbinding: \(client.connectionState.label)")
+        .accessibilityLabel(LS("Verbinding: \(client.connectionState.label)"))
     }
 
     /// Cmd+1…9 jump straight to a destination. Hidden but active (hardware keyboard).
@@ -657,35 +657,35 @@ struct RootView: View {
                         .font(.caption)
                         .foregroundStyle(Color.roonGold)
                 }
-                .help("Slaaptimer actief tot \(endsAt.formatted(date: .omitted, time: .shortened)) — tik om te annuleren")
+                .help(LS("Slaaptimer actief tot \(endsAt.formatted(date: .omitted, time: .shortened)) — tik om te annuleren"))
             }
         }
         ToolbarItem(placement: .automatic) {
             Button { showPalette = true } label: {
                 Image(systemName: "command")
             }
-            .accessibilityLabel("Opdrachtenpalet")
-            .help("Opdrachtenpalet (⌘K)")
+            .accessibilityLabel(LS("root.commandPalette"))
+            .help(LS("root.commandPaletteHelp"))
         }
         if let zone = client.selectedZone {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     Task { await client.previous(zoneID: zone.id) }
                 } label: { Image(systemName: "backward.fill") }
-                    .accessibilityLabel("Vorige track")
-                    .help("Vorige track")
+                    .accessibilityLabel(LS("root.previousTrack"))
+                    .help(LS("root.previousTrack"))
 
                 Button {
                     Task { await client.playPause(zoneID: zone.id) }
                 } label: { Image(systemName: zone.state == .playing ? "pause.fill" : "play.fill") }
-                    .accessibilityLabel(zone.state == .playing ? "Pauzeer" : "Speel af")
-                    .help(zone.state == .playing ? "Pauzeer" : "Speel af")
+                    .accessibilityLabel(zone.state == .playing ? LS("root.pause") : LS("root.play"))
+                    .help(zone.state == .playing ? LS("root.pause") : LS("root.play"))
 
                 Button {
                     Task { await client.next(zoneID: zone.id) }
                 } label: { Image(systemName: "forward.fill") }
-                    .accessibilityLabel("Volgende track")
-                    .help("Volgende track")
+                    .accessibilityLabel(LS("root.nextTrack"))
+                    .help(LS("root.nextTrack"))
             }
         }
     }
@@ -716,7 +716,7 @@ struct RootView: View {
             HStack(spacing: 4) {
                 Image(systemName: localOn ? RoonClient.localOutputIcon
                           : (active?.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"))
-                Text(localOn ? RoonClient.localOutputName : (active?.displayName ?? "Kies output"))
+                Text(localOn ? RoonClient.localOutputName : (active?.displayName ?? LS("root.chooseOutput")))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.semibold))
@@ -724,7 +724,7 @@ struct RootView: View {
             }
             .font(.subheadline.weight(.semibold))
         }
-        .accessibilityLabel("Output: \(localOn ? RoonClient.localOutputName : (active?.displayName ?? "geen"))")
-        .help("Kies een zone of dit apparaat")
+        .accessibilityLabel(LS("Output: \(localOn ? RoonClient.localOutputName : (active?.displayName ?? LS("root.none")))"))
+        .help(LS("root.chooseZoneHelp"))
     }
 }

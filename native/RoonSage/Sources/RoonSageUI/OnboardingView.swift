@@ -26,7 +26,7 @@ struct OnboardingView: View {
             HStack {
                 Spacer()
                 if step < steps.count - 1 {
-                    Button("Overslaan") { onContinue() }
+                    Button(LS("onboarding.skip")) { onContinue() }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
                         .font(.callout)
@@ -66,7 +66,7 @@ struct OnboardingView: View {
                     Button {
                         withAnimation(Motion.standard) { step -= 1 }
                     } label: {
-                        Label("Terug", systemImage: "chevron.left").frame(minWidth: 120)
+                        Label(LS("onboarding.back"), systemImage: "chevron.left").frame(minWidth: 120)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
@@ -77,7 +77,7 @@ struct OnboardingView: View {
                         withAnimation(Motion.standard) { step += 1 }
                     } label: {
                         HStack(spacing: 6) {
-                            Text("Volgende")
+                            LT("onboarding.next")
                             Image(systemName: "chevron.right")
                         }
                         .frame(minWidth: 160)
@@ -86,7 +86,7 @@ struct OnboardingView: View {
                     .controlSize(.large)
                 } else {
                     Button { onContinue() } label: {
-                        Label("Verbinden", systemImage: "music.note.house.fill").frame(minWidth: 200)
+                        Label(LS("onboarding.connect"), systemImage: "music.note.house.fill").frame(minWidth: 200)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
@@ -137,8 +137,8 @@ struct OnboardingView: View {
     // Step 1 — what RoonSage is
     private var introBody: some View {
         VStack(spacing: Spacing.md) {
-            Text("RoonSage is je persoonlijke AI-muziekcurator boven op Roon. Vertel in gewone taal wat je wilt horen en RoonSage stelt een playlist samen, ontdekt nieuwe muziek en bestuurt het afspelen in elke zone.")
-            Text("Het kernprincipe is **bibliotheek-eerst**: elke voorgestelde track bestaat echt — in jouw Roon-bibliotheek of op Qobuz. Niets wordt verzonnen.")
+            LT("onboarding.introBody1")
+            LT("onboarding.introBody2")
         }
         .font(.body)
         .foregroundStyle(.secondary)
@@ -148,21 +148,21 @@ struct OnboardingView: View {
     // Step 2 — the Analyzer/server requirement (the part the user emphasised)
     private var serverBody: some View {
         VStack(spacing: Spacing.lg) {
-            Text("Installeer de **RoonSage-analyzer** op een Mac die altijd aan staat. Die doet het zware werk en deelt het met al je apparaten:")
+            LT("onboarding.serverIntro")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: Spacing.md) {
-                OnboardingBullet(icon: "waveform", title: "Audio-analyse",
-                                 text: "BPM, toonsoort, energie en tags — de basis voor DJ-sets en Sonic DNA.")
-                OnboardingBullet(icon: "arrow.triangle.2.circlepath", title: "Synchronisatie",
-                                 text: "Bibliotheek, instellingen en analyses worden gedeeld met elk apparaat.")
-                OnboardingBullet(icon: "gearshape.2", title: "Eén plek voor instellingen",
-                                 text: "Stel hier je AI-provider, Last.fm en Qobuz in.")
+                OnboardingBullet(icon: "waveform", title: LS("onboarding.bulletAudioTitle"),
+                                 text: LS("onboarding.bulletAudioText"))
+                OnboardingBullet(icon: "arrow.triangle.2.circlepath", title: LS("onboarding.bulletSyncTitle"),
+                                 text: LS("onboarding.bulletSyncText"))
+                OnboardingBullet(icon: "gearshape.2", title: LS("onboarding.bulletSettingsTitle"),
+                                 text: LS("onboarding.bulletSettingsText"))
             }
 
-            Text("Je vindt de Analyzer-app en de installatie-instructies in de RoonSage-release. Later koppel je dit apparaat via Instellingen → Server.")
+            LT("onboarding.serverFootnote")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -172,23 +172,23 @@ struct OnboardingView: View {
     // Step 3 — feature highlights
     private var featuresBody: some View {
         VStack(spacing: Spacing.md) {
-            OnboardingBullet(icon: "wand.and.stars", title: "AI-playlists",
-                             text: "Genereer een playlist of stel je bibliotheek een vraag — in gewone taal.")
+            OnboardingBullet(icon: "wand.and.stars", title: LS("onboarding.featPlaylistsTitle"),
+                             text: LS("onboarding.featPlaylistsText"))
             OnboardingBullet(icon: "waveform.path.ecg", title: "Sonic DNA & Music Map",
-                             text: "Ontdek je muzikale DNA en navigeer je collectie op klank.")
+                             text: LS("onboarding.featDnaText"))
             OnboardingBullet(icon: "slider.horizontal.3", title: "DJ Set & Live DJ",
-                             text: "Beatmatchte, harmonisch gemixte sets — automatisch of live.")
-            OnboardingBullet(icon: "sparkles", title: "Ontdekken",
-                             text: "Nieuwe releases, aanbevelingen en slimme radio's op maat.")
+                             text: LS("onboarding.featDjText"))
+            OnboardingBullet(icon: "sparkles", title: LS("onboarding.featDiscoverTitle"),
+                             text: LS("onboarding.featDiscoverText"))
         }
     }
 
     // Step 4 — how to connect
     private var connectBody: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            OnboardingStepRow(number: 1, text: "Zorg dat je Roon Core draait op hetzelfde netwerk.")
-            OnboardingStepRow(number: 2, text: "Tik op **Verbinden** en kies je Roon Core (of voer het IP-adres in).")
-            OnboardingStepRow(number: 3, text: "Open in Roon **Instellingen → Extensies** en schakel **RoonSage** in.")
+            OnboardingStepRow(number: 1, text: "onboarding.connectStep1")
+            OnboardingStepRow(number: 2, text: "onboarding.connectStep2")
+            OnboardingStepRow(number: 3, text: "onboarding.connectStep3")
         }
         .padding(Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,17 +208,17 @@ private struct OnboardingStep: Identifiable {
 
     static let all: [OnboardingStep] = [
         .init(kind: .intro, icon: "music.note.house.fill",
-              title: "Welkom bij RoonSage",
-              subtitle: "Je AI-muziekcurator voor Roon"),
+              title: LS("onboarding.stepIntroTitle"),
+              subtitle: LS("onboarding.stepIntroSubtitle")),
         .init(kind: .server, icon: "server.rack",
-              title: "Wat je nodig hebt",
-              subtitle: "De analyzer op een always-on Mac"),
+              title: LS("onboarding.stepServerTitle"),
+              subtitle: LS("onboarding.stepServerSubtitle")),
         .init(kind: .features, icon: "sparkles",
-              title: "Wat je kunt doen",
-              subtitle: "Curatie, ontdekking en DJ-tools"),
+              title: LS("onboarding.stepFeaturesTitle"),
+              subtitle: LS("onboarding.stepFeaturesSubtitle")),
         .init(kind: .connect, icon: "link",
-              title: "Aan de slag",
-              subtitle: "Verbind met je Roon Core"),
+              title: LS("onboarding.stepConnectTitle"),
+              subtitle: LS("onboarding.stepConnectSubtitle")),
     ]
 }
 
@@ -258,7 +258,7 @@ private struct OnboardingStepRow: View {
                 .frame(width: 26, height: 26)
                 .background(Color.roonGold.opacity(0.15), in: Circle())
                 .accessibilityHidden(true)
-            Text(text)
+            LT(text)
                 .font(.callout)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

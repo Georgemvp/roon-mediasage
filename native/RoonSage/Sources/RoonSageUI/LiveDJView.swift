@@ -32,7 +32,7 @@ public struct LiveDJView: View {
                         Section { noFeaturesNote }
                     } else if suggestions.isEmpty {
                         Section {
-                            Text("Geen compatibele tracks gevonden in dit tempo.")
+                            LT("liveDJ.noCompatible")
                                 .font(.callout).foregroundStyle(.secondary)
                         }
                     } else {
@@ -56,7 +56,7 @@ public struct LiveDJView: View {
                             ForEach(suggestions, id: \.id) { row($0, zoneID: zone.id) }
                         } header: {
                             HStack {
-                                Text("Mixt hierna goed")
+                                LT("liveDJ.mixesNext")
                                 Spacer()
                                 if loading { ProgressView().controlSize(.small) }
                             }
@@ -65,9 +65,9 @@ public struct LiveDJView: View {
                 }
                 .task(id: np.title) { await reload(np) }
             } else {
-                ContentUnavailableView("Niets aan het spelen",
+                ContentUnavailableView(LS("liveDJ.nothingPlaying"),
                     systemImage: "slider.horizontal.2.gobackward",
-                    description: Text("Start een track in een zone om harmonische vervolgsuggesties te zien."))
+                    description: LT("liveDJ.nothingPlayingDesc"))
             }
         }
         .navigationTitle("Live DJ")
@@ -79,7 +79,7 @@ public struct LiveDJView: View {
         HStack(spacing: Spacing.md) {
             AlbumArtView(imageKey: np.imageKey, size: 72)
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Nu spelend").font(.caption).foregroundStyle(.secondary)
+                LT("liveDJ.nowPlaying").font(.caption).foregroundStyle(.secondary)
                 Text(np.title).font(.headline).lineLimit(1)
                 if let artist = np.artist {
                     Text(artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
@@ -96,9 +96,9 @@ public struct LiveDJView: View {
 
     private var noFeaturesNote: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Geen audio-kenmerken voor deze track", systemImage: "waveform.slash")
+            Label(LS("liveDJ.noFeatures"), systemImage: "waveform.slash")
                 .font(.callout)
-            Text("Synchroniseer audio-kenmerken (Instellingen → Audio Analyzer) om harmonische suggesties te krijgen.")
+            LT("liveDJ.noFeaturesDesc")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(.vertical, Spacing.xs)
@@ -127,15 +127,15 @@ public struct LiveDJView: View {
                 Task { await client.queueTracks([asRecord(c)], next: true, zoneID: zoneID) }
             } label: { Image(systemName: "text.line.first.and.arrowtriangle.forward") }
                 .buttonStyle(.borderless)
-                .accessibilityLabel("Als volgende in wachtrij")
-                .help("Als volgende in wachtrij")
+                .accessibilityLabel(LS("liveDJ.queueNext"))
+                .help(LS("liveDJ.queueNext"))
             Button {
                 Haptics.tap()
                 Task { await client.curateTracks([asRecord(c)], zoneID: zoneID) }
             } label: { Image(systemName: "play.fill") }
                 .buttonStyle(.borderless)
-                .accessibilityLabel("Speel nu")
-                .help("Speel nu")
+                .accessibilityLabel(LS("bm.playNow"))
+                .help(LS("bm.playNow"))
         }
         .padding(.vertical, Spacing.xs)
     }
@@ -143,8 +143,8 @@ public struct LiveDJView: View {
     @ViewBuilder
     private func relationBadge(_ relation: RoonClient.HarmonicRelation) -> some View {
         switch relation {
-        case .harmonic: Badge("Harmonisch", tint: .roonGold)
-        case .sameKey:  Badge("Zelfde toon", tint: .roonSuccess)
+        case .harmonic: Badge(LS("liveDJ.harmonic"), tint: .roonGold)
+        case .sameKey:  Badge(LS("liveDJ.sameKey"), tint: .roonSuccess)
         case .tempo:    EmptyView()
         }
     }
@@ -237,7 +237,7 @@ private struct MixRadar: View {
             if let sel = suggestions.first(where: { $0.id == selectedID }) {
                 actionBar(sel)
             } else {
-                Text("Tik op een orbit om te mixen")
+                LT("liveDJ.tapOrbit")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -286,8 +286,8 @@ private struct MixRadar: View {
             Spacer()
             Button { onQueue(c) } label: { Image(systemName: "text.line.first.and.arrowtriangle.forward") }
                 .buttonStyle(.bordered).controlSize(.small)
-                .accessibilityLabel("Als volgende in wachtrij")
-            Button { onPlay(c) } label: { Label("Speel nu", systemImage: "play.fill") }
+                .accessibilityLabel(LS("liveDJ.queueNext"))
+            Button { onPlay(c) } label: { Label(LS("bm.playNow"), systemImage: "play.fill") }
                 .buttonStyle(.borderedProminent).controlSize(.small)
         }
         .padding(Spacing.md)

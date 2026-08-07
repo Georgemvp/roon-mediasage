@@ -38,7 +38,7 @@ public struct DiscoveryView: View {
                 summaryCards(stats).plainCardRow()
                 if let aotd = albumOfDay { albumOfDayCard(aotd).plainCardRow() }
                 if !undiscovered.isEmpty {
-                    shelf("Nog niet gehoord", "sparkles",
+                    shelf(LS("discovery.shelfNeverHeard"), "sparkles",
                           covers: undiscovered.map(albumCover),
                           zoneAvailable: client.selectedZone != nil) {
                         Button { Task {
@@ -48,12 +48,12 @@ public struct DiscoveryView: View {
                             Image(systemName: "shuffle")
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel("Toon een andere selectie")
+                        .accessibilityLabel(LS("discovery.showAnotherSelection"))
                     }
                     .plainCardRow()
                 }
                 if !dormant.isEmpty {
-                    shelf("Weer opzetten", "clock.arrow.circlepath",
+                    shelf(LS("discovery.shelfPlayAgain"), "clock.arrow.circlepath",
                           covers: dormant.map(albumCover),
                           zoneAvailable: client.selectedZone != nil) {
                         Button { Task {
@@ -63,12 +63,12 @@ public struct DiscoveryView: View {
                             Image(systemName: "shuffle")
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel("Toon andere vergeten albums")
+                        .accessibilityLabel(LS("discovery.showOtherForgottenAlbums"))
                     }
                     .plainCardRow()
                 }
                 if !topTracks.isEmpty {
-                    shelf("Jouw toptracks", "star.fill",
+                    shelf(LS("discovery.shelfTopTracks"), "star.fill",
                           covers: topTracks.map(trackCover),
                           zoneAvailable: client.selectedZone != nil) {
                         playAllButton(topTracks)
@@ -76,7 +76,7 @@ public struct DiscoveryView: View {
                     .plainCardRow()
                 }
                 if forgotten.count > 1 {
-                    shelf("Vergeten favorieten", "clock.arrow.circlepath",
+                    shelf(LS("discovery.shelfForgottenFavorites"), "clock.arrow.circlepath",
                           covers: forgotten.dropFirst().map(trackCover),
                           zoneAvailable: client.selectedZone != nil) {
                         playAllButton(Array(forgotten))
@@ -91,11 +91,11 @@ public struct DiscoveryView: View {
                 emptyState.plainCardRow()
             }
         }
-        .navigationTitle("Ontdek")
+        .navigationTitle(LS("discovery.title"))
         .toolbar {
             Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
-                .help("Ververs")
-                .accessibilityLabel("Ververs ontdek-overzicht")
+                .help(LS("discovery.refresh"))
+                .accessibilityLabel(LS("discovery.refreshHint"))
         }
         .ambientSurface()
         .animation(Motion.standard, value: isLoaded)
@@ -128,8 +128,8 @@ public struct DiscoveryView: View {
                     .frame(width: 44, height: 44)
                     .background(Color.roonGold.opacity(0.15), in: RoundedRectangle(cornerRadius: Radius.lg))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Ontdek Wekelijks").font(.headline)
-                    Text("Verse ontdekkingen uit je eigen bibliotheek — elke week vernieuwd.")
+                    LT("discovery.weeklyTitle").font(.headline)
+                    LT("discovery.weeklySubtitle")
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -155,8 +155,8 @@ public struct DiscoveryView: View {
                     .frame(width: 44, height: 44)
                     .background(Color.roonGold.opacity(0.15), in: RoundedRectangle(cornerRadius: Radius.lg))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Platenlabels").font(.headline)
-                    Text("Blader door je bibliotheek op label — met een label van de week.")
+                    LT("discovery.labelsTitle").font(.headline)
+                    LT("discovery.labelsSubtitle")
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -202,7 +202,7 @@ public struct DiscoveryView: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radius.lg))
                 .shadow(color: .roonShadow, radius: 10, y: 6)
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Label("Herontdek", systemImage: "sparkles")
+                Label(LS("discovery.rediscover"), systemImage: "sparkles")
                     .font(.caption.bold())
                     .foregroundStyle(Color.roonGold)
                 Text(item.title).font(.title2.bold()).lineLimit(2)
@@ -215,7 +215,7 @@ public struct DiscoveryView: View {
                         Haptics.tap()
                         item.play()
                     } label: {
-                        Label("Speel nu", systemImage: "play.fill")
+                        Label(LS("bm.playNow"), systemImage: "play.fill")
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
@@ -223,8 +223,8 @@ public struct DiscoveryView: View {
                         .disabled(client.selectedZone == nil)
                     Button { item.playLocal() } label: { Image(systemName: "iphone") }
                         .buttonStyle(.bordered)
-                        .accessibilityLabel("Speel op dit apparaat")
-                        .help("Speel lokaal af op dit apparaat")
+                        .accessibilityLabel(LS("discovery.playOnThisDevice"))
+                        .help(LS("discovery.playLocallyHelp"))
                 }
             }
             Spacer(minLength: 0)
@@ -246,7 +246,7 @@ public struct DiscoveryView: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radius.lg))
                 .shadow(color: .roonShadow, radius: 10, y: 6)
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Label("Album van de dag", systemImage: "calendar")
+                Label(LS("discovery.albumOfDay"), systemImage: "calendar")
                     .font(.caption.bold())
                     .foregroundStyle(Color.roonGold)
                 Text(a.album).font(.title2.bold()).lineLimit(2)
@@ -259,7 +259,7 @@ public struct DiscoveryView: View {
                         Haptics.tap()
                         play { await client.playAlbum(albumKey: a.albumKey, zoneID: $0) }
                     } label: {
-                        Label("Speel nu", systemImage: "play.fill")
+                        Label(LS("bm.playNow"), systemImage: "play.fill")
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
@@ -269,8 +269,8 @@ public struct DiscoveryView: View {
                         Haptics.tap(); Task { await client.playAlbumLocally(albumKey: a.albumKey) }
                     } label: { Image(systemName: "iphone") }
                         .buttonStyle(.bordered)
-                        .accessibilityLabel("Speel op dit apparaat")
-                        .help("Speel lokaal af op dit apparaat")
+                        .accessibilityLabel(LS("discovery.playOnThisDevice"))
+                        .help(LS("discovery.playLocallyHelp"))
                 }
             }
             Spacer(minLength: 0)
@@ -305,7 +305,7 @@ public struct DiscoveryView: View {
             Button {
                 Haptics.tap()
                 play { await client.curateTracks(tracks, zoneID: $0) }
-            } label: { Label("Speel alles", systemImage: "play.fill") }
+            } label: { Label(LS("discovery.playAll"), systemImage: "play.fill") }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(client.selectedZone == nil)
@@ -325,7 +325,7 @@ public struct DiscoveryView: View {
             // like a no-op. A genuine failure still surfaces via the global
             // error toast (client.lastActionError).
             if client.lastActionError == nil {
-                withAnimation(Motion.quick) { actionMessage = "Afspelen gestart op ‘\(zone.displayName)’." }
+                withAnimation(Motion.quick) { actionMessage = LS("Afspelen gestart op ‘\(zone.displayName)’.") }
                 Task {
                     try? await Task.sleep(for: .seconds(4))
                     withAnimation(Motion.quick) { actionMessage = nil }
@@ -339,9 +339,9 @@ public struct DiscoveryView: View {
     @ViewBuilder
     func summaryCards(_ stats: DatabaseManager.LibraryStats) -> some View {
         HStack(spacing: Spacing.md) {
-            StatCard(label: "Tracks",   value: stats.totalTracks.formatted())
-            StatCard(label: "Artiesten", value: stats.totalArtists.formatted())
-            StatCard(label: "Albums",   value: stats.totalAlbums.formatted())
+            StatCard(label: LS("discovery.statTracks"),   value: stats.totalTracks.formatted())
+            StatCard(label: LS("bm.section.artists"), value: stats.totalArtists.formatted())
+            StatCard(label: LS("bm.section.albums"),   value: stats.totalAlbums.formatted())
         }
     }
 
@@ -350,7 +350,7 @@ public struct DiscoveryView: View {
     @ViewBuilder
     func decadeCard(_ stats: DatabaseManager.LibraryStats) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader("Tracks per decennium", "chart.xyaxis.line") { EmptyView() }
+            sectionHeader(LS("discovery.decadeCardTitle"), "chart.xyaxis.line") { EmptyView() }
 
             Chart(stats.tracksByDecade, id: \.decade) { item in
                 AreaMark(
@@ -413,7 +413,7 @@ public struct DiscoveryView: View {
     func genreCard(_ stats: DatabaseManager.LibraryStats) -> some View {
         let genres = Array(stats.topGenres.prefix(12))
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader("Topgenres", "guitars.fill") { EmptyView() }
+            sectionHeader(LS("discovery.topGenres"), "guitars.fill") { EmptyView() }
 
             Chart(genres, id: \.genre) { item in
                 BarMark(
@@ -454,9 +454,9 @@ public struct DiscoveryView: View {
 
     var emptyState: some View {
         ContentUnavailableView(
-            "Geen bibliotheekdata",
+            LS("discovery.emptyTitle"),
             systemImage: "music.note.list",
-            description: Text("Synchroniseer je bibliotheek in Instellingen om hier statistieken te zien.")
+            description: LT("discovery.emptyDescription")
         )
     }
 

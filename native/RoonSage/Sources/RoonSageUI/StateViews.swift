@@ -44,12 +44,12 @@ public struct AsyncStateView<Content: View, Empty: View>: View {
     public var body: some View {
         if let error {
             ContentUnavailableView {
-                Label("Er ging iets mis", systemImage: "exclamationmark.triangle")
+                Label(LS("state.errorTitle"), systemImage: "exclamationmark.triangle")
             } description: {
                 Text(error)
             } actions: {
                 if let onRetry {
-                    Button("Opnieuw proberen", action: onRetry)
+                    Button(LS("state.retry"), action: onRetry)
                         .buttonStyle(.borderedProminent)
                 }
             }
@@ -83,7 +83,7 @@ public struct ErrorStateView: View {
         } description: {
             Text(message)
         } actions: {
-            Button("Opnieuw proberen", action: onRetry)
+            Button(LS("state.retry"), action: onRetry)
                 .buttonStyle(.borderedProminent)
         }
     }

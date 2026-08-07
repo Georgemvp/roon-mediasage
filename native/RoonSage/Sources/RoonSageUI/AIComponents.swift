@@ -124,7 +124,7 @@ public struct ZonePicker: View {
                         Image(systemName: localOn ? RoonClient.localOutputIcon
                               : (unset ? "exclamationmark.circle.fill"
                               : (client.selectedZone?.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker")))
-                        Text(localOn ? RoonClient.localOutputName : (client.selectedZone?.displayName ?? "Kies zone"))
+                        Text(localOn ? RoonClient.localOutputName : (client.selectedZone?.displayName ?? LS("aIComponents.chooseZone")))
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
                             .font(.caption2.weight(.semibold))
@@ -169,7 +169,7 @@ public struct ZoneHintBanner: View {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(Color.accentColor)
-                Text("Kies een zone om af te spelen")
+                LT("aIComponents.chooseZoneToPlay")
                     .font(.subheadline)
                 Spacer()
                 ZonePicker()
@@ -252,9 +252,9 @@ public struct FilterChips: View {
             ForEach(filters.decades.sorted(), id: \.self) { Badge("\($0)s") }
             if filters.genres.isEmpty && filters.tags.isEmpty && filters.moods.isEmpty
                 && filters.activities.isEmpty && filters.decades.isEmpty {
-                Badge("hele bibliotheek")
+                Badge(LS("aIComponents.wholeLibrary"))
             }
-            if let poolSize { Badge("\(poolSize) kandidaten") }
+            if let poolSize { Badge(LS("\(poolSize) kandidaten")) }
         }
     }
 }

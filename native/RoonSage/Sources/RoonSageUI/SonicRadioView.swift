@@ -60,14 +60,14 @@ public struct SonicRadioView: View {
 
             qobuzSection.plainCardRow()
         }
-        .navigationTitle("Radio's")
+        .navigationTitle(LS("sonicRadio.navTitle"))
         .toolbar {
             Button {
                 Task { await load(force: true); await loadQobuz(force: true) }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .help("Ververs de radio's van vandaag")
+            .help(LS("sonicRadio.refreshHelp"))
         }
         .task { await load(force: false) }
         .task { await loadQobuz(force: false) }
@@ -134,8 +134,8 @@ public struct SonicRadioView: View {
                     .font(.title3)
                     .foregroundStyle(Color.roonGold)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Mijn radio's").font(.subheadline.weight(.semibold))
-                    Text("Stel zelf radio's samen uit artiesten, genres, sferen en activiteiten — en sync ze naar Qobuz.")
+                    LT("sonicRadio.myRadiosTitle").font(.subheadline.weight(.semibold))
+                    LT("sonicRadio.myRadiosSubtitle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)

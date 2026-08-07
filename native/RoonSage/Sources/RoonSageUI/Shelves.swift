@@ -96,9 +96,9 @@ public func coverTile(_ c: Cover, zoneAvailable: Bool) -> some View {
     .disabled(!zoneAvailable)
     .accessibilityLabel("Speel \(c.title)\(c.subtitle.map { " van \($0)" } ?? "")")
     .contextMenu {
-        Button("Speel nu", systemImage: "play.fill") { Haptics.tap(); c.play() }
+        Button(LS("bm.playNow"), systemImage: "play.fill") { Haptics.tap(); c.play() }
             .disabled(!zoneAvailable)
-        Button("Speel op dit apparaat", systemImage: "iphone") { c.playLocal() }
+        Button(LS("shelves.playOnThisDevice"), systemImage: "iphone") { c.playLocal() }
     }
 }
 

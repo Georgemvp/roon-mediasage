@@ -32,17 +32,17 @@ public struct SongPathsView: View {
     public var body: some View {
         List {
             Section {
-                Text("Vind een soepele sonische brug tussen twee tracks via je bibliotheek.")
+                LT("songPaths.intro")
                     .font(.callout).foregroundStyle(.secondary)
             }
 
             ZoneHintBanner().plainCardRow()
 
-            Section("Kies tracks") {
-                trackPicker(label: "Van", query: $fromQuery,
+            Section(LS("songPaths.chooseTracks")) {
+                trackPicker(label: LS("songPaths.from"), query: $fromQuery,
                             selected: $fromTrack, results: $fromResults,
                             onSearch: searchFrom)
-                trackPicker(label: "Naar", query: $toQuery,
+                trackPicker(label: LS("songPaths.to"), query: $toQuery,
                             selected: $toTrack, results: $toResults,
                             onSearch: searchTo)
             }
@@ -50,7 +50,7 @@ public struct SongPathsView: View {
             if fromTrack != nil && toTrack != nil {
                 Section {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("Brugtracks: \(Int(stepCount) - 2)")
+                        LT("Brugtracks: \(Int(stepCount) - 2)")
                             .font(.caption).foregroundStyle(.secondary)
                         Slider(value: $stepCount, in: 4...16, step: 1)
                             .tint(Color.roonGold)
@@ -60,7 +60,7 @@ public struct SongPathsView: View {
                         Haptics.tap()
                         Task { await buildPath() }
                     } label: {
-                        Label(loading ? "Zoeken…" : "Bouw brug",
+                        Label(loading ? LS("songPaths.searching") : LS("songPaths.buildBridge"),
                               systemImage: "point.topleft.down.curvedto.point.bottomright.up")
                             .frame(maxWidth: .infinity)
                     }
@@ -75,9 +75,9 @@ public struct SongPathsView: View {
             if noResult && !loading {
                 Section {
                     ContentUnavailableView(
-                        "Geen brug gevonden",
+                        LS("songPaths.noBridgeTitle"),
                         systemImage: "point.topleft.down.curvedto.point.bottomright.up",
-                        description: Text("Deze twee tracks liggen sonisch te ver uit elkaar, of er zijn te weinig geanalyseerde tracks. Probeer andere tracks of analyseer meer van je bibliotheek."))
+                        description: LT("songPaths.noBridgeDescription"))
                     .listRowBackground(Color.clear)
                 }
                 .listRowSeparator(.hidden)
@@ -110,7 +110,7 @@ public struct SongPathsView: View {
                         }
                     }
                     Spacer()
-                    Button("Wijzig") {
+                    Button(LS("songPaths.change")) {
                         selected.wrappedValue = nil
                         query.wrappedValue = ""
                         results.wrappedValue = []
@@ -123,7 +123,7 @@ public struct SongPathsView: View {
             } else {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Zoek track…", text: query)
+                    TextField(LS("songPaths.searchTrackPlaceholder"), text: query)
                         .textFieldStyle(.plain)
                         .onSubmit(onSearch)
                         .onChange(of: query.wrappedValue) { _, _ in onSearch() }
@@ -174,13 +174,13 @@ public struct SongPathsView: View {
     }
 
     private var pathResultSection: some View {
-        Section("Sonisch pad (\(path.count) tracks)") {
+        Section(LS("Sonisch pad (\(path.count) tracks)")) {
             HStack(spacing: Spacing.sm) {
                 if let zone = client.selectedZone {
                     Button {
                         Haptics.success()
                         Task { await client.curateTracks(pathRecords, zoneID: zone.id) }
-                    } label: { Label("Speel pad", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                    } label: { Label(LS("songPaths.playPath"), systemImage: "play.fill").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.roonGold)
                 }
@@ -195,14 +195,14 @@ public struct SongPathsView: View {
                         defer { syncing = false }
                         let title = bridgeTitle
                         let ok = await client.syncJourneyToQobuz(
-                            title: title, description: "Een sonische brug, samengesteld in RoonSage.",
+                            title: title, description: LS("songPaths.qobuzDescription"),
                             tracks: pathRecords)
                         syncMsg = ok
-                            ? "Op Qobuz gezet als ‘\(RoonClient.qobuzPlaylistName(for: title))’."
-                            : "Sync naar Qobuz mislukt — controleer je Qobuz-instellingen."
+                            ? LS("Op Qobuz gezet als ‘\(RoonClient.qobuzPlaylistName(for: title))’.")
+                            : LS("songPaths.syncFailed")
                     }
                 } label: {
-                    Label(syncing ? "Synchroniseren…" : "Sync naar Qobuz",
+                    Label(syncing ? LS("songPaths.syncing") : LS("songPaths.syncToQobuz"),
                           systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }

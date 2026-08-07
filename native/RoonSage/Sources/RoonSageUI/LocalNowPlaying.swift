@@ -37,10 +37,10 @@ struct LocalNowPlayingScreen: View {
     }
 
     #if os(macOS)
-    static let deviceNoun = "deze Mac"
+    static let deviceNoun = LS("localNowPlaying.deviceNounMac")
     static let deviceIcon = "laptopcomputer"
     #else
-    static let deviceNoun = "dit apparaat"
+    static let deviceNoun = LS("localNowPlaying.deviceNounDevice")
     static let deviceIcon = "iphone"
     #endif
 }
@@ -203,7 +203,7 @@ private struct LocalNowPlayingHero: View {
                         .lineLimit(1)
                 }
             } else {
-                Text("Er speelt niets").font(.title3).foregroundStyle(.secondary)
+                LT("localNowPlaying.nothingPlaying").font(.title3).foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity)
@@ -248,7 +248,7 @@ private struct LocalNowPlayingHero: View {
             }
             .frame(height: 22)
             .accessibilityElement()
-            .accessibilityLabel("Afspeelpositie")
+            .accessibilityLabel(LS("localNowPlaying.playbackPosition"))
             .accessibilityValue(formatTime(shownPos))
 
             HStack {
@@ -270,7 +270,7 @@ private struct LocalNowPlayingHero: View {
             }
             .buttonStyle(.plain)
             .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("Vorige track")
+            .accessibilityLabel(LS("localNowPlaying.previousTrack"))
 
             Button { Haptics.tap(); lp.togglePlayPause() } label: {
                 Image(systemName: lp.isPlaying ? "pause.circle.fill" : "play.circle.fill")
@@ -279,14 +279,14 @@ private struct LocalNowPlayingHero: View {
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(lp.isPlaying ? "Pauzeer" : "Speel af")
+            .accessibilityLabel(lp.isPlaying ? LS("localNowPlaying.pause") : LS("localNowPlaying.play"))
 
             Button { Haptics.tap(); lp.next() } label: {
                 Image(systemName: "forward.fill").font(.title)
             }
             .buttonStyle(.plain)
             .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("Volgende track")
+            .accessibilityLabel(LS("localNowPlaying.nextTrack"))
         }
     }
 
@@ -345,7 +345,7 @@ private struct LocalNowPlayingHero: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Shuffle")
-            .accessibilityValue(lp.shuffle ? "aan" : "uit")
+            .accessibilityValue(lp.shuffle ? LS("localNowPlaying.on") : LS("localNowPlaying.off"))
             .accessibilityAddTraits(lp.shuffle ? .isSelected : [])
 
             Button {
@@ -374,7 +374,7 @@ private struct LocalNowPlayingHero: View {
                     .tappable44()
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(lp.isMuted ? "Dempen opheffen" : "Dempen")
+            .accessibilityLabel(lp.isMuted ? LS("localNowPlaying.unmute") : LS("localNowPlaying.mute"))
 
             Slider(value: $volumeValue, in: 0...100, step: 1) { editing in
                 if !editing { lp.setVolume(volumeValue / 100) }
@@ -408,7 +408,7 @@ private struct LocalNowPlayingHero: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Vind ik leuk")
+                .accessibilityLabel(LS("localNowPlaying.like"))
                 .accessibilityAddTraits(current == .like ? .isSelected : [])
 
                 Button {
@@ -422,7 +422,7 @@ private struct LocalNowPlayingHero: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Vind ik niet leuk — sla over en leer ervan")
+                .accessibilityLabel(LS("localNowPlaying.dislike"))
                 .accessibilityAddTraits(current == .dislike ? .isSelected : [])
 
                 Button {
@@ -434,7 +434,7 @@ private struct LocalNowPlayingHero: View {
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Songtekst")
+                .accessibilityLabel(LS("localNowPlaying.lyrics"))
 
                 if let next = nextLocalItem(lp) {
                     Spacer(minLength: Spacing.sm)
@@ -449,7 +449,7 @@ private struct LocalNowPlayingHero: View {
     private func nextUpPill(_ next: LocalPlaybackController.Track, _ lp: LocalPlaybackController) -> some View {
         HStack(spacing: Spacing.sm) {
             VStack(alignment: .trailing, spacing: 1) {
-                Text("Hierna").font(.caption2).foregroundStyle(.secondary)
+                LT("localNowPlaying.upNext").font(.caption2).foregroundStyle(.secondary)
                 Text(next.title).font(.caption.weight(.medium)).lineLimit(1)
                 if !next.artist.isEmpty {
                     Text(next.artist).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -462,8 +462,8 @@ private struct LocalNowPlayingHero: View {
         .contentShape(Rectangle())
         .onTapGesture { Haptics.tap(); lp.next() }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Hierna: \(next.title)")
-        .accessibilityHint("Tik om door te spelen")
+        .accessibilityLabel(LS("Hierna: \(next.title)"))
+        .accessibilityHint(LS("localNowPlaying.tapToContinue"))
     }
 
     private func nextLocalItem(_ lp: LocalPlaybackController) -> LocalPlaybackController.Track? {
@@ -504,12 +504,12 @@ private struct LocalNowPlayingHero: View {
                 Haptics.tap()
                 client.stopLocalPlayback()
             } label: {
-                Label("Stop afspelen op \(LocalNowPlayingScreen.deviceNoun)", systemImage: "stop.circle")
+                Label(LS("Stop afspelen op \(LocalNowPlayingScreen.deviceNoun)"), systemImage: "stop.circle")
                     .font(.callout.weight(.medium))
             }
             .buttonStyle(.bordered)
             .tint(.secondary)
-            .accessibilityLabel("Stop lokaal afspelen")
+            .accessibilityLabel(LS("localNowPlaying.stopLocalPlayback"))
         }
     }
 

@@ -20,7 +20,7 @@ public struct LogConsoleView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    Text(text.isEmpty ? "Nog geen logregels." : text)
+                    Text(text.isEmpty ? LS("logConsole.emptyLog") : text)
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -36,18 +36,18 @@ public struct LogConsoleView: View {
                 Button {
                     copyAll()
                 } label: {
-                    Label(copied ? "Gekopieerd ✓" : "Kopieer alles", systemImage: "doc.on.doc")
+                    Label(copied ? LS("logConsole.copied") : LS("logConsole.copyAll"), systemImage: "doc.on.doc")
                 }
 
                 ShareLink(item: snapshotURL) {
-                    Label("Delen / bewaren", systemImage: "square.and.arrow.up")
+                    Label(LS("logConsole.shareSave"), systemImage: "square.and.arrow.up")
                 }
 
                 #if os(macOS)
                 Button {
                     NSWorkspace.shared.activateFileViewerSelecting([Log.fileURL])
                 } label: {
-                    Label("Toon in Finder", systemImage: "folder")
+                    Label(LS("logConsole.showInFinder"), systemImage: "folder")
                 }
                 #endif
 
@@ -57,17 +57,17 @@ public struct LogConsoleView: View {
                     Log.clear()
                     refresh()
                 } label: {
-                    Label("Wis", systemImage: "trash")
+                    Label(LS("logConsole.clear"), systemImage: "trash")
                 }
             }
             .padding(12)
         }
-        .navigationTitle("Logboek")
+        .navigationTitle(LS("logConsole.title"))
         .toolbar {
             Button {
                 refresh()
             } label: {
-                Label("Ververs", systemImage: "arrow.clockwise")
+                Label(LS("logConsole.refresh"), systemImage: "arrow.clockwise")
             }
         }
         .onAppear(perform: refresh)

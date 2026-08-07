@@ -19,13 +19,13 @@ public struct SonicSearchView: View {
     @State private var loading = false
     @State private var searched = false
 
-    private let examples = ["dromerige ambient piano", "energieke funk met blazers",
-                            "donkere melancholische synthwave", "warme akoestische zondagochtend"]
+    private let examples = [LS("sonicSearch.example1"), LS("sonicSearch.example2"),
+                            LS("sonicSearch.example3"), LS("sonicSearch.example4")]
 
     public var body: some View {
         List {
             Section {
-                Text("Beschrijf een sfeer of geluid; de analyzer zet je tekst om in een sonische vector en zoekt nummers die zó klinken.")
+                LT("sonicSearch.introDescription")
                     .font(.callout).foregroundStyle(.secondary)
                 searchBar
                     .listRowInsets(EdgeInsets())
@@ -42,9 +42,9 @@ public struct SonicSearchView: View {
             } else if results.isEmpty && lyricsHits.isEmpty {
                 Section {
                     ContentUnavailableView(
-                        "Geen resultaten",
+                        LS("sonicSearch.emptyTitle"),
                         systemImage: "sparkle.magnifyingglass",
-                        description: Text("Controleer of de analyzer draait met tekst-zoeken aan en of de sonische kenmerken zijn gesynchroniseerd."))
+                        description: LT("sonicSearch.emptyDescription"))
                     .listRowBackground(Color.clear)
                 }
                 .listRowSeparator(.hidden)
@@ -53,13 +53,13 @@ public struct SonicSearchView: View {
                 if !lyricsHits.isEmpty { lyricsSection }
             }
         }
-        .navigationTitle("Sonisch zoeken")
+        .navigationTitle(LS("nav.sonicSearch"))
     }
 
     private var searchBar: some View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: "sparkle.magnifyingglass").foregroundStyle(.secondary)
-            TextField("bijv. dromerige ambient piano", text: $query)
+            TextField(LS("sonicSearch.searchPlaceholder"), text: $query)
                 .textFieldStyle(.plain)
                 .onSubmit { runSearch() }
             if !query.isEmpty {
@@ -67,7 +67,7 @@ public struct SonicSearchView: View {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }.buttonStyle(.borderless)
             }
-            Button { runSearch() } label: { Text(loading ? "Zoeken…" : "Zoek") }
+            Button { runSearch() } label: { Text(loading ? LS("sonicSearch.searching") : LS("sonicSearch.search")) }
                 .buttonStyle(.borderedProminent).tint(Color.roonGold)
                 .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || loading)
         }
@@ -77,7 +77,7 @@ public struct SonicSearchView: View {
 
     private var exampleChips: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("Probeer eens").font(.caption).foregroundStyle(.secondary)
+            LT("sonicSearch.examplesHeader").font(.caption).foregroundStyle(.secondary)
             FlowChips(examples) { ex in
                 query = ex; runSearch()
             }

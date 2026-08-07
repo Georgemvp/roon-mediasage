@@ -29,26 +29,26 @@ public struct SongAlchemyView: View {
     public var body: some View {
         List {
             Section {
-                Text("Meng sonische profielen: optellen = sfeer overnemen, aftrekken = sfeer vermijden.")
+                LT("songAlchemy.intro")
                     .font(.callout).foregroundStyle(.secondary)
             }
 
             ZoneHintBanner().plainCardRow()
 
-            Section("Buckets") {
+            Section(LS("songAlchemy.sectionBuckets")) {
                 HStack(alignment: .top, spacing: Spacing.md) {
-                    bucket(title: "Optellen", tracks: $addTracks, tint: Color.roonSuccess,
+                    bucket(title: LS("songAlchemy.bucketAdd"), tracks: $addTracks, tint: Color.roonSuccess,
                            icon: "plus.circle.fill", bucket: .add)
-                    bucket(title: "Aftrekken", tracks: $subtractTracks, tint: Color.roonDanger,
+                    bucket(title: LS("songAlchemy.bucketSubtract"), tracks: $subtractTracks, tint: Color.roonDanger,
                            icon: "minus.circle.fill", bucket: .subtract)
                 }
             }
 
-            Section("Zoek tracks") { searchBar }
+            Section(LS("songAlchemy.sectionSearch")) { searchBar }
 
             Section {
                 if addTracks.isEmpty {
-                    Text("Voeg minimaal één track toe aan Optellen.")
+                    LT("songAlchemy.addHint")
                         .font(.callout).foregroundStyle(.secondary)
                 } else {
                     Button {
@@ -56,7 +56,7 @@ public struct SongAlchemyView: View {
                         remixSeed = 0
                         Task { await compute() }
                     } label: {
-                        Label(loading ? "Mixen…" : "Mix", systemImage: "wand.and.sparkles")
+                        Label(loading ? LS("songAlchemy.mixing") : LS("songAlchemy.mix"), systemImage: "wand.and.sparkles")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -70,7 +70,7 @@ public struct SongAlchemyView: View {
                             remixSeed &+= 1   // volgende deterministische variatie
                             Task { await compute() }
                         } label: {
-                            Label("Remix — zelfde smaak, andere tracks", systemImage: "shuffle")
+                            Label(LS("songAlchemy.remix"), systemImage: "shuffle")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
@@ -83,9 +83,9 @@ public struct SongAlchemyView: View {
             if noResult && !loading {
                 Section {
                     ContentUnavailableView(
-                        "Niets te mixen",
+                        LS("songAlchemy.noResultTitle"),
                         systemImage: "wand.and.sparkles",
-                        description: Text("Geen passende tracks gevonden. Voeg andere tracks toe, of zorg dat je bibliotheek sonisch geanalyseerd en gesynchroniseerd is."))
+                        description: LT("songAlchemy.noResultDesc"))
                     .listRowBackground(Color.clear)
                 }
                 .listRowSeparator(.hidden)
@@ -113,10 +113,10 @@ public struct SongAlchemyView: View {
                     Image(systemName: "plus").foregroundStyle(tint)
                 }
                 .buttonStyle(.borderless)
-                .accessibilityLabel("Track toevoegen aan \(title)")
+                .accessibilityLabel(LS("Track toevoegen aan \(title)"))
             }
             if tracks.wrappedValue.isEmpty {
-                Text("Leeg")
+                LT("songAlchemy.empty")
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 40)
                     .background(.background.secondary, in: RoundedRectangle(cornerRadius: Radius.md))
@@ -149,7 +149,7 @@ public struct SongAlchemyView: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Track zoeken om toe te voegen…", text: $searchQuery)
+                TextField(LS("songAlchemy.searchPlaceholder"), text: $searchQuery)
                     .textFieldStyle(.plain)
                     .onSubmit { performSearch() }
                     .onChange(of: searchQuery) { _, _ in performSearch() }
@@ -207,13 +207,13 @@ public struct SongAlchemyView: View {
     }
 
     private var resultsSection: some View {
-        Section("Alchemieresultaten (\(results.count))") {
+        Section(LS("Alchemieresultaten (\(results.count))")) {
             HStack(spacing: Spacing.sm) {
                 if let zone = client.selectedZone {
                     Button {
                         Haptics.success()
                         Task { await client.curateTracks(topRecords, zoneID: zone.id) }
-                    } label: { Label("Speel top 20", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                    } label: { Label(LS("songAlchemy.playTop20"), systemImage: "play.fill").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.roonGold)
                 }

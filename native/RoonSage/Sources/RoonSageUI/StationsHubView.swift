@@ -19,8 +19,8 @@ public struct StationsHubView: View {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .radios:   "Radio's"
-            case .djModes:  "DJ-modi"
+            case .radios:   LS("stationsHub.radios")
+            case .djModes:  LS("stationsHub.djModes")
             case .journeys: "Journeys"
             }
         }
@@ -30,7 +30,7 @@ public struct StationsHubView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Picker("Modus", selection: $mode) {
+            Picker(LS("stationsHub.mode"), selection: $mode) {
                 ForEach(Mode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)

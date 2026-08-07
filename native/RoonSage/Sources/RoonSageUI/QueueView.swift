@@ -14,11 +14,11 @@ public struct QueueView: View {
     public var body: some View {
         Group {
             if client.selectedZone == nil {
-                ContentUnavailableView("Geen zone gekozen", systemImage: "list.number",
-                    description: Text("Kies een zone in de werkbalk om de wachtrij te zien."))
+                ContentUnavailableView(LS("queue.noZoneTitle"), systemImage: "list.number",
+                    description: LT("queue.noZoneDescription"))
             } else if client.queueItems.isEmpty {
-                ContentUnavailableView("Wachtrij is leeg", systemImage: "list.number",
-                    description: Text("Niets in de wachtrij van \(client.selectedZone?.displayName ?? "deze zone")."))
+                ContentUnavailableView(LS("queue.emptyTitle"), systemImage: "list.number",
+                    description: LT("Niets in de wachtrij van \(client.selectedZone?.displayName ?? "deze zone")."))
             } else {
                 List {
                     Section {
@@ -50,7 +50,7 @@ public struct QueueView: View {
                         .contentShape(Rectangle())
                         .onTapGesture { playFromHere(item) }
                         .contextMenu {
-                            Button("Sonisch vergelijkbaar", systemImage: "waveform.path.ecg") {
+                            Button(LS("queue.sonicallySimilar"), systemImage: "waveform.path.ecg") {
                                 similarSeed = SonicSeed(title: item.title, artist: item.subtitle,
                                                         album: nil, imageKey: item.imageKey)
                             }
@@ -58,29 +58,29 @@ public struct QueueView: View {
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.isButton)
                         .accessibilityLabel(queueLabel(item, isNowPlaying: index == 0))
-                        .accessibilityHint("Tik om vanaf hier af te spelen")
+                        .accessibilityHint(LS("queue.playFromHereHint"))
                     }
                 }
                 .listStyle(.plain)
             }
         }
-        .navigationTitle("Wachtrij")
+        .navigationTitle(LS("nav.queue"))
         .similarTracksSheet(item: $similarSeed)
         .toolbar { if client.selectedZone != nil { queueOptions } }
         .onAppear(perform: restart)
         .onChange(of: client.selectedZone?.id) { _, _ in restart() }
         .onDisappear { client.stopQueue() }
-        .alert("Bewaar wachtrij als playlist", isPresented: $showSaveSheet) {
-            TextField("Naam playlist", text: $newPlaylistName)
-            Button("Annuleer", role: .cancel) {}
-            Button("Bewaar") {
+        .alert(LS("queue.saveAsPlaylist"), isPresented: $showSaveSheet) {
+            TextField(LS("queue.playlistNamePlaceholder"), text: $newPlaylistName)
+            Button(LS("queue.cancel"), role: .cancel) {}
+            Button(LS("queue.save")) {
                 let name = newPlaylistName.trimmingCharacters(in: .whitespaces)
                 guard !name.isEmpty else { return }
                 client.savePlaylist(name: name, tracks: queueRecords())
                 newPlaylistName = ""
             }
         } message: {
-            Text("Bewaar de \(client.queueItems.count) tracks in de wachtrij als playlist. Afspelen zoekt ze later op titel + artiest terug in je bibliotheek.")
+            LT("Bewaar de \(client.queueItems.count) tracks in de wachtrij als playlist. Afspelen zoekt ze later op titel + artiest terug in je bibliotheek.")
         }
     }
 
@@ -117,8 +117,8 @@ public struct QueueView: View {
                     Image(systemName: "plus.rectangle.on.folder")
                 }
                 .disabled(client.queueItems.isEmpty)
-                .accessibilityLabel("Bewaar wachtrij als playlist")
-                .help("Bewaar de wachtrij als playlist")
+                .accessibilityLabel(LS("queue.saveAsPlaylist"))
+                .help(LS("queue.saveQueueHelp"))
 
                 Button {
                     Haptics.tap()
@@ -127,8 +127,8 @@ public struct QueueView: View {
                     Image(systemName: "shuffle")
                         .foregroundStyle(shuffleOn ? Color.roonGold : .secondary)
                 }
-                .accessibilityLabel("Shuffle")
-                .help(shuffleOn ? "Shuffle staat aan" : "Shuffle staat uit")
+                .accessibilityLabel(LS("queue.shuffle"))
+                .help(shuffleOn ? LS("queue.shuffleOn") : LS("queue.shuffleOff"))
 
                 Button {
                     Haptics.tap()
@@ -155,7 +155,7 @@ public struct QueueView: View {
 
     private func queueLabel(_ item: RoonClient.QueueItem, isNowPlaying: Bool) -> String {
         var parts: [String] = []
-        if isNowPlaying { parts.append("Speelt nu") }
+        if isNowPlaying { parts.append(LS("queue.nowPlaying")) }
         parts.append(item.title)
         if let s = item.subtitle { parts.append(s) }
         return parts.joined(separator: ", ")

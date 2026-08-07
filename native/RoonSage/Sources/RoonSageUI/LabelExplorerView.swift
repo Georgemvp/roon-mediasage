@@ -20,36 +20,36 @@ public struct LabelExplorerView: View {
     public var body: some View {
         List {
             if let week = labelOfWeek {
-                Section("Label van de week") {
+                Section(LS("labelExplorer.labelOfWeek")) {
                     NavigationLink(value: week) { labelOfWeekCard(week) }
                 }
             }
             Section {
-                Picker("Sorteer", selection: $sort) {
-                    Text("Meeste albums").tag(LabelSort.albumCount)
-                    Text("Naam").tag(LabelSort.name)
+                Picker(LS("labelExplorer.sort"), selection: $sort) {
+                    LT("labelExplorer.mostAlbums").tag(LabelSort.albumCount)
+                    LT("labelExplorer.name").tag(LabelSort.name)
                 }
                 .pickerStyle(.segmented)
             }
-            Section("Labels (\(labels.count))") {
+            Section(LS("Labels (\(labels.count))")) {
                 ForEach(labels) { label in
                     NavigationLink(value: label) { labelRow(label) }
                         .contextMenu {
                             Button { mergeSource = label } label: {
-                                Label("Voeg samen met…", systemImage: "arrow.triangle.merge")
+                                Label(LS("labelExplorer.mergeWith"), systemImage: "arrow.triangle.merge")
                             }
                         }
                 }
             }
         }
-        .navigationTitle("Labels")
+        .navigationTitle(LS("labelExplorer.labels"))
         .navigationDestination(for: DatabaseManager.LabelRow.self) { LabelAlbumsView(label: $0) }
         .toolbar {
             if lastMergedFrom != nil {
                 ToolbarItem {
                     Button {
                         Task { await undoLastMerge() }
-                    } label: { Label("Ongedaan maken", systemImage: "arrow.uturn.backward") }
+                    } label: { Label(LS("labelExplorer.undo"), systemImage: "arrow.uturn.backward") }
                 }
             }
         }
@@ -81,7 +81,7 @@ public struct LabelExplorerView: View {
             labelGlyph(label, size: 52)
             VStack(alignment: .leading, spacing: 4) {
                 Text(label.name).font(.headline).lineLimit(2)
-                Text("\(label.albumCount) albums in je bibliotheek")
+                LT("\(label.albumCount) albums in je bibliotheek")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -108,9 +108,9 @@ public struct LabelExplorerView: View {
 
     private var emptyState: some View {
         ContentUnavailableView(
-            "Nog geen labels",
+            LS("labelExplorer.noLabelsTitle"),
             systemImage: "tag",
-            description: Text("Labels komen uit je geanalyseerde bibliotheek. Synchroniseer en analyseer je muziek om ze hier te zien.")
+            description: LT("labelExplorer.noLabelsDescription")
         )
     }
 
@@ -126,9 +126,9 @@ public struct LabelExplorerView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .navigationTitle("Samenvoegen met…")
+            .navigationTitle(LS("labelExplorer.mergeNavTitle"))
             .toolbar {
-                Button("Annuleer", role: .cancel) { mergeSource = nil }
+                Button(LS("labelExplorer.cancel"), role: .cancel) { mergeSource = nil }
             }
         }
     }

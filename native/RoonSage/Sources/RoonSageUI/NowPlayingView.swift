@@ -26,9 +26,9 @@ public struct NowPlayingView: View {
             LocalNowPlayingScreen()
         } else if client.zones.isEmpty {
             ContentUnavailableView(
-                "Geen actieve zones",
+                LS("nowPlaying.noActiveZones"),
                 systemImage: "speaker.slash",
-                description: Text("Start afspelen in Roon om hier zones te zien.")
+                description: LT("nowPlaying.startPlaybackHint")
             )
         } else if let zone = client.selectedZone {
             ZStack {
@@ -60,9 +60,9 @@ public struct NowPlayingView: View {
             // before RootView restores the last-used zone). Don't show a blank
             // screen — offer the zones explicitly.
             ContentUnavailableView {
-                Label("Kies een zone", systemImage: "hifi.speaker")
+                Label(LS("nowPlaying.chooseZone"), systemImage: "hifi.speaker")
             } description: {
-                Text("Selecteer hierboven een zone om af te spelen.")
+                LT("nowPlaying.selectZoneHint")
             } actions: {
                 ForEach(client.zones) { zone in
                     Button {
@@ -94,9 +94,9 @@ enum NowPlayingHeroOptions {
 
     static func loopLabel(_ loop: String) -> String {
         switch loop {
-        case "loop":     "Herhaal alles"
-        case "loop_one": "Herhaal deze track"
-        default:         "Herhalen uit"
+        case "loop":     LS("nowPlaying.repeatAll")
+        case "loop_one": LS("nowPlaying.repeatOne")
+        default:         LS("nowPlaying.repeatOff")
         }
     }
 
@@ -105,10 +105,10 @@ enum NowPlayingHeroOptions {
     static func attributeBadges(_ attrs: [String: Float]) -> [String] {
         guard !attrs.isEmpty else { return [] }
         let rules: [(key: String, high: String, low: String)] = [
-            ("valence", "Vrolijk", "Melancholisch"),
-            ("danceability", "Dansbaar", ""),
-            ("acousticness", "Akoestisch", "Elektronisch"),
-            ("instrumentalness", "Instrumentaal", ""),
+            ("valence", LS("nowPlaying.moodHappy"), LS("nowPlaying.moodMelancholic")),
+            ("danceability", LS("nowPlaying.moodDanceable"), ""),
+            ("acousticness", LS("nowPlaying.moodAcoustic"), LS("nowPlaying.moodElectronic")),
+            ("instrumentalness", LS("nowPlaying.moodInstrumental"), ""),
         ]
         var out: [String] = []
         for r in rules {
@@ -213,7 +213,7 @@ struct OutputSelector: View {
                 Image(systemName: localOn ? RoonClient.localOutputIcon
                           : (active?.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"))
                     .font(.caption)
-                Text(localOn ? RoonClient.localOutputName : (active?.displayName ?? "Kies output"))
+                Text(localOn ? RoonClient.localOutputName : (active?.displayName ?? LS("nowPlaying.chooseOutput")))
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
@@ -226,8 +226,8 @@ struct OutputSelector: View {
             .foregroundStyle(.primary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Output: \(localOn ? RoonClient.localOutputName : (active?.displayName ?? "geen"))")
-        .accessibilityHint("Tik om een andere zone of dit apparaat te kiezen")
+        .accessibilityLabel("Output: \(localOn ? RoonClient.localOutputName : (active?.displayName ?? LS("nowPlaying.none")))")
+        .accessibilityHint(LS("nowPlaying.chooseOutputHint"))
     }
 }
 
@@ -350,7 +350,7 @@ private struct NowPlayingHero: View {
                         .lineLimit(1)
                 }
             } else {
-                Text("Er speelt niets")
+                LT("nowPlaying.nothingPlaying")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                 Text(zone.displayName)
@@ -361,13 +361,13 @@ private struct NowPlayingHero: View {
                     Button {
                         Haptics.tap(); navigateTo(.discovery)
                     } label: {
-                        Label("Ontdek muziek", systemImage: "sparkles")
+                        Label(LS("nowPlaying.discoverMusic"), systemImage: "sparkles")
                     }
                     .buttonStyle(.borderedProminent)
                     Button {
                         Haptics.tap(); navigateTo(.generate)
                     } label: {
-                        Label("Maak een playlist", systemImage: "wand.and.stars")
+                        Label(LS("nowPlaying.makePlaylist"), systemImage: "wand.and.stars")
                     }
                     .buttonStyle(.bordered)
                 }
@@ -459,7 +459,7 @@ private struct NowPlayingHero: View {
                 .controlSize(.small)
                 .disabled(startingRadio)
                 .accessibilityLabel("Start Sonic Radio")
-                .help("Speel een station met tracks die hier sonisch op lijken")
+                .help(LS("nowPlaying.sonicRadioHelp"))
 
                 Button {
                     startingAdventure = true
@@ -471,14 +471,14 @@ private struct NowPlayingHero: View {
                     if startingAdventure {
                         ProgressView().controlSize(.small)
                     } else {
-                        Label("Reis", systemImage: "map").font(.caption)
+                        Label(LS("nowPlaying.journey"), systemImage: "map").font(.caption)
                     }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(startingAdventure)
-                .accessibilityLabel("Start een sonische reis")
-                .help("Een sonische reis die vanaf deze track wegdrijft naar een heel ander klankgebied")
+                .accessibilityLabel(LS("nowPlaying.startJourney"))
+                .help(LS("nowPlaying.journeyHelp"))
             }
             .lineLimit(1)
         }
@@ -547,9 +547,9 @@ private struct NowPlayingHero: View {
             }
             .frame(height: 22)
             .accessibilityElement()
-            .accessibilityLabel("Afspeelpositie")
+            .accessibilityLabel(LS("nowPlaying.playbackPosition"))
             .accessibilityValue(formatTime(displayPosition))
-            .accessibilityHint("Veeg omhoog of omlaag om te spoelen")
+            .accessibilityHint(LS("nowPlaying.scrubHint"))
             .accessibilityAdjustableAction { direction in
                 guard hasLength else { return }
                 let step = length * 0.05
@@ -582,7 +582,7 @@ private struct NowPlayingHero: View {
             }
             .buttonStyle(.plain)
             .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("Vorige track")
+            .accessibilityLabel(LS("nowPlaying.previousTrack"))
 
             Button {
                 Task { await client.playPause(zoneID: zone.id) }
@@ -593,7 +593,7 @@ private struct NowPlayingHero: View {
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(zone.state == .playing ? "Pauzeer" : "Speel af")
+            .accessibilityLabel(zone.state == .playing ? LS("nowPlaying.pause") : LS("nowPlaying.play"))
 
             Button {
                 Task { await client.next(zoneID: zone.id) }
@@ -602,7 +602,7 @@ private struct NowPlayingHero: View {
             }
             .buttonStyle(.plain)
             .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("Volgende track")
+            .accessibilityLabel(LS("nowPlaying.nextTrack"))
         }
     }
 
@@ -628,7 +628,7 @@ private struct NowPlayingHero: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Shuffle")
-            .accessibilityValue(shuffleOn ? "aan" : "uit")
+            .accessibilityValue(shuffleOn ? LS("nowPlaying.on") : LS("nowPlaying.off"))
             .accessibilityAddTraits(shuffleOn ? .isSelected : [])
 
             Button {
@@ -657,8 +657,8 @@ private struct NowPlayingHero: View {
                         .tappable44()
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Wanddisplay")
-                .help("Volledig scherm — wanddisplay")
+                .accessibilityLabel(LS("nowPlaying.wallDisplay"))
+                .help(LS("nowPlaying.wallDisplayHelp"))
             }
         }
     }
@@ -677,7 +677,7 @@ private struct NowPlayingHero: View {
                         .tappable44()
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(vol.isMuted ? "Dempen opheffen" : "Dempen")
+                .accessibilityLabel(vol.isMuted ? LS("nowPlaying.unmute") : LS("nowPlaying.mute"))
 
                 Slider(
                     value: $volumeValue,
@@ -722,7 +722,7 @@ private struct NowPlayingHero: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Vind ik leuk")
+                .accessibilityLabel(LS("nowPlaying.like"))
                 .accessibilityAddTraits(current == .like ? .isSelected : [])
 
                 Button {
@@ -736,7 +736,7 @@ private struct NowPlayingHero: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Vind ik niet leuk — sla over en leer ervan")
+                .accessibilityLabel(LS("nowPlaying.dislike"))
                 .accessibilityAddTraits(current == .dislike ? .isSelected : [])
 
                 Button {
@@ -749,7 +749,7 @@ private struct NowPlayingHero: View {
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Songtekst")
+                .accessibilityLabel(LS("nowPlaying.lyrics"))
 
                 Button {
                     Haptics.tap()
@@ -762,7 +762,7 @@ private struct NowPlayingHero: View {
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Sonisch vergelijkbaar")
+                .accessibilityLabel(LS("nowPlaying.sonicallySimilar"))
 
                 if let next = nextUpItem {
                     Spacer(minLength: Spacing.sm)
@@ -779,7 +779,7 @@ private struct NowPlayingHero: View {
     private func nextUpPill(_ next: RoonClient.QueueItem) -> some View {
         HStack(spacing: Spacing.sm) {
             VStack(alignment: .trailing, spacing: 1) {
-                Text("Hierna").font(.caption2).foregroundStyle(.secondary)
+                LT("nowPlaying.upNext").font(.caption2).foregroundStyle(.secondary)
                 Text(next.title).font(.caption.weight(.medium)).lineLimit(1)
                 if let s = next.subtitle, !s.isEmpty {
                     Text(s).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -796,7 +796,7 @@ private struct NowPlayingHero: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Hierna: \(next.title)\(next.subtitle.map { " — \($0)" } ?? "")")
-        .accessibilityHint("Tik om door te spelen")
+        .accessibilityHint(LS("nowPlaying.keepPlayingHint"))
     }
 
     private var nextUpItem: RoonClient.QueueItem? {
@@ -870,7 +870,7 @@ struct FullArtworkView: View {
                     }
                     .buttonStyle(.plain)
                     .padding()
-                    .accessibilityLabel("Sluit")
+                    .accessibilityLabel(LS("nowPlaying.close"))
                 }
                 Spacer()
             }

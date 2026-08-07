@@ -33,14 +33,14 @@ public struct CustomRadioView: View {
             header.plainCardRow()
 
             if !client.qobuzConfigured {
-                warningRow("Qobuz is niet ingesteld — je kunt radio's samenstellen en afspelen, maar synchroniseren naar Qobuz kan pas na het invullen van je inloggegevens bij Instellingen.")
+                warningRow(LS("customRadio.qobuzNotConfigured"))
                     .plainCardRow()
             }
             if let message {
                 Text(message).font(.caption).foregroundStyle(.secondary).plainCardRow()
             }
 
-            Text("Zelf samengesteld").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+            LT("customRadio.selfComposed").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                 .plainCardRow()
 
             AsyncStateView(isLoading: isLoading || !loaded, isEmpty: configs.isEmpty,
@@ -53,10 +53,10 @@ public struct CustomRadioView: View {
 
             aiSection.plainCardRow()
         }
-        .navigationTitle("Mijn radio's")
+        .navigationTitle(LS("customRadio.title"))
         .toolbar {
             Button { newConfig() } label: { Image(systemName: "plus") }
-                .help("Nieuwe radio samenstellen")
+                .help(LS("customRadio.newRadioHelp"))
                 .disabled(options == nil)
         }
         .task { await load(force: false) }
@@ -81,11 +81,11 @@ public struct CustomRadioView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Label {
-                Text("Zelf samengestelde radio's").font(.headline)
+                LT("customRadio.headerTitle").font(.headline)
             } icon: {
                 Image(systemName: "slider.horizontal.2.square").foregroundStyle(Color.roonGold)
             }
-            Text("Stel een eindeloze sonische radio samen uit artiesten, nummers, genres, sferen en activiteiten. Zet 'm aan om automatisch als playlist naar Qobuz te synchroniseren — of speel 'm direct af.")
+            LT("customRadio.headerSubtitle")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -98,7 +98,7 @@ public struct CustomRadioView: View {
                 editing = cfg
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(cfg.name.isEmpty ? "Naamloze radio" : cfg.name)
+                    Text(cfg.name.isEmpty ? LS("customRadio.unnamedRadio") : cfg.name)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                     Text(facetSummary(cfg))
@@ -118,17 +118,17 @@ public struct CustomRadioView: View {
             Toggle("", isOn: enabledBinding(cfg))
                 .labelsHidden()
                 .toggleStyle(.switch)
-                .help(cfg.enabled ? "Radio staat aan" : "Radio staat uit")
+                .help(cfg.enabled ? LS("customRadio.radioOn") : LS("customRadio.radioOff"))
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 play(cfg)
-            } label: { Label("Speel", systemImage: "play.fill") }
+            } label: { Label(LS("customRadio.play"), systemImage: "play.fill") }
             .tint(Color.roonGold)
             .disabled(client.selectedZone == nil)
         }
         .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { delete(cfg) } label: { Label("Verwijder", systemImage: "trash") }
+            Button(role: .destructive) { delete(cfg) } label: { Label(LS("action.delete"), systemImage: "trash") }
         }
     }
 
@@ -140,15 +140,15 @@ public struct CustomRadioView: View {
         if !cfg.moods.isEmpty { parts.append(cfg.moods.prefix(3).map { RoonClient.moodLabel($0) }.joined(separator: ", ")) }
         if !cfg.activities.isEmpty { parts.append("\(cfg.activities.count) activiteit\(cfg.activities.count == 1 ? "" : "en")") }
         if !cfg.decades.isEmpty { parts.append(cfg.decades.sorted().map { "'\(String($0 % 100))" }.joined(separator: " ")) }
-        return parts.isEmpty ? "Nog geen bron gekozen" : parts.joined(separator: " · ")
+        return parts.isEmpty ? LS("customRadio.noSourceChosen") : parts.joined(separator: " · ")
     }
 
     private func statusLine(_ cfg: RadioConfig) -> String {
-        var bits: [String] = [cfg.enabled ? "Aan" : "Uit"]
+        var bits: [String] = [cfg.enabled ? LS("customRadio.statusOn") : LS("customRadio.statusOff")]
         if cfg.syncToQobuz {
-            bits.append(cfg.qobuzPlaylistID != nil ? "op Qobuz" : "wacht op sync")
+            bits.append(cfg.qobuzPlaylistID != nil ? LS("customRadio.onQobuz") : LS("customRadio.awaitingSync"))
         } else {
-            bits.append("niet syncen")
+            bits.append(LS("customRadio.notSyncing"))
         }
         return bits.joined(separator: " · ")
     }
@@ -158,12 +158,12 @@ public struct CustomRadioView: View {
             HStack(spacing: Spacing.md) {
                 Image(systemName: "dot.radiowaves.left.and.right").font(.title3).foregroundStyle(Color.roonGold)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Radio speelt").font(.caption).foregroundStyle(.secondary)
+                    LT("customRadio.radioPlaying").font(.caption).foregroundStyle(.secondary)
                     Text(radio.artist).font(.headline)
                 }
                 Spacer()
                 Button(role: .destructive) { Haptics.tap(); client.stopRadio() } label: {
-                    Label("Stop", systemImage: "stop.fill")
+                    Label(LS("customRadio.stop"), systemImage: "stop.fill")
                 }
                 .buttonStyle(.bordered)
             }
@@ -175,8 +175,8 @@ public struct CustomRadioView: View {
     private var emptyState: some View {
         VStack(spacing: Spacing.sm) {
             Image(systemName: "slider.horizontal.2.square").font(.largeTitle).foregroundStyle(.tertiary)
-            Text("Nog geen eigen radio's").font(.headline)
-            Text("Tik op + om je eerste radio samen te stellen — bijvoorbeeld ‘House · Vrolijk · Workout’ of een paar favoriete artiesten.")
+            LT("customRadio.emptyTitle").font(.headline)
+            LT("customRadio.emptyBody")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -203,22 +203,22 @@ public struct CustomRadioView: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             HStack(spacing: Spacing.sm) {
                 Label {
-                    Text("AI-radio's").font(.headline)
+                    LT("customRadio.aiRadiosTitle").font(.headline)
                 } icon: {
                     Image(systemName: "sparkles").foregroundStyle(Color.roonGold)
                 }
                 if aiLoading { ProgressView().controlSize(.small) }
             }
-            Text("De automatisch samengestelde radio's. Zet aan/uit welke naar Qobuz gaan, of neem er één over als bewerkbare eigen radio.")
+            LT("customRadio.aiRadiosSubtitle")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             if let mgmt = aiMgmt {
-                Toggle("Radio's naar Qobuz synchroniseren", isOn: syncEnabledBinding)
+                Toggle(LS("customRadio.syncToQobuz"), isOn: syncEnabledBinding)
                     .toggleStyle(.switch)
                     .font(.subheadline)
 
-                Picker("Categorie", selection: $aiCategory) {
+                Picker(LS("customRadio.category"), selection: $aiCategory) {
                     ForEach(RoonClient.manageableRadioCategories) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -226,13 +226,13 @@ public struct CustomRadioView: View {
 
                 let items = mgmt.radios.filter { $0.category == aiCategory.rawValue }
                 if items.isEmpty {
-                    Text("Geen \(aiCategory.label.lowercased())-radio's beschikbaar — analyseer eerst meer muziek.")
+                    LT("Geen \(aiCategory.label.lowercased())-radio's beschikbaar — analyseer eerst meer muziek.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
                     ForEach(items) { aiRow($0) }
                 }
             } else if aiLoaded {
-                Text("Geen AI-radio's beschikbaar (nog niet genoeg geanalyseerde muziek, of de server is onbereikbaar).")
+                LT("customRadio.noAIRadios")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, Spacing.sm)
@@ -258,7 +258,7 @@ public struct CustomRadioView: View {
                     .foregroundStyle(hidden ? Color.secondary : Color.roonGold)
             }
             .buttonStyle(.borderless)
-            .help(hidden ? "Verborgen op hoofdscherm — tik om te tonen" : "Verberg op het hoofdscherm")
+            .help(hidden ? LS("customRadio.hiddenOnMain") : LS("customRadio.hideOnMain"))
 
             Button {
                 Haptics.tap()
@@ -267,12 +267,12 @@ public struct CustomRadioView: View {
                 Image(systemName: "square.and.pencil")
             }
             .buttonStyle(.borderless)
-            .help("Overnemen als bewerkbare eigen radio")
+            .help(LS("customRadio.adoptAsEditable"))
 
             Toggle("", isOn: aiSelectedBinding(item))
                 .labelsHidden()
                 .toggleStyle(.switch)
-                .help(item.selected ? "Wordt naar Qobuz gesynct" : "Wordt niet gesynct")
+                .help(item.selected ? LS("customRadio.willSync") : LS("customRadio.wontSync"))
         }
     }
 

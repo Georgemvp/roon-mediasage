@@ -26,67 +26,67 @@ struct CustomRadioEditorView: View {
 
     var body: some View {
         Form {
-            Section("Naam") {
-                TextField("Bijv. Zomeravond of Focus-house", text: $config.name)
+            Section(LS("customRadioEditor.sectionName")) {
+                TextField(LS("customRadioEditor.namePlaceholder"), text: $config.name)
                     #if os(iOS)
                     .textInputAutocapitalization(.words)
                     #endif
             }
 
             Section {
-                facetLink(title: "Artiesten", systemImage: "music.mic",
+                facetLink(title: LS("bm.section.artists"), systemImage: "music.mic",
                           options: options.artists.map { .init(key: $0, label: $0) },
                           selection: $config.artists.asSet)
-                facetLink(title: "Nummers", systemImage: "music.note",
+                facetLink(title: LS("bm.section.tracks"), systemImage: "music.note",
                           options: options.tracks, selection: $config.trackKeys.asSet)
-                facetLink(title: "Genres", systemImage: "guitars",
+                facetLink(title: LS("customRadioEditor.facetGenres"), systemImage: "guitars",
                           options: options.genres, selection: $config.genres.asSet)
             } header: {
-                Text("Bron — seeds")
+                LT("customRadioEditor.sourceSeedsHeader")
             } footer: {
-                Text("Artiesten en nummers bepalen de klank van de radio. Ze worden niet als filter gebruikt, maar sturen de sfeer.")
+                LT("customRadioEditor.sourceSeedsFooter")
             }
 
             if !options.moods.isEmpty {
-                Section("Sfeer") { chipRows(options.moods, selection: $config.moods.asSet) }
+                Section(LS("customRadioEditor.sectionMood")) { chipRows(options.moods, selection: $config.moods.asSet) }
             }
-            Section("Activiteit") { chipRows(options.activities, selection: $config.activities.asSet) }
+            Section(LS("customRadioEditor.sectionActivity")) { chipRows(options.activities, selection: $config.activities.asSet) }
             if !options.decades.isEmpty {
-                Section("Decennium") { decadeRows }
+                Section(LS("customRadioEditor.sectionDecade")) { decadeRows }
             }
 
             Section {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     HStack {
-                        Text("Avontuurlijkheid").font(.subheadline)
+                        LT("customRadioEditor.adventurousness").font(.subheadline)
                         Spacer()
                         Text(adventureLabel).font(.caption).foregroundStyle(Color.roonGold)
                     }
                     Slider(value: $config.adventurousness, in: 0...1, step: 0.05).tint(Color.roonGold)
                 }
-                Stepper("Aantal tracks: \(config.targetCount)", value: $config.targetCount, in: 8...100, step: 1)
+                Stepper(LS("Aantal tracks: \(config.targetCount)"), value: $config.targetCount, in: 8...100, step: 1)
             } header: {
-                Text("Afstemming")
+                LT("customRadioEditor.tuningHeader")
             } footer: {
-                Text("Genre, sfeer, activiteit en decennium werken als filter (met verzachting): alleen tracks die eraan voldoen komen erin, tenzij er te weinig zijn.")
+                LT("customRadioEditor.tuningFooter")
             }
 
-            Section("Synchronisatie") {
-                Toggle("Radio aan", isOn: $config.enabled)
-                Toggle("Automatisch naar Qobuz synchroniseren", isOn: $config.syncToQobuz)
+            Section(LS("customRadioEditor.sectionSync")) {
+                Toggle(LS("customRadioEditor.toggleEnabled"), isOn: $config.enabled)
+                Toggle(LS("customRadioEditor.toggleSyncQobuz"), isOn: $config.syncToQobuz)
             }
         }
         .formStyle(.grouped)
-        .navigationTitle(isNew ? "Nieuwe radio" : "Radio bewerken")
+        .navigationTitle(isNew ? LS("customRadioEditor.navTitleNew") : LS("customRadioEditor.navTitleEdit"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Annuleer") { dismiss() }
+                Button(LS("customRadioEditor.cancel")) { dismiss() }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Bewaar") { save() }
+                Button(LS("customRadioEditor.save")) { save() }
                     .disabled(!canSave || saving)
             }
         }
@@ -98,10 +98,10 @@ struct CustomRadioEditorView: View {
 
     private var adventureLabel: String {
         switch config.adventurousness {
-        case ..<0.2:  return "Vooral bekend"
-        case ..<0.45: return "Lichte verkenning"
-        case ..<0.7:  return "Verkennend"
-        default:      return "Op ontdekking"
+        case ..<0.2:  return LS("customRadioEditor.adventureFamiliar")
+        case ..<0.45: return LS("customRadioEditor.adventureLight")
+        case ..<0.7:  return LS("customRadioEditor.adventureExploring")
+        default:      return LS("customRadioEditor.adventureDiscovery")
         }
     }
 
@@ -116,7 +116,7 @@ struct CustomRadioEditorView: View {
             HStack {
                 Label(title, systemImage: systemImage)
                 Spacer()
-                Text(selection.wrappedValue.isEmpty ? "Geen" : "\(selection.wrappedValue.count)")
+                Text(selection.wrappedValue.isEmpty ? LS("customRadioEditor.none") : "\(selection.wrappedValue.count)")
                     .foregroundStyle(.secondary)
             }
         }
@@ -151,7 +151,7 @@ struct CustomRadioEditorView: View {
                 else { config.decades.append(d) }
             } label: {
                 HStack {
-                    Text(d >= 2000 ? "Jaren \(d)" : "Jaren \(d % 100)")
+                    Text(d >= 2000 ? LS("Jaren \(d)") : LS("Jaren \(d % 100)"))
                     Spacer()
                     if config.decades.contains(d) { Image(systemName: "checkmark").foregroundStyle(Color.roonGold) }
                 }
@@ -190,21 +190,21 @@ struct FacetMultiSelectView: View {
     var body: some View {
         List {
             if !selection.isEmpty {
-                Section("Gekozen (\(selection.count))") {
-                    Button("Selectie wissen", role: .destructive) { selection.removeAll() }
+                Section(LS("Gekozen (\(selection.count))")) {
+                    Button(LS("customRadioEditor.clearSelection"), role: .destructive) { selection.removeAll() }
                         .font(.caption)
                 }
             }
             if !searching, !featured.isEmpty {
-                Section("Favorieten") {
+                Section(LS("customRadioEditor.favorites")) {
                     ForEach(featured) { row($0) }
                 }
             }
-            Section(featured.isEmpty || searching ? "" : "Alle") {
+            Section(featured.isEmpty || searching ? "" : LS("customRadioEditor.all")) {
                 ForEach(filtered) { row($0) }
             }
         }
-        .searchable(text: $query, prompt: "Zoeken")
+        .searchable(text: $query, prompt: LS("customRadioEditor.searchPrompt"))
         .navigationTitle(title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

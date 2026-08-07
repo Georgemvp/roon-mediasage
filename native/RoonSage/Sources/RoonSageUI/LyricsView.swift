@@ -35,13 +35,13 @@ struct LyricsView: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle(nowPlaying?.title ?? "Songtekst")
+                .navigationTitle(nowPlaying?.title ?? LS("lyrics.title"))
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Klaar") { dismiss() }
+                        Button(LS("lyrics.done")) { dismiss() }
                     }
                 }
         }
@@ -81,10 +81,10 @@ struct LyricsView: View {
     @ViewBuilder
     private var content: some View {
         if loading {
-            ProgressView("Songtekst laden…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            ProgressView(LS("lyrics.loading")).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let l = lyrics, l.isInstrumental {
-            ContentUnavailableView("Instrumentaal", systemImage: "music.note",
-                description: Text("Deze track heeft geen songtekst."))
+            ContentUnavailableView(LS("lyrics.instrumental"), systemImage: "music.note",
+                description: LT("lyrics.instrumentalDesc"))
         } else if let synced = lyrics?.synced, !synced.isEmpty {
             karaoke(synced)
         } else if let plain = lyrics?.plain, !plain.isEmpty {
@@ -96,8 +96,8 @@ struct LyricsView: View {
                     .textSelection(.enabled)
             }
         } else {
-            ContentUnavailableView("Geen songtekst gevonden", systemImage: "text.quote",
-                description: Text("Voor deze track is geen tekst beschikbaar op LRCLIB."))
+            ContentUnavailableView(LS("lyrics.notFound"), systemImage: "text.quote",
+                description: LT("lyrics.notFoundDesc"))
         }
     }
 

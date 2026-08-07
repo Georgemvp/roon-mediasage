@@ -23,9 +23,9 @@ struct MultitagView: View {
     var body: some View {
         List {
             Section {
-                Text("Kies twee of meer genres om de kruising te vinden. Met ‘alle genres’ aan moet een nummer élk gekozen genre hebben.")
+                LT("multitag.introHint")
                     .font(.callout).foregroundStyle(.secondary)
-                Toggle("Alle genres (kruising)", isOn: $matchAll)
+                Toggle(LS("multitag.allGenresToggle"), isOn: $matchAll)
             }
 
             Section("Genres\(selected.isEmpty ? "" : " (\(selected.count))")") {
@@ -40,9 +40,9 @@ struct MultitagView: View {
                 }
             }
 
-            Section("Decennium") {
-                Picker("Decennium", selection: $decade) {
-                    Text("Alle").tag(Int?.none)
+            Section(LS("multitag.decade")) {
+                Picker(LS("multitag.decade"), selection: $decade) {
+                    LT("multitag.decadeAll").tag(Int?.none)
                     ForEach(decades, id: \.self) { d in Text("\(d)s").tag(Int?.some(d)) }
                 }
                 .pickerStyle(.segmented)
@@ -52,7 +52,7 @@ struct MultitagView: View {
                 Button {
                     runSearch()
                 } label: {
-                    Label(loading ? "Zoeken…" : "Zoek nummers", systemImage: "magnifyingglass")
+                    Label(loading ? LS("multitag.searching") : LS("multitag.searchTracks"), systemImage: "magnifyingglass")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).tint(Color.roonGold)
@@ -65,9 +65,9 @@ struct MultitagView: View {
                 } else if results.isEmpty {
                     Section {
                         ContentUnavailableView(
-                            "Geen kruising gevonden",
+                            LS("multitag.noCrossoverTitle"),
                             systemImage: "square.on.square.dashed",
-                            description: Text("Deze combinatie levert niks op. Zet ‘alle genres’ uit voor een bredere match, of kies andere genres."))
+                            description: LT("multitag.noCrossoverDesc"))
                         .listRowBackground(Color.clear)
                     }
                 } else {
@@ -85,7 +85,7 @@ struct MultitagView: View {
     }
 
     private var resultsSection: some View {
-        Section("Resultaten (\(results.count))") {
+        Section(LS("Resultaten (\(results.count))")) {
             HStack(spacing: Spacing.sm) {
                 if client.selectedZone != nil {
                     Button {
@@ -93,7 +93,7 @@ struct MultitagView: View {
                         if let zone = client.selectedZone {
                             Task { await client.curateTracks(Array(results.prefix(60)), zoneID: zone.id) }
                         }
-                    } label: { Label("Speel", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                    } label: { Label(LS("multitag.play"), systemImage: "play.fill").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).tint(Color.roonGold)
                 }
                 LocalPlayButton { Array(results.prefix(60)) }

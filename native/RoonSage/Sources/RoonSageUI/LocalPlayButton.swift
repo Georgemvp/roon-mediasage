@@ -30,10 +30,10 @@ public struct LocalPlayButton: View {
 
     #if os(macOS)
     private static let deviceIcon = "laptopcomputer"
-    private static let deviceNoun = "deze Mac"
+    private static var deviceNoun: String { LS("localPlayButton.deviceNounMac") }
     #else
     private static let deviceIcon = "iphone"
-    private static let deviceNoun = "dit apparaat"
+    private static var deviceNoun: String { LS("localPlayButton.deviceNounDevice") }
     #endif
 
     public var body: some View {
@@ -50,11 +50,11 @@ public struct LocalPlayButton: View {
             case .icon:
                 Image(systemName: Self.deviceIcon)
             case .labeled:
-                Label("Op \(Self.deviceNoun)", systemImage: Self.deviceIcon)
+                Label(LS("Op \(Self.deviceNoun)"), systemImage: Self.deviceIcon)
             }
         }
         .disabled(busy)
-        .accessibilityLabel("Speel op \(Self.deviceNoun)")
-        .help("Speel lokaal af op \(Self.deviceNoun)")
+        .accessibilityLabel(LS("Speel op \(Self.deviceNoun)"))
+        .help(LS("Speel lokaal af op \(Self.deviceNoun)"))
     }
 }

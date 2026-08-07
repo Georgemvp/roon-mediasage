@@ -23,21 +23,21 @@ struct PlayActionsMenu: View {
         // Roon zone, or this device when "dit apparaat" is chosen. The queue verbs
         // are Roon-only (the local engine has no insert-next), so they stay zoned.
         let hasOutput = client.hasActiveOutput
-        Button("Speel nu", systemImage: "play.fill") {
+        Button(LS("bm.playNow"), systemImage: "play.fill") {
             runOutput { await client.playToActiveOutput($0) }
         }.disabled(!hasOutput)
-        Button("Speel hierna", systemImage: "text.line.first.and.arrowtriangle.forward") {
+        Button(LS("playActionsMenu.playNext"), systemImage: "text.line.first.and.arrowtriangle.forward") {
             run { records, zone in await client.queueTracks(records, next: true, zoneID: zone) }
         }.disabled(!hasZone)
-        Button("Achteraan in wachtrij", systemImage: "text.append") {
+        Button(LS("playActionsMenu.queueLast"), systemImage: "text.append") {
             run { records, zone in await client.queueTracks(records, next: false, zoneID: zone) }
         }.disabled(!hasZone)
-        Button("Speel geschud", systemImage: "shuffle") {
+        Button(LS("playActionsMenu.playShuffled"), systemImage: "shuffle") {
             runOutput { await client.playToActiveOutput($0.shuffled()) }
         }.disabled(!hasOutput)
         if let seed = trackRadioSeed {
             Divider()
-            Button("Radio op dit nummer", systemImage: "dot.radiowaves.left.and.right") {
+            Button(LS("playActionsMenu.radioOnTrack"), systemImage: "dot.radiowaves.left.and.right") {
                 guard let zone = client.selectedZone else { return }
                 Haptics.tap()
                 Task {
@@ -45,7 +45,7 @@ struct PlayActionsMenu: View {
                                                  album: seed.album, zoneID: zone.id)
                 }
             }.disabled(!hasZone)
-            Menu("Start als DJ…", systemImage: "person.wave.2") {
+            Menu(LS("playActionsMenu.startAsDJ"), systemImage: "person.wave.2") {
                 ForEach(DJMode.allCases, id: \.self) { mode in
                     Button(mode.title) {
                         guard let zone = client.selectedZone else { return }
@@ -60,7 +60,7 @@ struct PlayActionsMenu: View {
         }
         if includeLocal {
             Divider()
-            Button("Speel op dit apparaat", systemImage: "iphone") {
+            Button(LS("playActionsMenu.playOnThisDevice"), systemImage: "iphone") {
                 Haptics.tap()
                 Task {
                     let records = await fetch()

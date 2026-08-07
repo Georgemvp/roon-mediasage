@@ -48,17 +48,17 @@ struct SimilarTracksView: View {
                 if client.hasActiveOutput, !results.isEmpty { playAllRow }
             }
             AsyncStateView(isLoading: !loaded, isEmpty: results.isEmpty) {
-                Section("Klinkt hierop") {
+                Section(LS("similarTracks.sectionSoundsLike")) {
                     ForEach(results) { scored in resultRow(scored) }
                 }
             } empty: {
                 ContentUnavailableView(
-                    "Geen sonische match",
+                    LS("similarTracks.noMatchTitle"),
                     systemImage: "waveform.slash",
-                    description: Text("Dit nummer heeft (nog) geen sonische kenmerken, of de analyzer is niet bereikbaar."))
+                    description: LT("similarTracks.noMatchDescription"))
             }
         }
-        .navigationTitle("Vergelijkbaar")
+        .navigationTitle(LS("similarTracks.navTitle"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -74,7 +74,7 @@ struct SimilarTracksView: View {
         HStack(spacing: Spacing.md) {
             AlbumArtView(imageKey: seed.imageKey, size: 52, cornerRadius: Radius.md)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Vergelijkbaar met").font(.caption).foregroundStyle(.secondary)
+                LT("similarTracks.similarToLabel").font(.caption).foregroundStyle(.secondary)
                 Text(seed.title).font(.headline).lineLimit(1)
                 if let a = seed.artist { Text(a).font(.subheadline).foregroundStyle(.secondary).lineLimit(1) }
             }
@@ -89,10 +89,10 @@ struct SimilarTracksView: View {
                 let n = topRecords.count
                 Task {
                     await client.playToActiveOutput(topRecords)
-                    confirmation = "Mix gestart — \(n) tracks."
+                    confirmation = LS("Mix gestart — \(n) tracks.")
                 }
             } label: {
-                Label("Speel deze mix", systemImage: "play.fill").frame(maxWidth: .infinity)
+                Label(LS("similarTracks.playThisMix"), systemImage: "play.fill").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent).tint(Color.roonGold)
             if let confirmation {
@@ -120,7 +120,7 @@ struct SimilarTracksView: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(!client.hasActiveOutput)
-                .accessibilityLabel("Speel \(t.title)")
+                .accessibilityLabel(LS("Speel \(t.title)"))
 
                 AlbumArtView(imageKey: t.imageKey, size: 48)
                     .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
@@ -175,7 +175,7 @@ extension View {
                     .navigationDestination(for: SonicSeed.self) { SimilarTracksView(seed: $0) }
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Gereed") { item.wrappedValue = nil }
+                            Button(LS("similarTracks.done")) { item.wrappedValue = nil }
                         }
                     }
             }

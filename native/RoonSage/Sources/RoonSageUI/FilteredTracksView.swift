@@ -88,8 +88,8 @@ public struct FilteredTracksView: View {
             }
             .listStyle(.plain)
         } empty: {
-            ContentUnavailableView("Geen tracks", systemImage: "line.3.horizontal.decrease.circle",
-                description: Text("Geen tracks voor “\(filter.title)”."))
+            ContentUnavailableView(LS("filteredTracks.emptyTitle"), systemImage: "line.3.horizontal.decrease.circle",
+                description: LT("Geen tracks voor “\(filter.title)”."))
         }
         .navigationTitle(filter.title)
         .task { await load() }
@@ -107,7 +107,7 @@ public struct FilteredTracksView: View {
                     let all = await client.filterTracks(options: opts)
                     await client.playToActiveOutput(all)
                 }
-            } label: { Label("Speel alles", systemImage: "play.fill").lineLimit(1) }
+            } label: { Label(LS("filteredTracks.playAll"), systemImage: "play.fill").lineLimit(1) }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(!client.hasActiveOutput || tracks.isEmpty)
@@ -116,7 +116,7 @@ public struct FilteredTracksView: View {
                 guard let zone = client.selectedZone else { return }
                 Haptics.tap()
                 Task { await client.playShuffledMix(options: filter.options, count: 40, zoneID: zone.id) }
-            } label: { Label("Shuffle", systemImage: "shuffle").lineLimit(1) }
+            } label: { Label(LS("filteredTracks.shuffle"), systemImage: "shuffle").lineLimit(1) }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(client.selectedZone == nil)
@@ -188,7 +188,7 @@ struct FilteredTrackRow: View {
             Button(action: onPlay) { Image(systemName: "play.fill") }
                 .buttonStyle(.borderless)
                 .disabled(!canPlay)
-                .accessibilityLabel("Speel nu")
+                .accessibilityLabel(LS("bm.playNow"))
         }
         .padding(.vertical, 2)
     }

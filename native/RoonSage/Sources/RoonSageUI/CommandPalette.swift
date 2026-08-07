@@ -129,7 +129,7 @@ struct CommandPaletteView: View {
     private var searchField: some View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Zoek een actie of track…", text: $query)
+            TextField(LS("commandPalette.searchPlaceholder"), text: $query)
                 .textFieldStyle(.plain)
                 .font(.title3)
                 .focused($searchFocused)
@@ -143,7 +143,7 @@ struct CommandPaletteView: View {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Wis zoekopdracht")
+                .accessibilityLabel(LS("commandPalette.clearSearch"))
             }
             Text("esc").font(.caption2.monospaced()).foregroundStyle(.tertiary)
         }
@@ -163,7 +163,7 @@ struct CommandPaletteView: View {
                 }
             }
             if !trackResults.isEmpty {
-                Section("Bibliotheek") {
+                Section(LS("nav.library")) {
                     ForEach(trackResults, id: \.id) { track in
                         Button { playTrack(track); dismiss() } label: { trackRow(track) }
                             .buttonStyle(.plain)
@@ -171,7 +171,7 @@ struct CommandPaletteView: View {
                 }
             }
             if groupedCommands.isEmpty && trackResults.isEmpty {
-                Text("Geen resultaten voor '\(query)'")
+                LT("Geen resultaten voor '\(query)'")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .listRowSeparator(.hidden)
@@ -270,37 +270,37 @@ struct CommandPaletteView: View {
         if let zone = client.selectedZone {
             let playing = zone.state == .playing
             out.append(PaletteCommand(
-                id: "playpause", title: playing ? "Pauzeer" : "Speel af",
+                id: "playpause", title: playing ? LS("commandPalette.pause") : LS("commandPalette.play"),
                 icon: playing ? "pause.fill" : "play.fill",
                 keywords: ["afspelen", "pauze", "play", "pause", "speel"], group: "Afspelen",
                 run: { Task { await client.playPause(zoneID: zone.id) } }))
             out.append(PaletteCommand(
-                id: "next", title: "Volgende track", icon: "forward.fill",
+                id: "next", title: LS("commandPalette.nextTrack"), icon: "forward.fill",
                 keywords: ["skip", "next", "verder"], group: "Afspelen",
                 run: { Task { await client.next(zoneID: zone.id) } }))
             out.append(PaletteCommand(
-                id: "prev", title: "Vorige track", icon: "backward.fill",
+                id: "prev", title: LS("commandPalette.prevTrack"), icon: "backward.fill",
                 keywords: ["previous", "terug"], group: "Afspelen",
                 run: { Task { await client.previous(zoneID: zone.id) } }))
             let shuffleOn = zone.shuffle ?? false
             out.append(PaletteCommand(
-                id: "shuffle", title: shuffleOn ? "Shuffle uitzetten" : "Shuffle aanzetten",
+                id: "shuffle", title: shuffleOn ? LS("commandPalette.shuffleOff") : LS("commandPalette.shuffleOn"),
                 icon: "shuffle", keywords: ["willekeurig", "shuffle"], group: "Afspelen", isActive: shuffleOn,
                 run: { Task { await client.setShuffle(zoneID: zone.id, enabled: !shuffleOn) } }))
             let loop = zone.loopMode ?? "disabled"
             out.append(PaletteCommand(
-                id: "repeat", title: "Herhaalmodus wisselen",
+                id: "repeat", title: LS("commandPalette.toggleRepeat"),
                 subtitle: NowPlayingHeroOptions.loopLabel(loop),
                 icon: loop == "loop_one" ? "repeat.1" : "repeat",
                 keywords: ["herhaal", "loop", "repeat"], group: "Afspelen", isActive: loop != "disabled",
                 run: { Task { await client.setRepeat(zoneID: zone.id, mode: NowPlayingHeroOptions.nextLoop(loop)) } }))
             if let output = zone.outputs.first {
                 out.append(PaletteCommand(
-                    id: "volup", title: "Volume omhoog", icon: "speaker.wave.3.fill",
+                    id: "volup", title: LS("commandPalette.volumeUp"), icon: "speaker.wave.3.fill",
                     keywords: ["harder", "volume"], group: "Afspelen",
                     run: { Task { await client.adjustVolume(outputID: output.id, delta: 4) } }))
                 out.append(PaletteCommand(
-                    id: "voldown", title: "Volume omlaag", icon: "speaker.wave.1.fill",
+                    id: "voldown", title: LS("commandPalette.volumeDown"), icon: "speaker.wave.1.fill",
                     keywords: ["zachter", "volume"], group: "Afspelen",
                     run: { Task { await client.adjustVolume(outputID: output.id, delta: -4) } }))
             }
@@ -308,15 +308,15 @@ struct CommandPaletteView: View {
             // Now-playing specific
             if let np = zone.nowPlaying {
                 out.append(PaletteCommand(
-                    id: "like", title: "Vind ik leuk", icon: "hand.thumbsup",
+                    id: "like", title: LS("commandPalette.like"), icon: "hand.thumbsup",
                     keywords: ["like", "duim", "leuk"], group: "Nu speelt",
                     run: { Task { await client.setFeedback(.like, title: np.title, artist: np.artist, album: np.album) } }))
                 out.append(PaletteCommand(
-                    id: "dislike", title: "Vind ik niet leuk", icon: "hand.thumbsdown",
+                    id: "dislike", title: LS("commandPalette.dislike"), icon: "hand.thumbsdown",
                     keywords: ["dislike", "niet leuk", "skip"], group: "Nu speelt",
                     run: { Task { await client.setFeedback(.dislike, title: np.title, artist: np.artist, album: np.album) } }))
                 out.append(PaletteCommand(
-                    id: "sonicradio", title: "Start Sonic Radio", subtitle: np.title,
+                    id: "sonicradio", title: LS("commandPalette.startSonicRadio"), subtitle: np.title,
                     icon: "dot.radiowaves.left.and.right",
                     keywords: ["radio", "station", "sonic"], group: "Nu speelt",
                     run: { Task { await client.playSonicRadio(title: np.title, artist: np.artist, album: np.album, zoneID: zone.id) } }))
@@ -326,7 +326,7 @@ struct CommandPaletteView: View {
         // Navigation to every destination
         for item in SidebarItem.allCases {
             out.append(PaletteCommand(
-                id: "nav-\(item.id)", title: "Ga naar \(item.title)", icon: item.icon,
+                id: "nav-\(item.id)", title: LS("Ga naar \(item.title)"), icon: item.icon,
                 keywords: [item.title, "open", "ga naar", "navigatie"], group: "Navigatie",
                 run: { navigate(item) }))
         }
@@ -334,13 +334,13 @@ struct CommandPaletteView: View {
         // Sleep timer
         for minutes in [15, 30, 60, 120] {
             out.append(PaletteCommand(
-                id: "sleep-\(minutes)", title: "Slaaptimer: \(minutes) min",
+                id: "sleep-\(minutes)", title: LS("Slaaptimer: \(minutes) min"),
                 icon: "moon.zzz", keywords: ["slaap", "timer", "sleep", "\(minutes)"], group: "Slaaptimer",
                 run: { sleepTimer.schedule(minutes: minutes) { await client.pauseForSleep() } }))
         }
         if sleepTimer.isActive {
             out.append(PaletteCommand(
-                id: "sleep-off", title: "Slaaptimer uitzetten", icon: "moon.zzz.fill",
+                id: "sleep-off", title: LS("commandPalette.sleepTimerOff"), icon: "moon.zzz.fill",
                 keywords: ["slaap", "annuleer", "stop"], group: "Slaaptimer", isActive: true,
                 run: { sleepTimer.cancel() }))
         }
@@ -348,7 +348,7 @@ struct CommandPaletteView: View {
         // Theme presets
         for preset in ThemePreset.allCases {
             out.append(PaletteCommand(
-                id: "theme-\(preset.id)", title: "Thema: \(preset.label)",
+                id: "theme-\(preset.id)", title: LS("Thema: \(preset.label)"),
                 icon: "paintpalette", keywords: ["thema", "kleur", preset.label], group: "Thema",
                 isActive: preset == themePreset,
                 run: { themePreset = preset }))
@@ -356,12 +356,12 @@ struct CommandPaletteView: View {
 
         // System
         out.append(PaletteCommand(
-            id: "visualizer", title: showVisualizer ? "Visualizer uitzetten" : "Visualizer aanzetten",
+            id: "visualizer", title: showVisualizer ? LS("commandPalette.visualizerOff") : LS("commandPalette.visualizerOn"),
             icon: "waveform", keywords: ["visualizer", "equalizer", "animatie"], group: "Systeem",
             isActive: showVisualizer,
             run: { showVisualizer.toggle() }))
         out.append(PaletteCommand(
-            id: "shortcuts", title: "Toon sneltoetsen", icon: "keyboard",
+            id: "shortcuts", title: LS("commandPalette.showShortcuts"), icon: "keyboard",
             keywords: ["sneltoets", "toetsen", "help", "shortcuts"], group: "Systeem",
             run: { showShortcuts() }))
 
@@ -380,16 +380,16 @@ struct ShortcutsCheatSheet: View {
     private struct Row: Identifiable { let id = UUID(); let keys: String; let action: String }
 
     private let sections: [(String, [Row])] = [
-        ("Algemeen", [
-            .init(keys: "⌘K", action: "Opdrachtenpalet openen"),
-            .init(keys: "⌘1 – ⌘9", action: "Spring naar een onderdeel in de zijbalk"),
+        (LS("commandPalette.sectionGeneral"), [
+            .init(keys: "⌘K", action: LS("commandPalette.openPalette")),
+            .init(keys: "⌘1 – ⌘9", action: LS("commandPalette.jumpSidebar")),
         ]),
-        ("Afspelen", [
-            .init(keys: "⌘P", action: "Afspelen / pauzeren"),
-            .init(keys: "⌘]", action: "Volgende track"),
-            .init(keys: "⌘[", action: "Vorige track"),
-            .init(keys: "⌘↑", action: "Volume omhoog"),
-            .init(keys: "⌘↓", action: "Volume omlaag"),
+        (LS("section.playback"), [
+            .init(keys: "⌘P", action: LS("commandPalette.playPause")),
+            .init(keys: "⌘]", action: LS("commandPalette.nextTrack")),
+            .init(keys: "⌘[", action: LS("commandPalette.prevTrack")),
+            .init(keys: "⌘↑", action: LS("commandPalette.volumeUp")),
+            .init(keys: "⌘↓", action: LS("commandPalette.volumeDown")),
         ]),
     ]
 
@@ -413,10 +413,10 @@ struct ShortcutsCheatSheet: View {
                     }
                 }
             }
-            .navigationTitle("Sneltoetsen")
+            .navigationTitle(LS("commandPalette.shortcutsTitle"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Klaar") { dismiss() }
+                    Button(LS("commandPalette.done")) { dismiss() }
                 }
             }
         }

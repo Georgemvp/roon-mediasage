@@ -27,7 +27,7 @@ struct AlbumDetailView: View {
                                               bottom: Spacing.md, trailing: Spacing.lg))
             }
             if let review {
-                Section("Over dit album") { reviewSection(review) }
+                Section(LS("libraryDetail.aboutAlbum")) { reviewSection(review) }
             }
             if isLoading {
                 ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden)
@@ -39,16 +39,16 @@ struct AlbumDetailView: View {
                     .contextMenu {
                         PlayActionsMenu(fetch: { [track.asTrackRecord] }, trackRadioSeed: track.asTrackRecord)
                         Divider()
-                        Button("Sonisch vergelijkbaar", systemImage: "waveform.path.ecg") {
+                        Button(LS("libraryDetail.sonicallySimilar"), systemImage: "waveform.path.ecg") {
                             similarSeed = SonicSeed(title: track.title, artist: track.artist,
                                                     album: track.album, imageKey: track.imageKey)
                         }
-                        Button("Info", systemImage: "info.circle") { infoTrack = track }
+                        Button(LS("libraryDetail.info"), systemImage: "info.circle") { infoTrack = track }
                     }
                 }
             }
             if !otherVersions.isEmpty {
-                Section("Andere versies in je bibliotheek") {
+                Section(LS("libraryDetail.otherVersions")) {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: Spacing.lg) {
                             ForEach(otherVersions) { version in
@@ -110,11 +110,11 @@ struct AlbumDetailView: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HStack {
-                    Text(reviewExpanded ? "Toon minder" : "Lees meer")
+                    (reviewExpanded ? LT("libraryDetail.showLess") : LT("libraryDetail.readMore"))
                         .font(.caption.bold())
                         .foregroundStyle(Color.roonGold)
                     Spacer()
-                    Text("bron: \(editorial.source)")
+                    LT("bron: \(editorial.source)")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -132,15 +132,15 @@ struct AlbumDetailView: View {
                 Text(subtitle).font(.caption).foregroundStyle(.tertiary)
                 Spacer(minLength: 0)
                 HStack(spacing: Spacing.sm) {
-                    Button { play(tracks) } label: { Label("Speel", systemImage: "play.fill") }
+                    Button { play(tracks) } label: { Label(LS("libraryDetail.play"), systemImage: "play.fill") }
                         .buttonStyle(.borderedProminent).tint(Color.roonGold)
                         .disabled(client.selectedZone == nil || tracks.isEmpty)
                     // Queue + listen-on-device kept icon-only so the row fits on iPhone.
                     Button { queue(tracks) } label: { Image(systemName: "text.append") }
                         .buttonStyle(.bordered)
                         .disabled(client.selectedZone == nil || tracks.isEmpty)
-                        .accessibilityLabel("Zet in wachtrij")
-                        .help("Zet in wachtrij")
+                        .accessibilityLabel(LS("libraryDetail.addToQueue"))
+                        .help(LS("libraryDetail.addToQueue"))
                     LocalPlayButton { tracks.map(record) }
                         .buttonStyle(.bordered)
                         .disabled(tracks.isEmpty)
@@ -155,8 +155,8 @@ struct AlbumDetailView: View {
                     } label: { Image(systemName: "dot.radiowaves.left.and.right") }
                         .buttonStyle(.bordered)
                         .disabled(client.selectedZone == nil)
-                        .accessibilityLabel("Album-radio")
-                        .help("Album-radio — eindeloze radio rond dit album")
+                        .accessibilityLabel(LS("libraryDetail.albumRadio"))
+                        .help(LS("libraryDetail.albumRadioHelp"))
                     FavoriteStarButton(isOn: client.isFavoriteAlbum(album: album.album, artist: album.artist)) {
                         Task { await client.toggleFavoriteAlbum(album: album.album, artist: album.artist) }
                     }
@@ -171,7 +171,7 @@ struct AlbumDetailView: View {
     private var subtitle: String {
         var parts: [String] = []
         if let y = album.year { parts.append(String(y)) }
-        parts.append("\(album.trackCount) nummers")
+        parts.append(LS("\(album.trackCount) nummers"))
         return parts.joined(separator: " · ")
     }
 
@@ -223,13 +223,13 @@ struct ArtistDetailView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button { playArtist() } label: { Label("Speel alles", systemImage: "play.fill") }
+                    Button { playArtist() } label: { Label(LS("libraryDetail.playAll"), systemImage: "play.fill") }
                         .buttonStyle(.borderedProminent).tint(Color.roonGold)
                         .disabled(client.selectedZone == nil)
                     Button { playArtistLocal() } label: { Image(systemName: "iphone") }
                         .buttonStyle(.bordered)
-                        .accessibilityLabel("Speel op dit apparaat")
-                        .help("Speel alles lokaal af op dit apparaat")
+                        .accessibilityLabel(LS("libraryDetail.playOnThisDevice"))
+                        .help(LS("libraryDetail.playAllLocalHelp"))
                     FavoriteStarButton(isOn: client.isFavoriteArtist(artist.name)) {
                         Task { await client.toggleFavoriteArtist(artist.name) }
                     }
@@ -303,7 +303,7 @@ struct ArtistDetailView: View {
                     .lineLimit(bioExpanded ? nil : 2)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(bioExpanded ? "Toon minder" : "Lees meer")
+                (bioExpanded ? LT("libraryDetail.showLess") : LT("libraryDetail.readMore"))
                     .font(.caption.bold())
                     .foregroundStyle(Color.roonGold)
             }
@@ -316,7 +316,7 @@ struct ArtistDetailView: View {
 
     private var topPlayedSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("Meest gespeeld").font(.headline)
+            LT("libraryDetail.mostPlayed").font(.headline)
             ForEach(topPlayed) { track in
                 LibraryTrackRow(track: track, canPlay: client.hasActiveOutput) {
                     playRows([track])
@@ -330,7 +330,7 @@ struct ArtistDetailView: View {
 
     private var similarSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("Vergelijkbaar in je bibliotheek").font(.headline)
+            LT("libraryDetail.similarInLibrary").font(.headline)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: Spacing.lg) {
                     ForEach(similarArtists) { a in
@@ -414,7 +414,7 @@ struct FavoriteStarButton: View {
                 .foregroundStyle(isOn ? Color.roonGold : .secondary)
         }
         .buttonStyle(.bordered)
-        .accessibilityLabel(isOn ? "Verwijder uit favorieten" : "Markeer als favoriet")
-        .help(isOn ? "Verwijder uit favorieten" : "Markeer als favoriet")
+        .accessibilityLabel(isOn ? LS("libraryDetail.removeFavorite") : LS("libraryDetail.markFavorite"))
+        .help(isOn ? LS("libraryDetail.removeFavorite") : LS("libraryDetail.markFavorite"))
     }
 }

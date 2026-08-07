@@ -38,16 +38,16 @@ public struct AskView: View {
             } else if results.isEmpty {
                 Section {
                     ContentUnavailableView {
-                        Label("Vraag het je bibliotheek", systemImage: "text.magnifyingglass")
+                        Label(LS("ask.emptyTitle"), systemImage: "text.magnifyingglass")
                     } description: {
-                        Text(summary ?? "Typ een sfeer, genre of tempo en RoonSage vindt passende tracks uit jouw bibliotheek.")
+                        Text(summary ?? LS("ask.emptyDescription"))
                     }
                     .listRowBackground(Color.clear)
                 }
                 .listRowSeparator(.hidden)
             } else {
                 resultsActionsSection
-                Section("Resultaten (\(results.count))") {
+                Section(LS("Resultaten (\(results.count))")) {
                     ForEach(results, id: \.id) { track in
                         AIResultRow(title: track.title, subtitle: subtitle(track), imageKey: track.imageKey) {
                             HStack(spacing: Spacing.sm) {
@@ -58,14 +58,14 @@ public struct AskView: View {
                                 }
                                 .buttonStyle(.borderless)
                                 .disabled(client.selectedZone == nil)
-                                .accessibilityLabel("Zet \(track.title) als volgende in de wachtrij")
+                                .accessibilityLabel(LS("Zet \(track.title) als volgende in de wachtrij"))
                                 Button { play([track]) } label: {
                                     Image(systemName: "play.fill")
                                         .tappable44()
                                 }
                                 .buttonStyle(.borderless)
                                 .disabled(client.selectedZone == nil)
-                                .accessibilityLabel("Speel \(track.title) nu")
+                                .accessibilityLabel(LS("Speel \(track.title) nu"))
                             }
                         }
                     }
@@ -73,18 +73,18 @@ public struct AskView: View {
             }
         }
         .task { await client.ensureFeedbackLoaded() }
-        .searchable(text: $prompt, prompt: "Beschrijf een sfeer… bijv. “donker en hypnotisch rond 122 BPM”")
+        .searchable(text: $prompt, prompt: LS("ask.searchPrompt"))
         .onSubmit(of: .search) { if canSearch { Task { await search() } } }
         .onChange(of: prompt) { _, newValue in
             if newValue.isEmpty { results = []; summary = nil; filters = nil }
         }
-        .navigationTitle("Vraag het")
-        .alert("Bewaar als playlist", isPresented: $showSaveAlert) {
-            TextField("Naam playlist", text: $playlistName)
-            Button("Annuleer", role: .cancel) {}
-            Button("Bewaar") { save() }
+        .navigationTitle(LS("nav.ask"))
+        .alert(LS("ask.saveAlertTitle"), isPresented: $showSaveAlert) {
+            TextField(LS("ask.playlistNamePlaceholder"), text: $playlistName)
+            Button(LS("ask.cancel"), role: .cancel) {}
+            Button(LS("ask.save")) { save() }
         } message: {
-            Text("Bewaar \(results.count) nummers als lokale playlist.")
+            LT("Bewaar \(results.count) nummers als lokale playlist.")
         }
     }
 
@@ -97,13 +97,13 @@ public struct AskView: View {
                     .padding(.vertical, 2)
             }
             HStack {
-                Text("Afspelen op")
+                LT("ask.playOn")
                 Spacer()
                 ZonePicker()
             }
             HStack(spacing: Spacing.sm) {
                 Button { play(results) } label: {
-                    Label("Speel alles", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    Label(LS("ask.playAll"), systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(client.selectedZone == nil)
@@ -112,19 +112,19 @@ public struct AskView: View {
                     playlistName = "Vraag: \(prompt.prefix(40))"
                     showSaveAlert = true
                 } label: {
-                    Label(justSaved ? "Bewaard!" : "Bewaar", systemImage: justSaved ? "checkmark" : "square.and.arrow.down")
+                    Label(LS(justSaved ? "ask.saved" : "ask.save"), systemImage: justSaved ? "checkmark" : "square.and.arrow.down")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .help("Bewaar deze tracks als playlist")
+                .help(LS("ask.saveHelp"))
             }
             if let onRefine {
                 Button { onRefine(prompt) } label: {
-                    Label("Verfijn tot playlist →", systemImage: "wand.and.stars")
+                    Label(LS("ask.refineToPlaylist"), systemImage: "wand.and.stars")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .help("Neem deze vraag mee naar Genereer voor een gecureerde, flow-geordende playlist")
+                .help(LS("ask.refineHelp"))
             }
         }
     }
@@ -143,7 +143,7 @@ public struct AskView: View {
         // Clear the prior scope so the interim status (not stale chips) shows while
         // the new search runs.
         filters = nil
-        summary = "Bezig met interpreteren…"
+        summary = LS("ask.interpreting")
 
         let f = await client.analyzeForFilters(request: request)
         var opts = DatabaseManager.FilterOptions()
@@ -176,7 +176,7 @@ public struct AskView: View {
         }
         filters = f
         summary = results.isEmpty
-            ? "Niets gevonden — probeer het anders te formuleren of synchroniseer je bibliotheek."
+            ? LS("ask.nothingFound")
             : nil
         if results.isEmpty { Haptics.error() } else { Haptics.success() }
     }

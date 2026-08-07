@@ -59,8 +59,8 @@ public struct LibraryView: View {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .overview: "Overzicht"; case .tracks: "Tracks"
-            case .albums: "Albums"; case .artists: "Artiesten"
+            case .overview: LS("library.modeOverview"); case .tracks: LS("library.tracks")
+            case .albums: LS("bm.section.albums"); case .artists: LS("bm.section.artists")
             }
         }
         var icon: String {
@@ -82,11 +82,11 @@ public struct LibraryView: View {
         /// Weergavenaam (NL); rawValue blijft het stabiele ID.
         var label: String {
             switch self {
-            case .title: "Titel"; case .artist: "Artiest"; case .album: "Album"
-            case .year: "Jaar"; case .bpm: "BPM"; case .random: "Willekeurig"
-            case .recentlyAdded: "Recent toegevoegd"
-            case .mostPlayed: "Meest gespeeld"
-            case .recentlyPlayed: "Recent gespeeld"
+            case .title: LS("library.sortTitle"); case .artist: LS("library.sortArtist"); case .album: LS("library.sortAlbum")
+            case .year: LS("library.sortYear"); case .bpm: "BPM"; case .random: LS("library.sortRandom")
+            case .recentlyAdded: LS("library.recentlyAdded")
+            case .mostPlayed: LS("library.sortMostPlayed")
+            case .recentlyPlayed: LS("library.sortRecentlyPlayed")
             }
         }
     }
@@ -144,7 +144,7 @@ public struct LibraryView: View {
         .navigationDestination(for: DatabaseManager.AlbumResult.self) { AlbumDetailView(album: $0) }
         .navigationDestination(for: DatabaseManager.ArtistResult.self) { ArtistDetailView(artist: $0) }
         .navigationDestination(for: LibraryFilter.self) { FilteredTracksView(filter: $0) }
-        .navigationTitle("Bibliotheek (\(client.trackCount) tracks)")
+        .navigationTitle(LS("Bibliotheek (\(client.trackCount) tracks)"))
         .searchable(text: $searchText, prompt: searchPrompt)
         .toolbar {
             ToolbarItem {
@@ -154,11 +154,11 @@ public struct LibraryView: View {
             }
             if viewMode == .tracks {
                 ToolbarItem {
-                    Picker("Sorteer", selection: $sort) {
+                    Picker(LS("library.sort"), selection: $sort) {
                         ForEach(SortField.allCases) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.menu)
-                    .help("Sorteer tracks")
+                    .help(LS("library.sortTracksHelp"))
                 }
             } else if viewMode == .albums || viewMode == .artists {
                 ToolbarItem {
@@ -168,8 +168,8 @@ public struct LibraryView: View {
                         Image(systemName: favoritesOnly ? "star.fill" : "star")
                             .foregroundStyle(favoritesOnly ? Color.roonGold : .secondary)
                     }
-                    .accessibilityLabel("Alleen favorieten")
-                    .help(favoritesOnly ? "Toon alles" : "Alleen favorieten")
+                    .accessibilityLabel(LS("library.favoritesOnly"))
+                    .help(favoritesOnly ? LS("library.showAll") : LS("library.favoritesOnly"))
                 }
             }
             if viewMode == .albums, !visibleAlbums.isEmpty {
@@ -178,17 +178,17 @@ public struct LibraryView: View {
                         isSelectingAlbums.toggle()
                         if !isSelectingAlbums { albumSelection.removeAll() }
                     } label: {
-                        Text(isSelectingAlbums ? "Klaar" : "Selecteer")
+                        isSelectingAlbums ? LT("library.done") : LT("library.select")
                     }
-                    .help(isSelectingAlbums ? "Selectie sluiten" : "Selecteer meerdere albums")
+                    .help(isSelectingAlbums ? LS("library.closeSelection") : LS("library.selectMultipleAlbums"))
                 }
             }
             ToolbarItem {
                 if client.isSyncing {
-                    Button("Annuleer", role: .cancel) { client.cancelSync() }
+                    Button(LS("library.cancel"), role: .cancel) { client.cancelSync() }
                 } else {
                     Button { client.startSync() } label: {
-                        Label("Synchroniseer bibliotheek", systemImage: "arrow.clockwise")
+                        Label(LS("library.syncLibrary"), systemImage: "arrow.clockwise")
                     }
                     .disabled(!client.connectionState.isConnected)
                 }
@@ -198,7 +198,7 @@ public struct LibraryView: View {
             // on touch, leaving the Speel/Wachtrij/Bewaar bar unreachable.
             if viewMode == .tracks, !tracks.isEmpty {
                 ToolbarItem(placement: .topBarLeading) {
-                    EditButton().accessibilityHint("Selecteer meerdere tracks")
+                    EditButton().accessibilityHint(LS("library.selectMultipleTracks"))
                 }
             }
             #endif
@@ -226,10 +226,10 @@ public struct LibraryView: View {
         .onAppear { reload() }
         .sheet(item: $infoTrack) { TrackInfoSheet(track: $0) }
         .similarTracksSheet(item: $similarSeed)
-        .alert("Bewaar als playlist", isPresented: $showSaveSheet) {
-            TextField("Naam playlist", text: $newPlaylistName)
-            Button("Annuleer", role: .cancel) {}
-            Button("Bewaar") {
+        .alert(LS("library.saveAsPlaylist"), isPresented: $showSaveSheet) {
+            TextField(LS("library.playlistName"), text: $newPlaylistName)
+            Button(LS("library.cancel"), role: .cancel) {}
+            Button(LS("library.save")) {
                 let name = newPlaylistName.trimmingCharacters(in: .whitespaces)
                 guard !name.isEmpty else { return }
                 client.savePlaylist(name: name, tracks: selectedRecords())
@@ -252,7 +252,7 @@ public struct LibraryView: View {
     #endif
 
     private var modePicker: some View {
-        let picker = Picker("Weergave", selection: $viewMode) {
+        let picker = Picker(LS("recent.pivotLabel"), selection: $viewMode) {
             ForEach(ViewMode.allCases) { mode in
                 Label(mode.label, systemImage: mode.icon).tag(mode)
             }
@@ -272,10 +272,10 @@ public struct LibraryView: View {
 
     private var searchPrompt: String {
         switch viewMode {
-        case .overview: "Zoek in je bibliotheek…"
-        case .tracks:  "Zoek op titel, artiest of album…"
-        case .albums:  "Zoek op album of artiest…"
-        case .artists: "Zoek op artiest…"
+        case .overview: LS("library.searchOverview")
+        case .tracks:  LS("library.searchTracks")
+        case .albums:  LS("library.searchAlbums")
+        case .artists: LS("library.searchArtists")
         }
     }
 
@@ -347,7 +347,7 @@ public struct LibraryView: View {
                                     .buttonStyle(.plain)
                                     .contextMenu {
                                         Button { enterAlbumSelection(album.albumKey) } label: {
-                                            Label("Selecteer meerdere", systemImage: "checkmark.circle")
+                                            Label(LS("library.selectMultiple"), systemImage: "checkmark.circle")
                                         }
                                         PlayActionsMenu(fetch: { [client] in
                                             await client.tracksForAlbum(album.albumKey).map(\.asTrackRecord)
@@ -411,8 +411,8 @@ public struct LibraryView: View {
             ContentUnavailableView("Geen \(noun)", systemImage: "square.grid.2x2",
                 description: Text(searchText.isEmpty ? "Synchroniseer je bibliotheek." : "Geen \(noun) voor “\(searchText)”."))
         } else {
-            ContentUnavailableView("Niet verbonden", systemImage: "wifi.slash",
-                description: Text("Verbind eerst met je Roon Core."))
+            ContentUnavailableView(LS("library.notConnected"), systemImage: "wifi.slash",
+                description: LT("library.connectFirst"))
         }
     }
 
@@ -420,14 +420,14 @@ public struct LibraryView: View {
 
     private var selectionBar: some View {
         HStack(spacing: Spacing.md) {
-            Text("\(selection.count) geselecteerd").font(.callout).foregroundStyle(.secondary)
+            LT("\(selection.count) geselecteerd").font(.callout).foregroundStyle(.secondary)
             Spacer()
-            Button { play(selectedRecords()) } label: { Label("Speel", systemImage: "play.fill") }
+            Button { play(selectedRecords()) } label: { Label(LS("library.play"), systemImage: "play.fill") }
                 .disabled(!client.hasActiveOutput)
-            Button { queue(selectedRecords()) } label: { Label("Wachtrij", systemImage: "text.append") }
+            Button { queue(selectedRecords()) } label: { Label(LS("nav.queue"), systemImage: "text.append") }
                 .disabled(client.selectedZone == nil)
-            Button { showSaveSheet = true } label: { Label("Bewaar", systemImage: "plus.rectangle.on.folder") }
-            Button { selection.removeAll() } label: { Label("Wis", systemImage: "xmark") }
+            Button { showSaveSheet = true } label: { Label(LS("library.save"), systemImage: "plus.rectangle.on.folder") }
+            Button { selection.removeAll() } label: { Label(LS("library.clear"), systemImage: "xmark") }
                 .labelStyle(.iconOnly)
         }
         .padding(.horizontal, Spacing.lg).padding(.vertical, Spacing.sm)
@@ -442,11 +442,11 @@ public struct LibraryView: View {
             Text("\(albumSelection.count) album\(albumSelection.count == 1 ? "" : "s")")
                 .font(.callout).foregroundStyle(.secondary)
             Spacer()
-            Button { bulkPlayAlbums() } label: { Label("Speel alle", systemImage: "play.fill") }
+            Button { bulkPlayAlbums() } label: { Label(LS("library.playAll"), systemImage: "play.fill") }
                 .disabled(client.selectedZone == nil)
-            Button { bulkQueueAlbums() } label: { Label("In wachtrij", systemImage: "text.append") }
+            Button { bulkQueueAlbums() } label: { Label(LS("library.addToQueue"), systemImage: "text.append") }
                 .disabled(client.selectedZone == nil)
-            Button { albumSelection.removeAll() } label: { Label("Wis", systemImage: "xmark") }
+            Button { albumSelection.removeAll() } label: { Label(LS("library.clear"), systemImage: "xmark") }
                 .labelStyle(.iconOnly)
         }
         .padding(.horizontal, Spacing.lg).padding(.vertical, Spacing.sm)
@@ -507,13 +507,13 @@ public struct LibraryView: View {
             guard let zone = client.selectedZone else { return }
             Task { await client.playSonicRadio(title: track.title, artist: track.artist, album: track.album, zoneID: zone.id) }
         }.disabled(client.selectedZone == nil)
-        Button("Sonisch vergelijkbaar", systemImage: "waveform.path.ecg") {
+        Button(LS("library.sonicallySimilar"), systemImage: "waveform.path.ecg") {
             similarSeed = SonicSeed(title: track.title, artist: track.artist,
                                     album: track.album, imageKey: track.imageKey)
         }
         Divider()
         Button("Info", systemImage: "info.circle") { infoTrack = track }
-        Button("Bewaar als playlist…") {
+        Button(LS("library.saveAsPlaylistMenu")) {
             selection = [track.id]
             showSaveSheet = true
         }
@@ -759,11 +759,11 @@ public struct LibraryView: View {
     @ViewBuilder
     var emptyState: some View {
         if client.connectionState.isConnected {
-            ContentUnavailableView("Geen passende tracks", systemImage: "music.note.list",
-                description: Text(selectedTag != nil ? "Geen tracks met tag “\(selectedTag!)”." : "Synchroniseer je bibliotheek en zoek daarna."))
+            ContentUnavailableView(LS("library.noMatchingTracks"), systemImage: "music.note.list",
+                description: selectedTag != nil ? LT("Geen tracks met tag “\(selectedTag!)”.") : LT("library.syncThenSearch"))
         } else {
-            ContentUnavailableView("Niet verbonden", systemImage: "wifi.slash",
-                description: Text("Verbind eerst met je Roon Core."))
+            ContentUnavailableView(LS("library.notConnected"), systemImage: "wifi.slash",
+                description: LT("library.connectFirst"))
         }
     }
 
@@ -779,30 +779,30 @@ public struct LibraryView: View {
             if let stats {
                 statsHero(stats).plainCardRow()
                 if !recentlyAdded.isEmpty {
-                    trackShelf("Recent toegevoegd", "clock.badge.plus", recentlyAdded).plainCardRow()
+                    trackShelf(LS("library.recentlyAdded"), "clock.badge.plus", recentlyAdded).plainCardRow()
                 }
                 if !recentPlayed.isEmpty {
-                    trackShelf("Onlangs gespeeld", "play.circle", recentPlayed).plainCardRow()
+                    trackShelf(LS("library.recentlyPlayedShelf"), "play.circle", recentPlayed).plainCardRow()
                 }
                 if !topTracks.isEmpty {
-                    recordShelf("Jouw toptracks", "star.fill", topTracks).plainCardRow()
+                    recordShelf(LS("library.yourTopTracks"), "star.fill", topTracks).plainCardRow()
                 }
                 if !undiscovered.isEmpty {
-                    albumShelf("Onontdekte albums", "sparkles", undiscovered).plainCardRow()
+                    albumShelf(LS("library.undiscoveredAlbums"), "sparkles", undiscovered).plainCardRow()
                 }
                 if forgotten.count > 1 {
-                    recordShelf("Vergeten favorieten", "clock.arrow.circlepath", forgotten).plainCardRow()
+                    recordShelf(LS("library.forgottenFavorites"), "clock.arrow.circlepath", forgotten).plainCardRow()
                 }
                 if !stations.isEmpty {
                     stationShelf.plainCardRow()
                 }
                 browseTiles.plainCardRow()
-                navCard("Ontdek Wekelijks",
-                        "Verse ontdekkingen uit je eigen bibliotheek — elke week vernieuwd.",
+                navCard(LS("library.discoverWeeklyTitle"),
+                        LS("library.discoverWeeklySubtitle"),
                         "sparkles") { DiscoverWeeklyView() }.plainCardRow()
-                navCard("Mijn radio's", "Jouw zelf samengestelde sonic radio's.",
+                navCard(LS("library.myRadiosTitle"), LS("library.myRadiosSubtitle"),
                         "dot.radiowaves.left.and.right") { CustomRadioView() }.plainCardRow()
-                navCard("Aanbevelen", "Beschrijf een vibe → albums uit je bibliotheek.",
+                navCard(LS("nav.recommend"), LS("library.recommendSubtitle"),
                         "wand.and.stars") { RecommendView() }.plainCardRow()
             } else if !overviewLoaded {
                 SkeletonRows().plainCardRow()
@@ -820,9 +820,9 @@ public struct LibraryView: View {
     private func statsHero(_ stats: DatabaseManager.LibraryStats) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             HStack(spacing: Spacing.md) {
-                StatCard(label: "Tracks", value: stats.totalTracks.formatted())
-                StatCard(label: "Artiesten", value: stats.totalArtists.formatted())
-                StatCard(label: "Albums", value: stats.totalAlbums.formatted())
+                StatCard(label: LS("library.tracks"), value: stats.totalTracks.formatted())
+                StatCard(label: LS("bm.section.artists"), value: stats.totalArtists.formatted())
+                StatCard(label: LS("bm.section.albums"), value: stats.totalAlbums.formatted())
             }
             // Flow layout so the three chips wrap to a second line on a narrow
             // phone instead of each truncating ("3.536 uur m…", "79% geanal…").
@@ -831,7 +831,7 @@ public struct LibraryView: View {
                     Label(top.genre.capitalized, systemImage: "guitars.fill")
                 }
                 if librarySeconds > 0 {
-                    Label("\(Int(librarySeconds / 3600).formatted()) uur muziek", systemImage: "clock")
+                    Label(LS("\(Int(librarySeconds / 3600).formatted()) uur muziek"), systemImage: "clock")
                 }
                 if analyzedTotal > 0 {
                     Label("\(analyzedMatched * 100 / analyzedTotal)% geanalyseerd", systemImage: "waveform")
@@ -888,7 +888,7 @@ public struct LibraryView: View {
 
     private var stationShelf: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            sectionHeader("Radiostations", "dot.radiowaves.left.and.right") { EmptyView() }
+            sectionHeader(LS("library.radioStations"), "dot.radiowaves.left.and.right") { EmptyView() }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: Spacing.md) {
                     ForEach(stations) { stationTile($0) }
@@ -918,7 +918,7 @@ public struct LibraryView: View {
         }
         .buttonStyle(.plain)
         .disabled(client.selectedZone == nil)
-        .accessibilityLabel("Start radio op \(radio.artist)")
+        .accessibilityLabel(LS("Start radio op \(radio.artist)"))
     }
 
     // MARK: Overview — browse by genre / sfeer / decade
@@ -929,19 +929,19 @@ public struct LibraryView: View {
     @ViewBuilder
     private var browseTiles: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader("Blader door", "square.grid.2x2") { EmptyView() }
+            sectionHeader(LS("library.browseBy"), "square.grid.2x2") { EmptyView() }
             if let facets, !facets.genres.isEmpty {
-                filterChipRow("Genres", facets.genres.prefix(16).map {
+                filterChipRow(LS("library.genres"), facets.genres.prefix(16).map {
                     LibraryFilter(kind: .genre($0.key), title: $0.label.capitalized)
                 })
             }
             if !tags.isEmpty {
-                filterChipRow("Sfeer", tags.prefix(16).map {
+                filterChipRow(LS("library.mood"), tags.prefix(16).map {
                     LibraryFilter(kind: .tag($0.tag), title: $0.tag.capitalized)
                 })
             }
             if let facets, !facets.decades.isEmpty {
-                filterChipRow("Decennia", facets.decades.map {
+                filterChipRow(LS("library.decades"), facets.decades.map {
                     LibraryFilter(kind: .decade($0), title: "\($0)s")
                 })
             }
@@ -1004,11 +1004,11 @@ public struct LibraryView: View {
 
     private var overviewEmpty: some View {
         ContentUnavailableView(
-            client.connectionState.isConnected ? "Nog geen bibliotheek" : "Niet verbonden",
+            client.connectionState.isConnected ? LS("library.noLibraryYet") : LS("library.notConnected"),
             systemImage: client.connectionState.isConnected ? "music.note.house" : "wifi.slash",
-            description: Text(client.connectionState.isConnected
-                ? "Synchroniseer je bibliotheek om je overzicht te vullen."
-                : "Verbind eerst met je Roon Core."))
+            description: client.connectionState.isConnected
+                ? LT("library.syncToFillOverview")
+                : LT("library.connectFirst"))
     }
 
     // MARK: Overview — data loading
@@ -1126,8 +1126,8 @@ struct LibraryTrackRow: View {
             Button(action: onPlay) { Image(systemName: "play.fill") }
                 .buttonStyle(.borderless)
                 .disabled(!canPlay)
-                .accessibilityLabel("Speel nu")
-                .help(canPlay ? "Speel nu" : "Kies eerst een zone of apparaat")
+                .accessibilityLabel(LS("bm.playNow"))
+                .help(canPlay ? LS("bm.playNow") : LS("library.chooseZoneFirst"))
         }
         .padding(.vertical, 2)
     }

@@ -25,15 +25,15 @@ public struct PlaylistsView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if playlists.isEmpty {
                 ContentUnavailableView {
-                    Label("Geen bewaarde playlists", systemImage: "list.star")
+                    Label(LS("playlists.emptyTitle"), systemImage: "list.star")
                 } description: {
-                    Text("Stel tracks samen en bewaar ze als playlist — ze verschijnen hier en blijven staan na een hersynchronisatie.")
+                    LT("playlists.emptyDescription")
                 } actions: {
                     Button {
                         Haptics.tap()
                         navigateTo(.generate)
                     } label: {
-                        Label("Genereer een playlist", systemImage: "wand.and.stars")
+                        Label(LS("playlists.generatePlaylist"), systemImage: "wand.and.stars")
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -63,29 +63,29 @@ public struct PlaylistsView: View {
                 }
             }
         }
-        .navigationTitle("Playlists")
+        .navigationTitle(LS("nav.playlists"))
         .toolbar {
             Button(action: reload) { Image(systemName: "arrow.clockwise") }
-                .help("Ververs")
-                .accessibilityLabel("Ververs")
+                .help(LS("playlists.refresh"))
+                .accessibilityLabel(LS("playlists.refresh"))
         }
         .onAppear(perform: reload)
         .confirmationDialog(
-            "Playlist verwijderen?",
+            LS("playlists.deleteConfirmTitle"),
             isPresented: Binding(
                 get: { pendingDelete != nil },
                 set: { if !$0 { pendingDelete = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Verwijder", role: .destructive) {
+            Button(LS("action.delete"), role: .destructive) {
                 if let pl = pendingDelete { delete(pl) }
                 pendingDelete = nil
             }
-            Button("Annuleer", role: .cancel) { pendingDelete = nil }
+            Button(LS("playlists.cancel"), role: .cancel) { pendingDelete = nil }
         } message: {
             if let name = pendingDelete?.name {
-                Text("\(name) wordt definitief verwijderd.")
+                LT("\(name) wordt definitief verwijderd.")
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -133,7 +133,7 @@ public struct PlaylistsView: View {
                             .padding(.vertical, 2)
                             .background(badge.color.opacity(0.18), in: Capsule())
                             .foregroundStyle(badge.color)
-                            .accessibilityLabel("Bron: \(badge.text)")
+                            .accessibilityLabel(LS("Bron: \(badge.text)"))
                     }
                 }
                 Text("\(pl.trackCount) nummers · \(pl.createdAt.prefix(10))")
@@ -146,8 +146,8 @@ public struct PlaylistsView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(client.selectedZone == nil)
-            .accessibilityLabel("Speel playlist")
-            .help(client.selectedZone == nil ? "Kies eerst een zone" : "Speel af in \(client.selectedZone?.displayName ?? "")")
+            .accessibilityLabel(LS("playlists.playPlaylist"))
+            .help(client.selectedZone == nil ? LS("playlists.chooseZoneFirst") : LS("Speel af in \(client.selectedZone?.displayName ?? "")"))
 
             // Listen on the phone itself (local files only — Qobuz/stream tracks
             // are skipped and reported).
@@ -155,27 +155,27 @@ public struct PlaylistsView: View {
                 Image(systemName: "iphone")
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("Speel op deze iPhone")
-            .help("Speel lokaal af op deze iPhone")
+            .accessibilityLabel(LS("playlists.playOnThisIPhone"))
+            .help(LS("playlists.playLocallyThisIPhone"))
 
             if client.qobuzConfigured {
                 Button { saveToQobuz(pl) } label: { Image(systemName: "cloud") }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("Bewaar in Qobuz")
-                    .help("Bewaar in Qobuz")
+                    .accessibilityLabel(LS("playlists.saveToQobuz"))
+                    .help(LS("playlists.saveToQobuz"))
             }
 
             Button { toggle(pl) } label: {
                 Image(systemName: expanded == pl.id ? "chevron.up" : "chevron.down")
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel(expanded == pl.id ? "Verberg tracks" : "Toon tracks")
+            .accessibilityLabel(expanded == pl.id ? LS("playlists.hideTracks") : LS("playlists.showTracks"))
 
             Button(role: .destructive) { pendingDelete = pl } label: {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("Verwijder playlist")
+            .accessibilityLabel(LS("playlists.deletePlaylist"))
         }
     }
 
@@ -184,14 +184,14 @@ public struct PlaylistsView: View {
             let tracks = await client.playlistTracks(id: pl.id)
             guard !tracks.isEmpty else { return }
             statusOK = nil
-            statusBanner = "“\(pl.name)” bewaren in Qobuz…"
+            statusBanner = LS("“\(pl.name)” bewaren in Qobuz…")
             if let r = await client.saveToQobuz(name: pl.name, tracks: tracks) {
                 statusOK = true
                 statusBanner = "“\(pl.name)” → Qobuz: \(r.matched)/\(r.total) gematcht."
                 Haptics.success()
             } else {
                 statusOK = false
-                statusBanner = "Bewaren in Qobuz mislukt — controleer je account in Instellingen."
+                statusBanner = LS("playlists.saveToQobuzFailed")
                 Haptics.error()
             }
         }
@@ -217,7 +217,7 @@ public struct PlaylistsView: View {
         guard let zone = client.selectedZone else { return }
         Haptics.tap()
         statusOK = nil
-        statusBanner = "“\(pl.name)” starten…"
+        statusBanner = LS("“\(pl.name)” starten…")
         let played = await client.playPlaylist(id: pl.id, zoneID: zone.id)
         if played > 0 {
             statusOK = true
@@ -225,7 +225,7 @@ public struct PlaylistsView: View {
             Haptics.success()
         } else {
             statusOK = false
-            statusBanner = "“\(pl.name)” kon niet starten — geen van de tracks was beschikbaar."
+            statusBanner = LS("“\(pl.name)” kon niet starten — geen van de tracks was beschikbaar.")
             Haptics.error()
         }
     }
@@ -237,7 +237,7 @@ public struct PlaylistsView: View {
         let tracks = await client.playlistTracks(id: pl.id)
         guard !tracks.isEmpty else { return }
         statusOK = nil
-        statusBanner = "“\(pl.name)” lokaal starten…"
+        statusBanner = LS("“\(pl.name)” lokaal starten…")
         let summary = await client.playLocally(tracks)
         if let s = summary, s.playable > 0 {
             statusOK = true
@@ -247,7 +247,7 @@ public struct PlaylistsView: View {
             Haptics.success()
         } else {
             statusOK = false
-            statusBanner = "Niets om lokaal af te spelen — deze tracks staan niet op schijf (Qobuz/stream)."
+            statusBanner = LS("playlists.nothingLocalToPlay")
             Haptics.error()
         }
     }

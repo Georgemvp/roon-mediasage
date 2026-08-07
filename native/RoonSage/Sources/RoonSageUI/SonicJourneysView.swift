@@ -36,7 +36,7 @@ public struct SonicJourneysView: View {
             } icon: {
                 Image(systemName: "map").foregroundStyle(Color.roonGold)
             }
-            Text("Sonische reizen door je bibliotheek — rond een album, door de tijd, of van het ene naar het andere nummer.")
+            LT("sonicJourneys.headerSubtitle")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -48,7 +48,7 @@ public struct SonicJourneysView: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Label("Album Radio", systemImage: "square.stack")
                 .font(.subheadline.weight(.semibold))
-            Text("Open een album in je bibliotheek en tik op het radio-icoon — je krijgt een eindeloze radio die rond dat album blijft hangen en er sonisch verwante muziek bij zoekt.")
+            LT("sonicJourneys.albumRadioDesc")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -61,16 +61,16 @@ public struct SonicJourneysView: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             Label("Time Machine", systemImage: "clock.arrow.circlepath")
                 .font(.subheadline.weight(.semibold))
-            Text("Een reis door de tijd: van oud naar nieuw, dwars door je bibliotheek. Jaartallen komen uit je bestandstags — muziek zonder jaartal doet niet mee.")
+            LT("sonicJourneys.timeMachineDesc")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Stepper("Lengte: \(count) tracks", value: $count, in: 20...80, step: 10)
+            Stepper(LS("Lengte: \(count) tracks"), value: $count, in: 20...80, step: 10)
                 .font(.caption)
             HStack(spacing: Spacing.sm) {
                 Button {
                     startTimeMachine()
                 } label: {
-                    Label(building ? "Bezig…" : "Start reis", systemImage: "play.fill")
+                    Label(building ? LS("sonicJourneys.building") : LS("sonicJourneys.startJourney"), systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -81,7 +81,7 @@ public struct SonicJourneysView: View {
                     Button {
                         syncTimeMachine()
                     } label: {
-                        Label(syncing ? "Synchroniseren…" : "Sync naar Qobuz",
+                        Label(syncing ? LS("sonicJourneys.syncing") : LS("sonicJourneys.syncToQobuz"),
                               systemImage: "arrow.triangle.2.circlepath")
                             .frame(maxWidth: .infinity)
                     }
@@ -104,11 +104,11 @@ public struct SonicJourneysView: View {
             defer { building = false }
             let tracks = await client.buildTimeMachine(count: count)
             guard !tracks.isEmpty else {
-                message = "Geen tracks met een jaartal gevonden — tag of analyseer eerst meer muziek."
+                message = LS("sonicJourneys.noYearTracks")
                 return
             }
             await client.curateTracks(tracks, zoneID: zone.id)
-            message = "Tijdreis gestart — \(tracks.count) tracks van oud naar nieuw."
+            message = LS("Tijdreis gestart — \(tracks.count) tracks van oud naar nieuw.")
         }
     }
 
@@ -119,16 +119,16 @@ public struct SonicJourneysView: View {
             defer { syncing = false }
             let tracks = await client.buildTimeMachine(count: count)
             guard !tracks.isEmpty else {
-                message = "Geen tracks met een jaartal gevonden om te synchroniseren."
+                message = LS("sonicJourneys.noYearTracksSync")
                 return
             }
             let ok = await client.syncJourneyToQobuz(
                 title: "Time Machine",
-                description: "Een reis van oud naar nieuw, samengesteld in RoonSage.",
+                description: LS("sonicJourneys.qobuzDescription"),
                 tracks: tracks)
             message = ok
-                ? "Op Qobuz gezet als ‘\(RoonClient.qobuzPlaylistName(for: "Time Machine"))’."
-                : "Sync naar Qobuz mislukt — controleer je Qobuz-instellingen."
+                ? LS("Op Qobuz gezet als ‘\(RoonClient.qobuzPlaylistName(for: "Time Machine"))’.")
+                : LS("sonicJourneys.qobuzSyncFailed")
         }
     }
 
@@ -144,7 +144,7 @@ public struct SonicJourneysView: View {
                     .foregroundStyle(Color.roonGold)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("The Bridge").font(.subheadline.weight(.semibold))
-                    Text("Kies een start- en eindnummer; RoonSage bouwt de soepele sonische brug ertussen — en zet 'm desgewenst op Qobuz.")
+                    LT("sonicJourneys.bridgeDesc")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)

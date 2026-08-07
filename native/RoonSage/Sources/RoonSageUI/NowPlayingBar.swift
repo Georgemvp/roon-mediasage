@@ -18,10 +18,10 @@ public struct NowPlayingBar: View {
 
     #if os(macOS)
     private static let localIcon = "laptopcomputer"
-    private static let localNoun = "Deze Mac"
+    private static let localNoun = LS("nowPlayingBar.thisMac")
     #else
     private static let localIcon = "iphone"
-    private static let localNoun = "Dit apparaat"
+    private static let localNoun = LS("nowPlayingBar.thisDevice")
     #endif
 
     public var body: some View {
@@ -114,21 +114,21 @@ public struct NowPlayingBar: View {
                 .buttonStyle(.plain)
                 .frame(minWidth: 40, minHeight: 40)
                 .foregroundStyle(Color.roonGold)
-                .accessibilityLabel(isPlaying ? "Pauzeer" : "Speel af")
+                .accessibilityLabel(isPlaying ? LS("nowPlayingBar.pause") : LS("nowPlayingBar.play"))
 
                 Button(action: onNext) {
                     Image(systemName: "forward.fill").font(.title3)
                 }
                 .buttonStyle(.plain)
                 .frame(minWidth: 36, minHeight: 40)
-                .accessibilityLabel("Volgende track")
+                .accessibilityLabel(LS("nowPlayingBar.nextTrack"))
 
                 if let onStop {
                     Button(action: onStop) { Image(systemName: "xmark") }
                         .buttonStyle(.plain)
                         .frame(minWidth: 32, minHeight: 40)
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel("Stop lokaal afspelen")
+                        .accessibilityLabel(LS("nowPlayingBar.stopLocal"))
                 }
             }
             .padding(.horizontal, Spacing.md)

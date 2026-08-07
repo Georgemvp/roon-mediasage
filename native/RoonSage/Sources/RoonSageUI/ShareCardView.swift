@@ -78,7 +78,7 @@ struct ShareCardButton: View {
                     icon
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Deel als afbeelding")
+                .accessibilityLabel(LS("shareCard.shareAsImage"))
             } else {
                 icon.opacity(0.4).accessibilityHidden(true)
             }

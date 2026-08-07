@@ -25,12 +25,12 @@ public struct DiscoverWeeklyView: View {
     /// sometimes leaves in a joined credit ("Alan Parsons / Unknown Artist"), so
     /// the row shows a clean name instead of the raw metadata.
     private func cleanArtist(_ artist: String?) -> String {
-        guard let artist, !artist.isEmpty else { return "Onbekend" }
+        guard let artist, !artist.isEmpty else { return LS("discoverWeekly.unknownArtist") }
         let parts = artist
             .components(separatedBy: CharacterSet(charactersIn: "/;"))
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && $0.caseInsensitiveCompare("Unknown Artist") != .orderedSame }
-        return parts.isEmpty ? "Onbekend" : parts.joined(separator: " / ")
+        return parts.isEmpty ? LS("discoverWeekly.unknownArtist") : parts.joined(separator: " / ")
     }
 
     public var body: some View {
@@ -47,7 +47,7 @@ public struct DiscoverWeeklyView: View {
                 emptyState.plainCardRow()
             }
         }
-        .navigationTitle("Ontdek Wekelijks")
+        .navigationTitle(LS("discoverWeekly.navTitle"))
         .toolbar {
             Button {
                 Task { await refreshNow() }
@@ -55,8 +55,8 @@ public struct DiscoverWeeklyView: View {
                 Image(systemName: "arrow.clockwise")
             }
             .disabled(refreshing)
-            .help("Ververs de wekelijkse selectie nu")
-            .accessibilityLabel("Ververs de wekelijkse selectie")
+            .help(LS("discoverWeekly.refreshHelp"))
+            .accessibilityLabel(LS("discoverWeekly.refreshA11y"))
         }
         .ambientSurface()
         .animation(Motion.standard, value: loading)
@@ -115,7 +115,7 @@ public struct DiscoverWeeklyView: View {
                         if client.lastActionError == nil { showActionMessage("Afspelen gestart op ‘\(zone.displayName)’ — \(pl.tracks.count) tracks.") }
                     }
                 } label: {
-                    Label("Speel nu", systemImage: "play.fill")
+                    Label(LS("bm.playNow"), systemImage: "play.fill")
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
                 }
@@ -128,7 +128,7 @@ public struct DiscoverWeeklyView: View {
                     if refreshing {
                         ProgressView().controlSize(.small).frame(maxWidth: .infinity)
                     } else {
-                        Label("Ververs nu", systemImage: "arrow.clockwise")
+                        Label(LS("discoverWeekly.refreshNow"), systemImage: "arrow.clockwise")
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -142,7 +142,7 @@ public struct DiscoverWeeklyView: View {
     // MARK: Tracks
 
     private func tracksSection(_ pl: DiscoverWeeklyPlaylist) -> some View {
-        Section("Tracks") {
+        Section(LS("discoverWeekly.tracksSection")) {
             ForEach(Array(pl.tracks.enumerated()), id: \.offset) { idx, t in
                 HStack(spacing: Spacing.md) {
                     Text("\(idx + 1)")
@@ -157,7 +157,7 @@ public struct DiscoverWeeklyView: View {
                     }
                     Spacer(minLength: 0)
                     if t.notInLibrary {
-                        Text("nog niet in je bibliotheek")
+                        LT("discoverWeekly.notInLibrary")
                             .font(.caption2)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(Color.roonGold.opacity(0.18), in: Capsule())
@@ -173,20 +173,20 @@ public struct DiscoverWeeklyView: View {
     // MARK: States
 
     private var loadingState: some View {
-        HStack { Spacer(); ProgressView("Ontdek Wekelijks laden…"); Spacer() }
+        HStack { Spacer(); ProgressView(LS("discoverWeekly.loading")); Spacer() }
             .padding(.vertical, Spacing.xl)
     }
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("Nog geen wekelijkse ontdek-playlist", systemImage: "sparkles")
+            Label(LS("discoverWeekly.emptyTitle"), systemImage: "sparkles")
         } description: {
-            Text("De server bouwt hem automatisch, of tik hieronder om hem nu te genereren. Hiervoor is een geanalyseerde bibliotheek en wat luistergeschiedenis nodig.")
+            LT("discoverWeekly.emptyDescription")
         } actions: {
             Button {
                 Task { await refreshNow() }
             } label: {
-                Label(refreshing ? "Bezig…" : "Genereer nu", systemImage: "sparkles")
+                Label(refreshing ? LS("discoverWeekly.busy") : LS("discoverWeekly.generateNow"), systemImage: "sparkles")
             }
             .buttonStyle(.borderedProminent)
             .disabled(refreshing)
@@ -224,12 +224,12 @@ public struct DiscoverWeeklyView: View {
     private func subtitle(_ pl: DiscoverWeeklyPlaylist) -> String {
         var parts: [String] = []
         if let date = Self.isoParser.date(from: pl.generatedAt) {
-            parts.append("Gegenereerd op \(Self.dateFormatter.string(from: date))")
+            parts.append(LS("Gegenereerd op \(Self.dateFormatter.string(from: date))"))
         } else if !pl.weekKey.isEmpty {
-            parts.append("Week \(pl.weekKey)")
+            parts.append(LS("Week \(pl.weekKey)"))
         }
-        parts.append("\(pl.tracks.count) tracks")
-        if pl.discoveryCount > 0 { parts.append("\(pl.discoveryCount) buiten je bibliotheek") }
+        parts.append(LS("\(pl.tracks.count) tracks"))
+        if pl.discoveryCount > 0 { parts.append(LS("\(pl.discoveryCount) buiten je bibliotheek")) }
         return parts.joined(separator: " · ")
     }
 

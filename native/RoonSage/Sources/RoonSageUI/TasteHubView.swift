@@ -21,9 +21,9 @@ public struct TasteHubView: View {
         var label: String {
             switch self {
             case .dna:     "DNA"
-            case .profile: "Smaak"
-            case .history: "Historie"
-            case .year:    "Jaar"
+            case .profile: LS("nav.tasteHub")
+            case .history: LS("tasteHub.modeHistory")
+            case .year:    LS("tasteHub.modeYear")
             }
         }
     }

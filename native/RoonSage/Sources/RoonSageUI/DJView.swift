@@ -21,7 +21,7 @@ public struct DJView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Picker("Modus", selection: $mode) {
+            Picker(LS("dJ.mode"), selection: $mode) {
                 ForEach(Mode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
