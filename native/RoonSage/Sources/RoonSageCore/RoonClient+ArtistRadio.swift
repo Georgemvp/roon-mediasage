@@ -168,7 +168,8 @@ extension RoonClient {
         // warm the (Ollama) model once up front so the first title call below
         // doesn't eat a cold-start timeout and freeze on the fallback. No-op for
         // cloud providers / when all cached and signed.
-        let needsTitle = radios.contains { r in
+        // A fixed-title category never calls the model, so it must not pay the warm-up.
+        let needsTitle = Self.fixedMeta(category: category) == nil && radios.contains { r in
             let t = UserDefaults.standard.string(forKey: Self.titleKey(r.id))
             return (t?.isEmpty ?? true)
                 || t == Self.fallbackMeta(category: category, label: r.artist).title
@@ -648,11 +649,35 @@ extension RoonClient {
         var fullyFresh: Bool { titleFresh && descFresh && (cachedDesc?.isEmpty == false) }
     }
 
+    /// Categories whose playlist name must stay literal and predictable instead of
+    /// being an LLM-invented title (user, 2026-08-07: "de titels moeten heel
+    /// duidelijk zijn"). These are the stations you look for BY NAME, so a creative
+    /// title that changes every rotation ("Vrolijke Poprock uit de jaren 80") makes
+    /// them unfindable in Roon/Qobuz.
+    nonisolated static func fixedMeta(category: RadioCategory) -> (title: String, description: String)? {
+        switch category {
+        case .recent:
+            return ("Recent geluisterd",
+                    "Aanbevelingen uit je bibliotheek op basis van wat je de laatste tijd hebt geluisterd.")
+        case .artist, .genre, .mood, .activity, .decade, .sonic:
+            return nil
+        }
+    }
+
     /// Compute the title-cache state for a station (no I/O beyond UserDefaults).
     func titlePlan(for radio: SonicRadio, category: RadioCategory,
                    sample: [TrackRecord], sonics: [DatabaseManager.SonicTrack]) -> TitlePlan {
-        titlePlan(for: radio, fallback: Self.fallbackMeta(category: category, label: radio.artist),
-                  sample: sample, sonics: sonics)
+        // Fixed-title category: hand back an already-fresh plan so the station is
+        // never queued for LLM titling and `resolveTitle` returns these verbatim.
+        if let fixed = Self.fixedMeta(category: category) {
+            return TitlePlan(radioID: radio.id, cachedTitle: fixed.title, cachedDesc: fixed.description,
+                             titleFresh: true, descFresh: true,
+                             sig: Self.trackSetSignature(sample),
+                             profileSig: TitleGrounding.profileSignature(sonics),
+                             fallback: fixed)
+        }
+        return titlePlan(for: radio, fallback: Self.fallbackMeta(category: category, label: radio.artist),
+                         sample: sample, sonics: sonics)
     }
 
     /// Title-cache state for a station whose fallback isn't category-derived (custom
@@ -681,6 +706,19 @@ extension RoonClient {
         -> (title: String, description: String) {
         let d = UserDefaults.standard
         if plan.fullyFresh, let t = plan.cachedTitle, let desc = plan.cachedDesc {
+            // Persist whenever the store disagrees with what we're about to serve.
+            // A fixed-title station (see `fixedMeta`) arrives here fully fresh on
+            // every build, so an "only if absent" write would never run — and worse,
+            // a station that was LLM-titled BEFORE it became fixed keeps that stale
+            // name on disk. `reconcileQobuzRadios(keepIDs:)` derives its keep-list
+            // from exactly these stored titles, so a stale/absent one reads as an
+            // orphan and deletes the playlist we just created under the new name.
+            if d.string(forKey: Self.titleKey(plan.radioID)) != t {
+                d.set(t, forKey: Self.titleKey(plan.radioID))
+                d.set(desc, forKey: Self.descKey(plan.radioID))
+                d.set(plan.sig, forKey: Self.descSigKey(plan.radioID))
+                d.set(plan.profileSig, forKey: Self.titleSigKey(plan.radioID))
+            }
             return (t, desc)
         }
         if let meta = generated {

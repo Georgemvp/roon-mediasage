@@ -158,4 +158,21 @@ final class SonicRadioTests: XCTestCase {
         XCTAssertNotEqual(RoonClient.rotationBucketStamp(date: "2026-08-07", hour: 12),
                           RoonClient.rotationBucketStamp(date: "2026-08-08", hour: 12))
     }
+
+    // MARK: Fixed titles
+
+    func testFixedMetaOnlyForLookedUpByNameStations() {
+        // .recent must be findable by name in Roon/Qobuz; the creative categories
+        // keep their LLM titles.
+        XCTAssertEqual(RoonClient.fixedMeta(category: .recent)?.title, "Recent geluisterd")
+        for c in [RoonClient.RadioCategory.artist, .genre, .mood, .activity, .decade, .sonic] {
+            XCTAssertNil(RoonClient.fixedMeta(category: c), "\(c.rawValue) stays LLM-titled")
+        }
+    }
+
+    func testFixedMetaTitleIsStableAcrossCalls() {
+        // The whole point: it must not rotate the way generated titles do.
+        XCTAssertEqual(RoonClient.fixedMeta(category: .recent)?.title,
+                       RoonClient.fixedMeta(category: .recent)?.title)
+    }
 }
