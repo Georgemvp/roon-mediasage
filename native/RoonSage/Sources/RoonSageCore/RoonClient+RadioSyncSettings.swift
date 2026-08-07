@@ -120,7 +120,7 @@ extension RoonClient {
             let index = await activeIndex(db)
             let disliked = dislikedMatchKeys
             let radios = await artistSeedRadios(db: db, lib: lib, index: index,
-                                                disliked: disliked, stamp: Self.dayStamp())
+                                                disliked: disliked, stamp: Self.rotationStamp())
             return radios.map {
                 RadioDescriptor(id: $0.id, category: category.rawValue, label: $0.artist,
                                 trackCount: $0.trackCount, imageKey: $0.imageKey)

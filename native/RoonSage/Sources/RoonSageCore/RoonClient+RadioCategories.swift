@@ -83,7 +83,7 @@ extension RoonClient {
         guard category != .artist, let db = database else { return [] }
         let lib = await radioLibrary()
         guard !lib.isEmpty else { return [] }
-        let stamp = Self.dayStamp()
+        let stamp = Self.rotationStamp()
         let disliked = radioDislikedMatchKeys
 
         // Sonic neighborhoods are discovered by clustering the CLAP embeddings, so

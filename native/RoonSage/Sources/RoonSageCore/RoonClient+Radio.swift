@@ -3,16 +3,17 @@ import Foundation
 
 // MARK: - Sonic Radio
 //
-// Daily "for you" stations seeded from the artists you listen to most. Each
-// radio centres on one frequently-played artist: we take that artist's analyzed
+// "For you" stations seeded from the artists you listen to most. Each radio
+// centres on one frequently-played artist: we take that artist's analyzed
 // tracks, compute the sonic centroid of their CLAP embeddings (or fall back to
 // the rule-based BPM/Camelot/tag engine), and grow an endless station of
 // sonically-close library tracks around it.
 //
-// "Daily": the candidate ordering is seeded on the calendar date, so each radio
-// is stable for the day but rotates to a fresh selection tomorrow. The endless
-// top-up refills the queue (a different date+generation salt each refill) as it
-// drains, so the station never runs out.
+// Rotation: the candidate ordering is seeded on `rotationStamp()` (calendar
+// date + `radioRotationHours`-hour bucket), so each radio is stable within one
+// bucket but reshuffles at the next — in step with the ~3h auto-sync, not once
+// a day. The endless top-up refills the queue (a different stamp+generation
+// salt each refill) as it drains, so the station never runs out.
 
 extension RoonClient {
 
@@ -63,7 +64,7 @@ extension RoonClient {
         var djMode: DJMode? = nil
     }
 
-    // MARK: Daily radios
+    // MARK: Rotating radios
 
     /// Build today's stations for `category`. Artist radios use the play-history
     /// scoring below; the other categories are bucketed by `radioBuckets(_:)`
@@ -115,7 +116,7 @@ extension RoonClient {
 
         // Affinity score: play history dominates; a like nudges an artist up, a
         // dislike nudges it down — neither flips the ranking on its own.
-        let stamp = Self.dayStamp()
+        let stamp = Self.rotationStamp()
         var scored: [(radio: SonicRadio, score: Double)] = []
         for key in candidateKeys {
             guard let tracks = byArtist[key] else { continue }
@@ -132,7 +133,7 @@ extension RoonClient {
             let base = Double(playCount[key] ?? 0)
             let bonus = 3.0 * Double(tallies.liked[key] ?? 0)
             let penalty = 2.0 * Double(tallies.disliked[key] ?? 0)
-            // Daily jitter (≈0…4) keeps the order fresh each morning without
+            // Rotation jitter (≈0…4) keeps the order fresh each bucket without
             // overriding genuine play/like signal.
             let jitter = Double(Self.seed64("\(stamp)\u{1f}\(key)") % 1000) / 250.0
             scored.append((radio, base + bonus - penalty + jitter))
@@ -153,7 +154,7 @@ extension RoonClient {
         let index = await activeIndex(db)
         let seedIds = radio.seedIds
         let key = radio.id
-        let stamp = Self.dayStamp()
+        let stamp = Self.rotationStamp()
         let disliked = radioDislikedMatchKeys
         let liked = likedMatchKeys
         let known = await knownArtistKeys(lib: lib)
@@ -341,7 +342,7 @@ extension RoonClient {
         let seedIds = state.seedIds
         let key = state.artistKey
         let nextGen = state.generation + 1
-        let stamp = Self.dayStamp()
+        let stamp = Self.rotationStamp()
         let disliked = radioDislikedMatchKeys
         let liked = likedMatchKeys
         let known = await knownArtistKeys(lib: lib)
@@ -535,14 +536,22 @@ extension RoonClient {
         return best
     }
 
-    // MARK: Deterministic daily shuffle
+    // MARK: Deterministic rotating shuffle
 
-    /// Today's date as `yyyy-MM-dd` in the user's calendar — the daily seed.
-    nonisolated static func dayStamp() -> String {
+    /// The current rotation bucket as `yyyy-MM-dd-HH`, HH floored to
+    /// `radioRotationHours` — the seed for radio-bucket shuffling. Bucketed
+    /// (not a raw timestamp) so requests within the same window shuffle
+    /// identically; changes every `radioRotationHours` so a radio actually gets
+    /// a fresh track selection each time the auto-sync lands, not once a day
+    /// (was `dayStamp`/`yyyy-MM-dd` — user report 2026-08-07: the daily seed
+    /// meant a radio's tracks were identical all day despite the 3-hourly sync).
+    nonisolated static func rotationStamp() -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
+        let hour = Calendar.current.component(.hour, from: Date())
+        let bucket = (hour / radioRotationHours) * radioRotationHours
+        return "\(f.string(from: Date()))-\(String(format: "%02d", bucket))"
     }
 
     /// FNV-1a 64-bit — a stable string hash (unlike `String.hashValue`, which is

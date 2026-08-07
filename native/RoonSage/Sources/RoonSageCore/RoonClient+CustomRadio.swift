@@ -280,7 +280,7 @@ extension RoonClient {
         let genres   = (try? await db.genresByTrackID()) ?? [:]
         let years    = cfg.decades.isEmpty ? [:] : ((try? await db.yearByMatchKey()) ?? [:])
         let byId     = Dictionary(lib.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let stamp    = Self.dayStamp()
+        let stamp    = Self.rotationStamp()
         let calibration = await Task.detached { TitleGrounding.Calibration.compute(library: lib) }.value
         let daySeed  = "\(stamp)|\(cfg.radioID)"
 
@@ -542,7 +542,7 @@ extension RoonClient {
         let years  = cfg.decades.isEmpty ? [:] : ((try? await db.yearByMatchKey()) ?? [:])
         let calibration: TitleGrounding.Calibration? = cfg.activities.isEmpty
             ? nil : await Task.detached { TitleGrounding.Calibration.compute(library: lib) }.value
-        let daySeed = "\(Self.dayStamp())|\(cfg.radioID)"
+        let daySeed = "\(Self.rotationStamp())|\(cfg.radioID)"
         let seedIds = Self.resolveCustomSeeds(cfg: cfg, lib: lib, genres: genres, years: years,
                                               calibration: calibration, disliked: disliked, daySeed: daySeed)
         guard !seedIds.isEmpty else {

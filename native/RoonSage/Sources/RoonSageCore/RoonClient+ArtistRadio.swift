@@ -39,6 +39,11 @@ extension RoonClient {
     nonisolated static let artistRadioPoolLimit   = 500
     /// Re-sync cadence on the always-on server build.
     nonisolated static let artistRadioRefreshInterval: UInt64 = 3 * 60 * 60 * 1_000_000_000
+    /// Radio rotation granularity in hours — kept equal to
+    /// `artistRadioRefreshInterval` so every successful auto-sync actually lands a
+    /// fresh `rotationStamp()` bucket instead of re-shuffling nothing. See
+    /// `RoonClient.rotationStamp()`.
+    nonisolated static let radioRotationHours = 3
 
     // MARK: Model
 
@@ -126,7 +131,7 @@ extension RoonClient {
         // Decade gates key on file-tag years; only fetched when needed.
         let years = category == .decade ? ((try? await db.yearByMatchKey()) ?? [:]) : [:]
         let byId = Dictionary(lib.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let stamp = Self.dayStamp()
+        let stamp = Self.rotationStamp()
         // Library-wide attribute distribution: calibrates the profile descriptors
         // (and thus the AI titles) to THIS library instead of absolute scores.
         let calibration = await Task.detached { TitleGrounding.Calibration.compute(library: lib) }.value
