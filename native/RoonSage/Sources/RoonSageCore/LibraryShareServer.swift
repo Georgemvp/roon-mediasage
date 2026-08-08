@@ -372,23 +372,68 @@ public final class LibraryShareServer: @unchecked Sendable {
             let body = buf.subdata(in: min(bodyStart, bodyEnd)..<bodyEnd)
             Task {
                 let (status, respBody, ctype) = await self.route(header: header, body: body, loopback: loopback, peerIP: peerIP)
-                self.send(conn, status: status, body: respBody, ctype: ctype)
+                self.send(conn, status: status, body: respBody, ctype: ctype, requestHeader: header)
             }
         }
     }
 
-    private func send(_ conn: NWConnection, status: String, body: Data, ctype: String) {
+    /// Paths whose body must never be stored anywhere, not even revalidated from
+    /// a local copy — it carries credentials.
+    private static func mustNotStore(_ requestHeader: String) -> Bool {
+        let requestLine = requestHeader.split(separator: "\r\n").first.map(String.init) ?? ""
+        let target = requestLine.split(separator: " ").dropFirst().first.map(String.init) ?? ""
+        return target.hasPrefix("/settings")
+    }
+
+    private func send(_ conn: NWConnection, status: String, body: Data, ctype: String,
+                      requestHeader: String = "") {
+        var payload = body
+        var status = status
+        var extraHeaders = ""
+
+        // Conditional GET. `/library` is tens of MB and clients re-pull it on every
+        // libraryRevision shift — which moves during analysis while the library
+        // CONTENT only changes on a sync. A matching validator turns that into an
+        // empty 304. Only for successful bodies: a 401 or 500 must never be cached.
+        let isCacheable = status.hasPrefix("200") && !Self.mustNotStore(requestHeader)
+        var etag: String?
+        if isCacheable, !payload.isEmpty {
+            let tag = HTTPPayload.etag(for: payload)
+            etag = tag
+            if let inm = Self.headerValue("If-None-Match", in: requestHeader), inm == tag {
+                status = "304 Not Modified"
+                payload = Data()
+            }
+        }
+
+        // gzip when the client advertised it and the body is worth compressing.
+        // URLSession sends `Accept-Encoding: gzip` and decompresses transparently,
+        // so this needs no client change.
+        if status.hasPrefix("200"), !payload.isEmpty,
+           HTTPPayload.clientAcceptsGzip(requestHeader),
+           let zipped = HTTPPayload.gzip(payload) {
+            payload = zipped
+            extraHeaders += "Content-Encoding: gzip\r\n"
+            extraHeaders += "Vary: Accept-Encoding\r\n"
+        }
+
         var header = "HTTP/1.1 \(status)\r\n"
         header += "Content-Type: \(ctype)\r\n"
-        header += "Content-Length: \(body.count)\r\n"
-        // Every response here is either personal (library, history, taste) or
-        // credential-bearing (/settings); none of it may sit in an intermediary
-        // or on-disk cache. `nosniff` stops a JSON body being re-interpreted as
-        // something executable if a browser ever points at this server.
-        header += "Cache-Control: no-store\r\n"
+        header += "Content-Length: \(payload.count)\r\n"
+        if let etag { header += "ETag: \(etag)\r\n" }
+        // Everything here is either personal (library, history, taste) or
+        // credential-bearing (/settings). `/settings` may not be stored at all;
+        // the rest may be held locally but must be revalidated before use, which
+        // is what makes the ETag above useful. `private` keeps both out of shared
+        // caches. `nosniff` stops a JSON body being re-interpreted as something
+        // executable if a browser ever points at this server.
+        header += Self.mustNotStore(requestHeader)
+            ? "Cache-Control: no-store\r\n"
+            : "Cache-Control: private, no-cache\r\n"
         header += "X-Content-Type-Options: nosniff\r\n"
+        header += extraHeaders
         header += "Connection: close\r\n\r\n"
-        var out = Data(header.utf8); out.append(body)
+        var out = Data(header.utf8); out.append(payload)
         conn.send(content: out, completion: .contentProcessed { _ in
             conn.send(content: nil, isComplete: true, completion: .contentProcessed { _ in conn.cancel() })
         })
