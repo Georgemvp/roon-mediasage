@@ -467,6 +467,7 @@ public final class RoonClient {
         startDiscoverWeeklySchedule()
         startServerFeatureSync()
         startLyricsBackfill()
+        startMaintenance()
     }
 
     /// The server must stay connected to Roon. Keep (re)trying from a not-

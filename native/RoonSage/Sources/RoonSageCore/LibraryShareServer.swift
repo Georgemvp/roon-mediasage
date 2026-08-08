@@ -563,7 +563,10 @@ public final class LibraryShareServer: @unchecked Sendable {
         // and the *arr stack. The client apps never target loopback anyway
         // (`startServerMode` drops a loopback base URL on purpose), so nothing
         // legitimate depended on it.
-        guard !path.hasPrefix("/health"), !loopback || sensitive else { return nil }
+        // Exactly `/health`, not a prefix: `/health/detail` names task failures,
+        // disk pressure and host addresses, so it must NOT inherit the open
+        // discovery probe's exemption.
+        guard path != "/health", !loopback || sensitive else { return nil }
 
         // Brute-force throttle: after 5 consecutive bad tokens an IP gets
         // 429s for a few seconds — no token comparison, no oracle.
@@ -977,6 +980,16 @@ public final class LibraryShareServer: @unchecked Sendable {
             let data = await RoonClient.shared.lyricsData(
                 title: title, artist: artist, album: album, durationSec: duration)
             return ("200 OK", data, "application/json")
+        }
+        // Detailed condition report. Sits under /health for discoverability but is
+        // token-gated unlike bare /health: it names hosts, task failures and how
+        // full the disk is — useful to an operator, and to nobody else.
+        if method == "GET", path.hasPrefix("/health/detail") {
+            let results = await HealthCheckService.shared.results()
+            if let body = try? JSONEncoder().encode(results) {
+                return ("200 OK", body, "application/json")
+            }
+            return ("500 Internal Server Error", Data("health failed".utf8), "text/plain")
         }
         if path.hasPrefix("/health") {
             let n = (try? await database.trackCount()) ?? 0
