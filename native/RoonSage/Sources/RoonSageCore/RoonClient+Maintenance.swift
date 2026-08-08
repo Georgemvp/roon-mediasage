@@ -10,9 +10,30 @@ extension RoonClient {
     public static let backupTaskName = "database-backup"
     public static let housekeepingTaskName = "housekeeping"
 
+    public static let healthWatchTaskName = "health-watch"
+
     /// Called from `startServerBackgroundWork`.
     func startMaintenance() {
         registerHealthChecks()
+
+        // Health only helps if someone finds out. This runs the checks on a slow
+        // cadence and notifies when something is actually wrong; the service's own
+        // repeat window keeps a persistent problem from becoming hourly spam.
+        Task {
+            await TaskScheduler.shared.register(
+                name: Self.healthWatchTaskName,
+                title: "Gezondheidscontrole",
+                interval: 60 * 60,
+                initialDelay: 5 * 60
+            ) {
+                let results = await HealthCheckService.shared.results(force: true)
+                let bad = results.filter { $0.level == .error }
+                guard !bad.isEmpty else { return .completed }
+                let summary = bad.map { "\($0.title): \($0.message)" }.joined(separator: " · ")
+                await NotificationService.shared.notify(.healthDegraded, message: summary)
+                return .completed
+            }
+        }
 
         Task { [weak self] in
             await TaskScheduler.shared.register(

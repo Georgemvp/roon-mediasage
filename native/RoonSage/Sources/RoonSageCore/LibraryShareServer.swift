@@ -981,6 +981,36 @@ public final class LibraryShareServer: @unchecked Sendable {
                 title: title, artist: artist, album: album, durationSec: duration)
             return ("200 OK", data, "application/json")
         }
+        // Notification destinations: list, upsert, delete, and the Test button —
+        // which is the part that decides whether anyone ever configures this right.
+        if method == "GET", path == "/system/notifications" {
+            let list = await NotificationService.shared.destinations()
+            if let body = try? JSONEncoder().encode(list) {
+                return ("200 OK", body, "application/json")
+            }
+            return ("500 Internal Server Error", Data("notifications failed".utf8), "text/plain")
+        }
+        if method == "POST", path == "/system/notifications/test" {
+            let id = Self.queryValue("id", in: target)
+            let accepted = await NotificationService.shared.sendTest(to: id)
+            return ("200 OK", Data("{\"accepted\":\(accepted)}".utf8), "application/json")
+        }
+        if method == "POST", path == "/system/notifications" {
+            guard let dest = try? JSONDecoder().decode(NotificationDestination.self, from: body),
+                  !dest.url.isEmpty else {
+                return ("400 Bad Request", Data("bad destination".utf8), "text/plain")
+            }
+            await NotificationService.shared.upsert(dest)
+            return ("200 OK", Data("{\"id\":\"\(dest.id)\"}".utf8), "application/json")
+        }
+        if method == "DELETE", path == "/system/notifications" {
+            guard let id = Self.queryValue("id", in: target), !id.isEmpty else {
+                return ("400 Bad Request", Data("bad id".utf8), "text/plain")
+            }
+            await NotificationService.shared.remove(id: id)
+            return ("200 OK", Data("{\"ok\":true}".utf8), "application/json")
+        }
+
         // Detailed condition report. Sits under /health for discoverability but is
         // token-gated unlike bare /health: it names hosts, task failures and how
         // full the disk is — useful to an operator, and to nobody else.
