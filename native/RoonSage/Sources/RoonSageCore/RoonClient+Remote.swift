@@ -351,6 +351,32 @@ extension RoonClient {
         applyPlaybackSnapshot(snap, base: base, serverHost: serverHost)
     }
 
+    /// Which host a thin client should fetch album art from (`imageURL` builds
+    /// `http://<coreHost>:<corePort>/api/image/…` and returns nil without one, so
+    /// getting this wrong means no artwork anywhere).
+    ///
+    /// - The server reports the Core host as *it* sees it. Loopback, or any
+    ///   address the server itself answers on, is useless to a client — substitute
+    ///   the address this connection actually runs over, so art loads off-LAN too.
+    /// - **A nil report is not "no Core".** The server can be `.connected` with no
+    ///   host after a stale socket's close raced its registration (fixed on the
+    ///   server side too). Falling back to the server host is right for this
+    ///   topology: the Core runs on the machine serving us. Without this a fresh
+    ///   install never gets a host at all — which is how every screen lost its
+    ///   artwork on 2026-08-08.
+    /// - Never downgrade a host we already have to nil: a momentary blip should
+    ///   not blank the art that is already on screen.
+    nonisolated static func resolvedCoreHost(reported: String?, serverHost: String?,
+                                             roonConnected: Bool, current: String?,
+                                             knownHosts: [String]) -> String? {
+        guard let reported, !reported.isEmpty else {
+            guard roonConnected else { return current }
+            return serverHost ?? current
+        }
+        let isServerItself = isLoopback(reported) || knownHosts.contains(reported)
+        return (isServerItself ? serverHost : reported) ?? reported
+    }
+
     /// Map a `PlaybackSnapshot` onto the observable state the UI binds to. Shared
     /// by the `/playback` poll and the `/events` stream, so both paths produce
     /// exactly the same result — the stream is a transport change, not a
@@ -364,10 +390,11 @@ extension RoonClient {
         // of the server's own advertised addresses and equally unreachable from
         // 4G/5G. In both cases use the address this connection actually runs
         // over, so album art (Core /api/image) loads off-LAN too.
-        if let host = snap.coreHost {
-            let isServerItself = Self.isLoopback(host) || Self.knownServerHosts().contains(host)
-            coreHost = (isServerItself ? serverHost : host) ?? host
-        }
+        coreHost = Self.resolvedCoreHost(reported: snap.coreHost,
+                                         serverHost: serverHost,
+                                         roonConnected: snap.roonConnected,
+                                         current: coreHost,
+                                         knownHosts: Self.knownServerHosts())
         corePort = UInt16(snap.corePort)
         trackCount = snap.trackCount
 

@@ -82,7 +82,9 @@ extension RoonClient {
         return true
     }
 
-    static func isLoopback(_ host: String) -> Bool {
+    /// `nonisolated`: pure string test, so callers off the main actor (the art-host
+    /// resolution, its tests) needn't hop just to ask this.
+    nonisolated static func isLoopback(_ host: String) -> Bool {
         host == "localhost" || host == "::1" || host.hasPrefix("127.")
     }
 

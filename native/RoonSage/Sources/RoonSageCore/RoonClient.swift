@@ -787,6 +787,13 @@ public final class RoonClient {
             let previousCoreID = RoonClientAuth.loadCoreID()
             RoonClientAuth.saveToken(reg.token, coreID: reg.coreID)
             persistHost(host, port: corePort)
+            // Re-assert the host alongside the connected state. `connect()` sets it
+            // up front, but a close belonging to an EARLIER socket can land while
+            // this registration is still in flight — `handleClose` nils it
+            // unconditionally, and we would then be `.connected` with no host. That
+            // leaves `imageURL` returning nil, i.e. no album art anywhere on every
+            // client, which is exactly how it surfaced on 2026-08-08.
+            coreHost = host
             connectionState = .connected(coreName: reg.coreName)
             await subscribeZones()
             // A different Core (reinstall / another machine) means the cached
