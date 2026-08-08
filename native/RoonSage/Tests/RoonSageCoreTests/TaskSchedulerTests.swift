@@ -55,6 +55,48 @@ final class TaskSchedulerTests: XCTestCase {
         XCTAssertEqual(count, 0, "een startgrace moet de eerste run uitstellen")
     }
 
+    /// The other half of the startup grace, and the one that was missing: after
+    /// the delay has elapsed the job must ACTUALLY run.
+    ///
+    /// Its absence hid a real defect for a full release cycle. `nextDue` returned
+    /// `Date() + initialDelay` — recomputed on every check — so a job that had
+    /// never run could never become due: it slept the grace, woke, asked again,
+    /// got a fresh future date, and slept again. On the live server that silently
+    /// disabled the artist-radio sync, discovery run, digest, weekly and feature
+    /// sync for hours, while /system/tasks calmly reported "never".
+    ///
+    /// The old test only asserted the job does NOT run early, which passes just as
+    /// happily when it never runs at all.
+    func testJobRunsOnceTheInitialDelayHasElapsed() async {
+        let scheduler = TaskScheduler()
+        let counter = Counter()
+
+        await scheduler.register(name: "delayed", title: "Delayed",
+                                 interval: 3600, initialDelay: 0.05) {
+            _ = await counter.bump()
+            return .completed
+        }
+        defer { Task { await scheduler.stopAll() } }
+
+        let ran = await waitUntil(2) { await counter.get() >= 1 }
+        XCTAssertTrue(ran, "na de startgrace hoort de taak te draaien, niet eeuwig te blijven wachten")
+    }
+
+    /// And a never-run job must report a due date that stands still, rather than
+    /// receding every time it is consulted.
+    func testNeverRunJobsDueDateDoesNotRecede() async {
+        let scheduler = TaskScheduler()
+        await scheduler.register(name: "anchored", title: "Anchored",
+                                 interval: 3600, initialDelay: 60) { .completed }
+        defer { Task { await scheduler.stopAll() } }
+
+        let first = await scheduler.info().first { $0.name == "anchored" }?.nextExecution
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        let second = await scheduler.info().first { $0.name == "anchored" }?.nextExecution
+        XCTAssertEqual(first, second, "de startgrace moet aan de registratie hangen, niet aan nu")
+        XCTAssertNotNil(first, "een nog niet gedraaide taak hoort een vaste verwachte tijd te melden")
+    }
+
     func testRunNowIsDedupedWhileInFlight() async {
         let scheduler = TaskScheduler()
         let counter = Counter()
@@ -159,7 +201,10 @@ final class TaskSchedulerTests: XCTestCase {
         let info = await scheduler.info().first { $0.name == "idle" }
         XCTAssertEqual(info?.lastStatus, "never")
         XCTAssertNil(info?.lastExecution)
-        XCTAssertNil(info?.nextExecution)
+        // Was: nil. A never-run job now reports its anchored first run, so the UI
+        // can distinguish "hasn't run yet" from "will never run" — the exact
+        // ambiguity that hid the stuck-scheduler bug.
+        XCTAssertNotNil(info?.nextExecution)
         XCTAssertEqual(info?.runCount, 0)
         XCTAssertFalse(info?.isRunning ?? true)
     }

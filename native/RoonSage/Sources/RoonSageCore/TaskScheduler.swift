@@ -80,6 +80,8 @@ public actor TaskScheduler {
         let name: String
         let title: String
         let initialDelay: TimeInterval
+        /// Fixed anchor for the startup grace — see `nextDue`.
+        let registeredAt: Date
         let body: @Sendable () async -> Outcome
         var interval: TimeInterval
         var lastExecution: Date?
@@ -127,7 +129,8 @@ public actor TaskScheduler {
                          initialDelay: TimeInterval = 0,
                          body: @escaping @Sendable () async -> Outcome) {
         guard jobs[name] == nil else { return }
-        var job = Job(name: name, title: title, initialDelay: initialDelay, body: body,
+        var job = Job(name: name, title: title, initialDelay: initialDelay,
+                      registeredAt: Date(), body: body,
                       interval: interval, lastExecution: nil, lastDuration: nil,
                       lastStatus: .never, lastError: nil, runCount: 0, failureCount: 0,
                       driver: nil)
@@ -200,7 +203,12 @@ public actor TaskScheduler {
     private func nextDue(_ name: String) -> Date? {
         guard let job = jobs[name] else { return nil }
         guard let last = job.lastExecution else {
-            return Date().addingTimeInterval(job.initialDelay)
+            // Anchored to REGISTRATION, not to now. Computing `Date() + delay` here
+            // moved the target every time the driver re-checked it, so a job that
+            // had never run could never become due — it slept, woke, asked again,
+            // got a fresh future date, and slept again, forever. Only jobs with a
+            // persisted lastExecution ever fired.
+            return job.registeredAt.addingTimeInterval(job.initialDelay)
         }
         return max(last.addingTimeInterval(job.interval),
                    Date().addingTimeInterval(-Self.maxSleep))   // never queue far in the past
@@ -261,7 +269,11 @@ public actor TaskScheduler {
                      lastDurationSeconds: job.lastDuration,
                      lastStatus: job.lastStatus.rawValue,
                      lastError: job.lastError,
-                     nextExecution: job.lastExecution?.addingTimeInterval(job.interval),
+                     // A job that has never run still has a knowable first run:
+                     // its registration plus the startup grace. Reporting nil there
+                     // made "never" look indistinguishable from "never will".
+                     nextExecution: job.lastExecution?.addingTimeInterval(job.interval)
+                        ?? job.registeredAt.addingTimeInterval(job.initialDelay),
                      isRunning: running.contains(job.name),
                      runCount: job.runCount,
                      failureCount: job.failureCount)
