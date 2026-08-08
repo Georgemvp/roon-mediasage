@@ -15,7 +15,18 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
-NU (2026-08-08, ochtend): **BENCHMARK-PROGRAMMA LIDARR + DROPPEDNEEDLE — user: "Doe alles"**. Vraag was een plan hoe Lidarr (GPL-3.0) en DroppedNeedle (AGPL-3.0) RoonSage kunnen verbeteren op snelheid/functionaliteit/design/theme/veiligheid; plan staat in `docs/BENCHMARK-LIDARR-DROPPEDNEEDLE.md` (25 items, 4 fasen, 8 batches). **LICENTIE-HEK: geen regel code overgenomen — beide bronnen zijn copyleft, deze repo MIT; alleen mechanismen zelfstandig herbouwd** (zelfde regel als bij de discovery-batch hieronder). Batch 1/8 (beveiliging V1–V4+V6) klaar en geverifieerd, zie ## Done — **lokaal gecommit, NIET gepusht/getagd**: de hard stop vereist push-toestemming in het lopende gesprek. Volgende: batch 2 = S4 TaskScheduler (daar leunen F1/F2/F3/F5/V5 op).
+NU (2026-08-08, ochtend): **BENCHMARK-PROGRAMMA LIDARR + DROPPEDNEEDLE — user: "Doe alles"**. Vraag was een plan hoe Lidarr (GPL-3.0) en DroppedNeedle (AGPL-3.0) RoonSage kunnen verbeteren op snelheid/functionaliteit/design/theme/veiligheid; plan staat in `docs/BENCHMARK-LIDARR-DROPPEDNEEDLE.md` (25 items, 4 fasen, 8 batches). **LICENTIE-HEK: geen regel code overgenomen — beide bronnen zijn copyleft, deze repo MIT; alleen mechanismen zelfstandig herbouwd** (zelfde regel als bij de discovery-batch hieronder). User gaf expliciet push+tag-toestemming per batch ("Ja, push + tag per batch") en koos reikwijdte "Alles, batch voor batch".
+
+**GESHIPT: batch 1/8** (beveiliging V1–V4+V6) = v1.10.217 / ios-v1.7.182 / analyzer-v1.1.187 · **batch 2/8** (S4 TaskScheduler) = v1.10.218 / ios-v1.7.183 / analyzer-v1.1.188 · **batch 3/8** (S2 ETag+gzip) = v1.10.219 / ios-v1.7.184 / analyzer-v1.1.189. Zie ## Done per batch.
+
+**NOG TE DOEN, in deze volgorde:**
+- batch 4 = S1 SSE-push (`GET /events`) **+ S3 keep-alive** (samen: beide herschrijven het `receive`-pad) — grootste snelheidswinst: de client pollt nu elke 1,5 s (`RoonClient+Remote.swift:219`) met een verse TCP-verbinding per poll.
+- batch 5 = S5 centrale rate-limiting + providerstatus, V5 per-token-limieten op /generate, /discovery/run, /library.
+- batch 6 = F1 HealthCheckService (leunt op batch 2+5) → F2 backup (`VACUUM INTO`, retentie) → F3 housekeeping.
+- batch 7 = F7 exacte route-tabel + `/api/v1` (dóén vóór er nieuwe endpoints bijkomen), F4 notificaties, F5 import lists, F6 slimme lijsten, F8 providerregister.
+- batch 8 = T1 `ThemePalette` + T2 contrasttest + T3 amoled/Wall Display, D1 componentbibliotheek + view-opsplitsing, D2 skeletons, D3 mono-cijfers. Los: S6 FTS5, V7 SECURITY.md + secret-scan.
+
+**NIET LIVE GEVERIFIEERD** (draait in de analyzer op de mini, en de client-app mag daar niet heen): `/settings`-versleuteling, `/system/tasks`, ETag/gzip. Na een analyzer-deploy te bevestigen met de curls die per batch in ## Done staan. **Analyzer op de mini draait nog analyzer-v1.1.186** — drie analyzer-tags achter.
 
 EERDER (2026-08-08, nacht): Vier discovery-verbeteringen geshipt en gedeployd (v1.10.216 / ios-v1.7.181 / analyzer-v1.1.186 — zie ## Done). Geen actief spoor. Twee losse eindjes: `swiftlint` staat NIET op deze machine (`command not found`), dus de lint-poort is lokaal onverifieerbaar — CI dekt hem wel; en `native/docs/KOEL_AUDIT.md` heeft ongecommitte wijzigingen van een eerdere sessie die niet van deze batch zijn. Volgende stap is B3 (mood-backfill) of user-richting.
 
