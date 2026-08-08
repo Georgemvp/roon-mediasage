@@ -522,7 +522,11 @@ public final class LibraryShareServer: @unchecked Sendable {
         let keepAlive = Self.wantsKeepAlive(requestHeader)
         header += keepAlive ? "Connection: keep-alive\r\n\r\n" : "Connection: close\r\n\r\n"
 
-        var out = Data(header.utf8); out.append(payload)
+        // A HEAD response carries the headers a GET would produce — including
+        // Content-Length and ETag — but never a body. `route` doesn't distinguish
+        // the method, so the body is dropped here, after the length is stamped.
+        var out = Data(header.utf8)
+        if Self.requestTarget(requestHeader).method != "HEAD" { out.append(payload) }
         conn.send(content: out, completion: .contentProcessed { [weak self] _ in
             guard keepAlive, let self else {
                 conn.send(content: nil, isComplete: true, completion: .contentProcessed { _ in conn.cancel() })
@@ -538,10 +542,13 @@ public final class LibraryShareServer: @unchecked Sendable {
     /// send when the request must be rejected, or nil when it may proceed.
     static func authorize(method: String, path: String, header: String,
                           loopback: Bool, peerIP: String) -> (String, Data, String)? {
-        // /settings carries secrets, and ANY state-changing request (non-GET:
-        // POST /command, /track-feedback, /playlists, /radio-configs,
-        // /discovery/run, DELETE …) can drive Roon or mutate data.
-        let sensitive = path.hasPrefix("/settings") || method != "GET"
+        // /settings carries secrets, and any state-changing request (POST
+        // /command, /track-feedback, /playlists, /radio-configs, /discovery/run,
+        // DELETE …) can drive Roon or mutate data. HEAD counts as a read: it is
+        // GET without the body, so gating it while GET is open only made
+        // `curl -I` return 401 on an otherwise-public route.
+        let readOnly = method == "GET" || method == "HEAD"
+        let sensitive = path.hasPrefix("/settings") || !readOnly
 
         // Everything but /health needs a valid token, unless the peer is loopback
         // or we're in the grace window. A token is valid when it matches the master

@@ -93,6 +93,16 @@ final class PlaybackEventHubTests: XCTestCase {
             "GET /playback HTTP/1.1\r\nConnection: keep-alive\r\n\r\n"))
     }
 
+    // MARK: - HEAD is a read
+
+    /// Found live on the mini: `curl -I` (HEAD) came back 401 on a route whose GET
+    /// is open, because the sensitivity test was `method != "GET"`. HEAD is GET
+    /// without a body — it must classify as a read.
+    func testHeadIsTreatedAsARead() {
+        XCTAssertEqual(LibraryShareServer.requestTarget(
+            "HEAD /on-this-day HTTP/1.1\r\n\r\n").method, "HEAD")
+    }
+
     // MARK: - Why the auth gate is not unit-tested here
     //
     // `/events` goes through the same `LibraryShareServer.authorize` as every
