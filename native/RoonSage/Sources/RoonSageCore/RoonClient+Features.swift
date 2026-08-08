@@ -178,19 +178,26 @@ extension RoonClient {
     /// re-sync only when it changes (new analyses), so the heavy /embeddings
     /// pull doesn't repeat needlessly. Retries on a short cadence until the
     /// feature server is up and the library is populated, then idles long.
+    public static let serverFeatureSyncTaskName = "feature-sync"
+
     public func startServerFeatureSync() {
-        guard controlMode == .direct, serverFeatureSyncTask == nil else { return }
-        serverFeatureSyncTask = Task { [weak self] in
-            // Let launch (Roon connect + library sync + artist-radio) settle first.
-            try? await Task.sleep(nanoseconds: 90 * 1_000_000_000)
-            while !Task.isCancelled {
-                guard let self else { return }
-                let url = self.analyzerURL.trimmingCharacters(in: .whitespaces)
-                let rev = self.featuresRevision
-                let lastRev = (try? self.database?.syncStateValue(forKey: "features_synced_revision")) ?? nil
+        guard controlMode == .direct else { return }
+        Task {
+            await TaskScheduler.shared.register(
+                name: Self.serverFeatureSyncTaskName,
+                title: "Audiokenmerken synchroniseren",
+                interval: 6 * 60 * 60,
+                // Let launch (Roon connect + library sync + artist-radio) settle first.
+                initialDelay: 90
+            ) { [weak self] in
+                guard let self else { return .skipped }
+                let url = await self.analyzerURL.trimmingCharacters(in: .whitespaces)
+                let rev = await self.featuresRevision
+                let lastRev = await (try? self.database?.syncStateValue(forKey: "features_synced_revision")) ?? nil
+                let tracks = await self.trackCount
 
                 var settled = false
-                if url.isEmpty || rev.isEmpty || self.trackCount == 0 {
+                if url.isEmpty || rev.isEmpty || tracks == 0 {
                     settled = false                       // not ready yet — retry soon
                 } else if rev == lastRev {
                     settled = true                        // already synced this revision
@@ -200,15 +207,13 @@ extension RoonClient {
                     settled = true
                 }
                 // Long idle once up-to-date; short retry while warming up / on failure.
-                let wait: UInt64 = settled ? 6 * 60 * 60 * 1_000_000_000 : 5 * 60 * 1_000_000_000
-                try? await Task.sleep(nanoseconds: wait)
+                return settled ? .completed : .retry(after: 5 * 60)
             }
         }
     }
 
     public func stopServerFeatureSync() {
-        serverFeatureSyncTask?.cancel()
-        serverFeatureSyncTask = nil
+        Task { await TaskScheduler.shared.unregister(Self.serverFeatureSyncTaskName) }
     }
 
     /// Fetch the analyzer's binary `/embeddings` bundle and attach the vectors

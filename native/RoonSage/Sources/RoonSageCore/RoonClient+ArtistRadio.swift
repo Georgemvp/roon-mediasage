@@ -1589,14 +1589,34 @@ extension RoonClient {
 
     /// Start the periodic Qobuz sync. No-op unless this is the always-on server
     /// build (`.direct`); the client apps sync on demand via the UI button.
+    public static let artistRadioRefreshTaskName = "artist-radio-sync"
+
     public func startArtistRadioRefresh() {
-        guard controlMode == .direct, artistRadioRefreshTask == nil else { return }
-        artistRadioRefreshTask = Task { [weak self] in
-            // Brief grace so the server can connect to Roon + load its library on
-            // launch before the first attempt.
-            try? await Task.sleep(nanoseconds: 20 * 1_000_000_000)
-            while !Task.isCancelled {
-                guard let self else { return }
+        guard controlMode == .direct else { return }
+        Task {
+            await TaskScheduler.shared.register(
+                name: Self.artistRadioRefreshTaskName,
+                title: "AI-radio's naar Qobuz",
+                interval: Double(Self.artistRadioRefreshInterval) / 1_000_000_000,
+                // Brief grace so the server can connect to Roon + load its library
+                // on launch before the first attempt.
+                initialDelay: 20
+            ) { [weak self] in
+                guard let self else { return .skipped }
+                return await self.runArtistRadioSyncPass()
+            }
+        }
+        Log.info("AI radio auto-sync gestart (eerste poging na 20s, daarna elke 3 uur; artiest + dagdeel-categorie)", category: .roon)
+    }
+
+    public func stopArtistRadioRefresh() {
+        Task { await TaskScheduler.shared.unregister(Self.artistRadioRefreshTaskName) }
+    }
+
+    /// One pass of the Qobuz radio mirror. Lifted out of the old `while true` body
+    /// unchanged — same branches, same log lines — so the scheduler can drive it
+    /// and report on it.
+    private func runArtistRadioSyncPass() async -> TaskScheduler.Outcome {
                 var didSync = false
                 if !self.radioSyncEnabled {
                     Log.info("AI radio auto-sync staat uit (Instellingen → Radio's).", category: .network)
@@ -1651,15 +1671,6 @@ extension RoonClient {
                 }
                 // Re-sync on the full cadence once it's working; retry sooner while
                 // still warming up (library/features not ready yet, or no Qobuz).
-                let wait = didSync ? Self.artistRadioRefreshInterval : 15 * 60 * 1_000_000_000
-                try? await Task.sleep(nanoseconds: wait)
-            }
-        }
-        Log.info("AI radio auto-sync gestart (eerste poging na 20s, daarna elke 3 uur; artiest + dagdeel-categorie)", category: .roon)
-    }
-
-    public func stopArtistRadioRefresh() {
-        artistRadioRefreshTask?.cancel()
-        artistRadioRefreshTask = nil
+                return didSync ? .completed : .retry(after: 15 * 60)
     }
 }

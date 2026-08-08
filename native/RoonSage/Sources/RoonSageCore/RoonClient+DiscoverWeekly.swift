@@ -204,25 +204,29 @@ extension RoonClient {
 
     /// Start the hourly "is a new weekly due?" watch. No-op unless this is the
     /// always-on server build (`.direct`); client apps read/refresh over HTTP.
+    public static let discoverWeeklyTaskName = "discover-weekly"
+
     public func startDiscoverWeeklySchedule() {
-        guard controlMode == .direct, discoverWeeklyTask == nil else { return }
-        discoverWeeklyTask = Task { [weak self] in
-            // Grace so the library + features finish loading before the first build.
-            try? await Task.sleep(nanoseconds: 90 * 1_000_000_000)
-            while !Task.isCancelled {
-                guard let self else { return }
-                if self.discoverWeeklyEnabled {
-                    await self.buildDiscoverWeeklyIfDue()
-                }
-                try? await Task.sleep(nanoseconds: Self.discoverWeeklyCheckInterval)
+        guard controlMode == .direct else { return }
+        Task {
+            await TaskScheduler.shared.register(
+                name: Self.discoverWeeklyTaskName,
+                title: "Ontdek Wekelijks",
+                interval: Double(Self.discoverWeeklyCheckInterval) / 1_000_000_000,
+                // Grace so the library + features finish loading before the first build.
+                initialDelay: 90
+            ) { [weak self] in
+                guard let self else { return .skipped }
+                guard await self.discoverWeeklyEnabled else { return .skipped }
+                await self.buildDiscoverWeeklyIfDue()
+                return .completed
             }
         }
         Log.info("Ontdek Wekelijks scheduler gestart (elk uur gecontroleerd; max 1× per interval)", category: .roon)
     }
 
     public func stopDiscoverWeeklySchedule() {
-        discoverWeeklyTask?.cancel()
-        discoverWeeklyTask = nil
+        Task { await TaskScheduler.shared.unregister(Self.discoverWeeklyTaskName) }
     }
 
     // MARK: Build (server build only)

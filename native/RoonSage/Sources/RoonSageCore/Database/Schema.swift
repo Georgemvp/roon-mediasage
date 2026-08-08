@@ -726,6 +726,24 @@ enum Schema {
             }
         }
 
+        // The periodic server jobs were a dozen independent
+        // `Task { while true { sleep; work } }` loops with no shared state: a
+        // restart re-ran every startup grace from scratch and nothing could
+        // answer "when did this last succeed". `TaskScheduler` keeps that
+        // bookkeeping here, so a restart resumes the cadence instead of
+        // restarting it, and /system/tasks (plus the health checks) can read it.
+        migrator.registerMigration("v46_scheduled_tasks") { db in
+            try db.create(table: "scheduled_tasks", ifNotExists: true) { t in
+                t.primaryKey("name", .text)
+                t.column("last_execution", .text)     // ISO8601; nil = never ran
+                t.column("last_duration",  .double)   // seconds
+                t.column("last_status",    .text)     // TaskScheduler.Status raw value
+                t.column("last_error",     .text)
+                t.column("run_count",      .integer).notNull().defaults(to: 0)
+                t.column("failure_count",  .integer).notNull().defaults(to: 0)
+            }
+        }
+
         try migrator.migrate(db)
     }
 }

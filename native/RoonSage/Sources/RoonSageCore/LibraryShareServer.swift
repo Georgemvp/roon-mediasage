@@ -35,6 +35,8 @@ import UIKit
 ///   POST /discovery/accept | /discovery/play | /discovery/reject → DiscoveryActionRequest
 ///   POST /discovery/run    → kick a pipeline pass ({"ok":true})
 ///   GET  /discovery/run-status → DiscoveryRunStatus
+///   GET  /system/tasks → [TaskScheduler.TaskInfo] (cadans + laatste uitkomst per job)
+///   POST /system/tasks/{name}/run → trigger een job nu (409 als hij al draait)
 ///   GET  /health   → {"status":"ok","tracks":n,"hosts":[all server IPv4s]}
 public final class LibraryShareServer: @unchecked Sendable {
     public static let defaultPort: UInt16 = 5767   // 5766 is the analyzer
@@ -741,6 +743,30 @@ public final class LibraryShareServer: @unchecked Sendable {
             let ok = await RoonClient.shared.handleDiscoveryAction(path, body: body)
             return ok ? ("200 OK", Data("{\"ok\":true}".utf8), "application/json")
                       : ("400 Bad Request", Data("bad discovery action".utf8), "text/plain")
+        }
+        // Scheduled-job introspection + manual trigger (TaskScheduler). Read-only
+        // GET; the POST is deduped by the scheduler itself, so hammering it
+        // cannot stack pipelines.
+        if method == "GET", path == "/system/tasks" {
+            let tasks = await TaskScheduler.shared.info()
+            if let body = try? JSONEncoder().encode(tasks) {
+                return ("200 OK", body, "application/json")
+            }
+            return ("500 Internal Server Error", Data("tasks failed".utf8), "text/plain")
+        }
+        if method == "POST", path.hasPrefix("/system/tasks/") {
+            let name = String(path.dropFirst("/system/tasks/".count))
+                .replacingOccurrences(of: "/run", with: "")
+            guard !name.isEmpty else {
+                return ("400 Bad Request", Data("bad task name".utf8), "text/plain")
+            }
+            guard await TaskScheduler.shared.isRegistered(name) else {
+                return ("404 Not Found", Data("unknown task".utf8), "text/plain")
+            }
+            let started = await TaskScheduler.shared.runNow(name)
+            return started
+                ? ("200 OK", Data("{\"ok\":true}".utf8), "application/json")
+                : ("409 Conflict", Data("{\"ok\":false,\"reason\":\"already running\"}".utf8), "application/json")
         }
         if method == "POST", path.hasPrefix("/discovery/run") {
             // F12a: an optional mood seed rides along in the body; fase 2: an

@@ -855,25 +855,30 @@ extension RoonClient {
 
     /// Start the daily discovery run. No-op unless this is the always-on server
     /// build (`.direct`); client apps trigger runs on demand from the UI.
+    /// Name this job carries in `TaskScheduler` and on `/system/tasks`.
+    public static let discoveryRefreshTaskName = "discovery-run"
+
     public func startDiscoveryRefresh() {
-        guard controlMode == .direct, discoveryRefreshTask == nil else { return }
-        discoveryRefreshTask = Task { [weak self] in
-            // Grace so the library + features are ready before the first run.
-            try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
-            while !Task.isCancelled {
-                guard let self else { return }
+        guard controlMode == .direct else { return }
+        Task {
+            await TaskScheduler.shared.register(
+                name: Self.discoveryRefreshTaskName,
+                title: "Ontdekkingen",
+                interval: Double(Self.discoveryRefreshInterval) / 1_000_000_000,
+                // Grace so the library + features are ready before the first run.
+                initialDelay: 60
+            ) { [weak self] in
+                guard let self else { return .skipped }
                 let batch = await self.runDiscoveryPipeline(trigger: "scheduled")
                 // Re-run daily once it produced something; retry sooner while warming up.
-                let wait = batch != nil ? Self.discoveryRefreshInterval : 30 * 60 * 1_000_000_000
-                try? await Task.sleep(nanoseconds: wait)
+                return batch != nil ? .completed : .retry(after: 30 * 60)
             }
         }
         Log.info("Ontdekkingen auto-run gestart (eerste poging na 60s, daarna dagelijks)", category: .roon)
     }
 
     public func stopDiscoveryRefresh() {
-        discoveryRefreshTask?.cancel()
-        discoveryRefreshTask = nil
+        Task { await TaskScheduler.shared.unregister(Self.discoveryRefreshTaskName) }
     }
 
     // MARK: - Weekly digest scheduler (F12b, server build)
@@ -882,22 +887,27 @@ extension RoonClient {
     /// server that was asleep/offline right at midnight still catches "today is
     /// the day" within the hour, same posture as the discovery refresh's own
     /// startup grace.
+    public static let digestScheduleTaskName = "discovery-digest"
+
     public func startDigestSchedule() {
-        guard controlMode == .direct, digestScheduleTask == nil else { return }
-        digestScheduleTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)   // let the library settle first
-            while !Task.isCancelled {
-                guard let self else { return }
+        guard controlMode == .direct else { return }
+        Task {
+            await TaskScheduler.shared.register(
+                name: Self.digestScheduleTaskName,
+                title: "Ontdekkingen-digest",
+                interval: Double(Self.discoveryDigestCheckInterval) / 1_000_000_000,
+                initialDelay: 60                     // let the library settle first
+            ) { [weak self] in
+                guard let self else { return .skipped }
                 await self.buildWeeklyDigestIfDue()
-                try? await Task.sleep(nanoseconds: Self.discoveryDigestCheckInterval)
+                return .completed
             }
         }
         Log.info("Ontdekkingen-digest scheduler gestart (elk uur gecontroleerd)", category: .roon)
     }
 
     public func stopDigestSchedule() {
-        digestScheduleTask?.cancel()
-        digestScheduleTask = nil
+        Task { await TaskScheduler.shared.unregister(Self.digestScheduleTaskName) }
     }
 
     /// Builds this week's digest playlist if today is the configured weekday AND

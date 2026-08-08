@@ -143,31 +143,17 @@ public final class RoonClient {
     /// yet analyzed) is tried once, not on every zone frame.
     var autoplayInFlight = false
     var lastAutoplayTitle: String?
-    /// Periodic "AI artist radios → Qobuz" sync on the always-on server build
-    /// (see RoonClient+ArtistRadio). A stored property here because extensions
-    /// can't add stored state.
-    var artistRadioRefreshTask: Task<Void, Never>?
-    /// Periodic discovery-engine run on the always-on server build (see
-    /// RoonClient+Discovery). Declared unconditionally (extensions can't add stored
-    /// state) but only assigned on the `.direct` server path.
-    var discoveryRefreshTask: Task<Void, Never>?
+    // The periodic server jobs (AI-radio → Qobuz, discovery run, weekly digest,
+    // Ontdek Wekelijks, feature sync, Last.fm scrobbles) used to each keep a
+    // retained `Task` here. They now live in `TaskScheduler`, which owns their
+    // drivers and their persisted cadence — see TaskScheduler.swift.
     /// Guards against overlapping pipeline runs (a manual /discovery/run while the
     /// scheduled one is mid-flight).
     var discoveryRunning = false
-    /// Hourly weekday watch for the weekly digest (F12b). Same declared-
-    /// unconditionally-but-.direct-only pattern as `discoveryRefreshTask`.
-    var digestScheduleTask: Task<Void, Never>?
     /// The last successfully synced set of AI radios, keyed by `RadioCategory`
     /// rawValue. Served to client apps via /artist-radios?category=… so iOS/macOS
     /// always show the same playlists as Qobuz.
     var cachedArtistRadios: [String: [SonicRadioPlaylist]] = [:]
-    /// Periodic server-side ingest of analyzer features (tags/year/embeddings)
-    /// into library.db on the always-on build (see RoonClient+Features).
-    var serverFeatureSyncTask: Task<Void, Never>?
-    /// Hourly "is a new weekly due?" watch for "Ontdek Wekelijks" on the always-on
-    /// server build (see RoonClient+DiscoverWeekly). Same declared-unconditionally-
-    /// but-.direct-only pattern as `digestScheduleTask`.
-    var discoverWeeklyTask: Task<Void, Never>?
     /// The last built/loaded weekly discovery playlist, served to client apps via
     /// /discover-weekly so iOS/macOS always show the same set as the server.
     var cachedDiscoverWeekly: DiscoverWeeklyPlaylist?
@@ -366,11 +352,11 @@ public final class RoonClient {
     public internal(set) var lastfmPlaylistSyncStatus: String = ""
     #if os(macOS)
     var lastfmPlaylistSyncTask: Task<Void, Never>?
-    // The analyzer server's Roon-connect + Last.fm-scrobble loops. Started from
-    // init() (not a SwiftUI `.task`) so they run even when the headless mini's
-    // Window scene never activates — see startServerConnectLoops().
+    // The analyzer server's Roon-connect loop. Started from init() (not a SwiftUI
+    // `.task`) so it runs even when the headless mini's Window scene never
+    // activates — see startServerBackgroundWork(). The Last.fm-scrobble loop that
+    // sat beside it is now a TaskScheduler job.
     var serverRoonConnectTask: Task<Void, Never>?
-    var serverLastfmScrobbleTask: Task<Void, Never>?
     #endif
 
     public init() {
@@ -448,12 +434,23 @@ public final class RoonClient {
         if serverRoonConnectTask == nil {
             serverRoonConnectTask = Task { [weak self] in await self?.serverRoonConnectLoop() }
         }
-        if serverLastfmScrobbleTask == nil {
-            serverLastfmScrobbleTask = Task { [weak self] in
-                while !Task.isCancelled {
-                    await self?.syncRecentLastfmScrobbles()
-                    try? await Task.sleep(nanoseconds: 15 * 60 * 1_000_000_000)
-                }
+        // Every fixed-cadence job below runs under TaskScheduler, so a restart
+        // resumes each cadence from its persisted `last_execution` instead of
+        // re-running every startup grace, and /system/tasks can report on it.
+        // `serverRoonConnectLoop` above stays hand-written on purpose: its waits
+        // depend on connection state (3/5/6 s) and it carries local retry counters.
+        if let database {
+            Task { await TaskScheduler.shared.attach(database: database) }
+        }
+        Task { [weak self] in
+            await TaskScheduler.shared.register(
+                name: "lastfm-scrobble-sync",
+                title: "Last.fm-scrobbles ophalen",
+                interval: 15 * 60
+            ) { [weak self] in
+                guard let self else { return .skipped }
+                await self.syncRecentLastfmScrobbles()
+                return .completed
             }
         }
         // The server's periodic Qobuz / discovery / lyrics / feature schedules
