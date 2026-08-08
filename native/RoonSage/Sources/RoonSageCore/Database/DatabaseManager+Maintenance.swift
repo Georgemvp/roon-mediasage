@@ -95,23 +95,30 @@ extension DatabaseManager {
         let batchCutoff = Self.isoFormatter.string(
             from: now.addingTimeInterval(-Double(batchRetentionDays) * 86_400))
 
-        var report = HousekeepingReport()
-        try await pool.write { db in
+        // The counts are RETURNED from the write block, not accumulated into a
+        // captured `var`: mutating a captured variable inside the @Sendable
+        // closure compiles on some toolchains and is a hard error on others (it
+        // broke CI on macos-14 while passing locally on Swift 6.3).
+        let counts = try await pool.write { db -> (editorial: Int, items: Int, batches: Int) in
             try db.execute(sql: "DELETE FROM editorial_cache WHERE fetched_at < ?",
                            arguments: [editorialCutoff])
-            report.expiredEditorial = db.changesCount
+            let editorial = db.changesCount
 
             // Items first: they reference the batch.
             try db.execute(sql: """
                 DELETE FROM recommendation_items
                  WHERE batch_id IN (SELECT id FROM recommendation_batches WHERE created_at < ?)
                 """, arguments: [batchCutoff])
-            report.oldBatchItems = db.changesCount
+            let items = db.changesCount
 
             try db.execute(sql: "DELETE FROM recommendation_batches WHERE created_at < ?",
                            arguments: [batchCutoff])
-            report.oldBatches = db.changesCount
+            return (editorial, items, db.changesCount)
         }
+        var report = HousekeepingReport()
+        report.expiredEditorial = counts.editorial
+        report.oldBatchItems = counts.items
+        report.oldBatches = counts.batches
         // VACUUM cannot run inside a transaction, hence its own write.
         try await pool.write { db in try db.execute(sql: "VACUUM") }
         return report

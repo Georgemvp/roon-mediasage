@@ -74,6 +74,34 @@ final class MaintenanceTests: XCTestCase {
                        "een onzinnige retentie mag niet alles wissen")
     }
 
+    // MARK: - Scheduled library sync guards
+
+    /// The Roon Browse API is single-session, so two walks at once fight each
+    /// other. A manual sync must always win; the scheduled one steps aside.
+    func testScheduledSyncStepsAsideForAManualOne() {
+        XCTAssertEqual(
+            RoonClient.shouldRunScheduledSync(isSyncing: true, isConnected: true), .skipBusy)
+    }
+
+    /// No Core attached is "try again later", not a failure — the connect loop is
+    /// already retrying and a red task would be noise.
+    func testScheduledSyncWaitsWhenTheCoreIsAbsent() {
+        XCTAssertEqual(
+            RoonClient.shouldRunScheduledSync(isSyncing: false, isConnected: false), .waitForCore)
+    }
+
+    func testScheduledSyncRunsWhenIdleAndConnected() {
+        XCTAssertEqual(
+            RoonClient.shouldRunScheduledSync(isSyncing: false, isConnected: true), .run)
+    }
+
+    /// Busy beats disconnected: if a walk is somehow in flight we never start a
+    /// second one, whatever the connection says.
+    func testBusyTakesPrecedenceOverDisconnected() {
+        XCTAssertEqual(
+            RoonClient.shouldRunScheduledSync(isSyncing: true, isConnected: false), .skipBusy)
+    }
+
     // MARK: - Housekeeping report
 
     func testHousekeepingReportStartsEmpty() {
