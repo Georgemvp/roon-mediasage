@@ -63,6 +63,10 @@ public final class LibraryShareServer: @unchecked Sendable {
 
     /// Per-IP brute-force throttle (5 consecutive bad tokens → 3 s of 429s).
     static let authThrottler = AuthThrottler()
+
+    /// Per-client request budget for callers that DO hold a valid token — the
+    /// throttle above only covers guessing. See `RequestLimiter`.
+    static let requestLimiter = RequestLimiter()
     private static let tokenKey = "share_token"
     private static var cachedToken: String?
 
@@ -611,6 +615,18 @@ public final class LibraryShareServer: @unchecked Sendable {
         if let denial = Self.authorize(method: method, path: path, header: header,
                                        loopback: loopback, peerIP: peerIP) {
             return denial
+        }
+
+        // Budget check, AFTER auth so an unauthorised caller can't spend an
+        // approved client's tokens. Keyed on the client's own token (falling back
+        // to its IP) so one misbehaving device can't starve the others.
+        let client = Self.headerValue(Self.tokenHeader, in: header).map(SecretsEnvelope.tokenHash)
+            ?? peerIP
+        if let wait = await Self.requestLimiter.consume(client: client, path: path) {
+            Log.warning("share-server: budget op voor \(method) \(path) (\(peerIP)) — \(Int(wait))s wachten", category: .network)
+            return ("429 Too Many Requests",
+                    Data("{\"error\":\"rate limited\",\"retryAfter\":\(Int(wait))}".utf8),
+                    "application/json")
         }
 
         if method == "POST", path.hasPrefix("/command") {
