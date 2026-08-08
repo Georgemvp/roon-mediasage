@@ -43,6 +43,16 @@ extension RoonClient {
               var settings = try? JSONDecoder().decode(SyncableSettings.self, from: data)
         else { return false }
 
+        // The credential half arrives sealed for this device's token (the same one
+        // `authorizeShareRequest` just sent). Opening it fills the plain fields so
+        // `apply()` below needs no special case. A failure here is not fatal: the
+        // non-secret settings still apply and `apply()` leaves existing credentials
+        // untouched — a server too old to seal simply sends none.
+        if settings.encryptedSecrets != nil,
+           !settings.decryptSecrets(withToken: LibraryShareServer.ensureDeviceToken()) {
+            Log.warning("settings-sync: versleutelde secrets konden niet worden geopend — bestaande inloggegevens blijven staan", category: .network)
+        }
+
         // The server reports hosts as it sees them. When the Core / analyzer run
         // on the server itself it reports loopback (127.0.0.1) — useless to the
         // client, where that means the client. Substitute the share server's

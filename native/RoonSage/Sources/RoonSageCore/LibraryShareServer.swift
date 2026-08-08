@@ -85,11 +85,18 @@ public final class LibraryShareServer: @unchecked Sendable {
         else { KeychainStore.save(key: tokenKey, value: t); cachedToken = t }
     }
 
-    /// When false (default) unauthenticated requests are still served but logged
-    /// — a grace window so existing clients keep working until they're paired.
-    /// Flip to true to hard-reject them. A *wrong* token is always rejected.
+    /// When false unauthenticated requests are still served but logged — a grace
+    /// window so existing clients keep working until they're paired. A *wrong*
+    /// token is always rejected.
+    ///
+    /// Defaults to **true**: a fresh install must not hand `/library` and
+    /// `/history` (the full listening profile) to anyone on the network while the
+    /// user has not paired a device yet. The pending-approval queue is the
+    /// intended way in — an unknown client is queued, not stranded. Same
+    /// `object(forKey:) as? Bool ?? default` shape as `library_share_enabled`
+    /// (RoonClient.swift), because `bool(forKey:)` cannot express "unset".
     public static var enforceToken: Bool {
-        get { UserDefaults.standard.bool(forKey: "share_token_enforce") }
+        get { UserDefaults.standard.object(forKey: "share_token_enforce") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "share_token_enforce") }
     }
 
@@ -105,10 +112,12 @@ public final class LibraryShareServer: @unchecked Sendable {
     /// Header a client sends its human-readable device name in.
     public static let deviceHeader = "X-RoonSage-Device"
 
-    /// A client token the user has approved on the server.
+    /// A client token the user has approved on the server. Stores only the
+    /// SHA-256 of the token: the server never needs the clear text (it only ever
+    /// *compares*), so a leaked store yields nothing usable.
     public struct ApprovedDevice: Codable, Sendable, Identifiable {
-        public var id: String { token }
-        public let token: String
+        public var id: String { tokenHash }
+        public let tokenHash: String
         public var name: String
         public var approvedAt: Date
     }
@@ -125,17 +134,49 @@ public final class LibraryShareServer: @unchecked Sendable {
 
     private static let deviceLock = NSLock()
     private static var _pending: [String: PendingDevice] = [:]
+    /// Keyed on token hash, never on the token itself.
     private static var _approvedCache: [String: ApprovedDevice]?
     private static let approvedKey = "approved_devices"
 
     /// Caller must hold `deviceLock`.
+    ///
+    /// Devices approved by an older build were stored with their clear-text
+    /// token; those are hashed in place on first read — a one-way migration that
+    /// runs at most once and keeps every already-paired client working.
+    ///
+    /// Deliberately still UserDefaults, not the Keychain: once only the hash is
+    /// stored, a reader of the store learns nothing usable (authenticating needs
+    /// the pre-image), while a Keychain read on this path — which
+    /// `isApprovedDevice` hits per request — risks the blocking SecurityAgent ACL
+    /// prompt documented in `KeychainStore`. The master token stays in the
+    /// Keychain because it IS a usable credential.
     private static func loadApprovedLocked() -> [String: ApprovedDevice] {
         if let c = _approvedCache { return c }
-        let arr = UserDefaults.standard.data(forKey: approvedKey)
-            .flatMap { try? JSONDecoder().decode([ApprovedDevice].self, from: $0) } ?? []
-        let map = Dictionary(arr.map { ($0.token, $0) }, uniquingKeysWith: { a, _ in a })
+        let raw = UserDefaults.standard.data(forKey: approvedKey)
+        var map: [String: ApprovedDevice] = [:]
+        if let raw, let arr = try? JSONDecoder().decode([ApprovedDevice].self, from: raw) {
+            map = Dictionary(arr.map { ($0.tokenHash, $0) }, uniquingKeysWith: { a, _ in a })
+            _approvedCache = map
+            return map
+        }
+        if let raw, let legacy = try? JSONDecoder().decode([LegacyApprovedDevice].self, from: raw) {
+            for d in legacy where !d.token.isEmpty {
+                let hash = SecretsEnvelope.tokenHash(d.token)
+                map[hash] = ApprovedDevice(tokenHash: hash, name: d.name, approvedAt: d.approvedAt)
+            }
+            persistApprovedLocked(map)          // rewrites the store hashed-only
+            Log.info("share-server: \(map.count) goedgekeurde apparaten omgezet naar hash-opslag", category: .network)
+            return map
+        }
         _approvedCache = map
         return map
+    }
+
+    /// The pre-migration on-disk shape: clear-text token. Decoded only to migrate.
+    private struct LegacyApprovedDevice: Codable {
+        let token: String
+        var name: String
+        var approvedAt: Date
     }
 
     /// Caller must hold `deviceLock`.
@@ -146,10 +187,11 @@ public final class LibraryShareServer: @unchecked Sendable {
         }
     }
 
-    /// True when `token` has been approved on this server.
+    /// True when `token` has been approved on this server. Compares hashes, so
+    /// the clear-text token is never stored anywhere to compare against.
     public static func isApprovedDevice(_ token: String) -> Bool {
         deviceLock.lock(); defer { deviceLock.unlock() }
-        return loadApprovedLocked()[token] != nil
+        return loadApprovedLocked()[SecretsEnvelope.tokenHash(token)] != nil
     }
 
     /// True once at least one client has been paired. After the first approval the
@@ -167,7 +209,7 @@ public final class LibraryShareServer: @unchecked Sendable {
     /// File (or refresh) an unknown-token client in the pending queue.
     static func recordPending(token: String, name: String, ip: String) {
         deviceLock.lock(); defer { deviceLock.unlock() }
-        if loadApprovedLocked()[token] != nil { return }
+        if loadApprovedLocked()[SecretsEnvelope.tokenHash(token)] != nil { return }
         let now = Date()
         let display = name.isEmpty ? "Onbekend apparaat" : name
         if var p = _pending[token] {
@@ -200,12 +242,15 @@ public final class LibraryShareServer: @unchecked Sendable {
     }
 
     /// Move a pending device into the approved set. Its next poll (~1.5s) succeeds.
+    /// Takes the clear-text token (the pending queue is in-memory only) and stores
+    /// its hash.
     @discardableResult
     public static func approveDevice(token: String) -> Bool {
         deviceLock.lock(); defer { deviceLock.unlock() }
         guard let p = _pending[token] else { return false }
+        let hash = SecretsEnvelope.tokenHash(token)
         var map = loadApprovedLocked()
-        map[token] = ApprovedDevice(token: token, name: p.name, approvedAt: Date())
+        map[hash] = ApprovedDevice(tokenHash: hash, name: p.name, approvedAt: Date())
         persistApprovedLocked(map)
         _pending[token] = nil
         return true
@@ -217,11 +262,13 @@ public final class LibraryShareServer: @unchecked Sendable {
         _pending[token] = nil
     }
 
-    /// Revoke a previously approved device (it drops back to 401 on its next poll).
-    public static func revokeDevice(token: String) {
+    /// Revoke a previously approved device (it drops back to 401 on its next
+    /// poll). Keyed on the stored hash — the UI has the `ApprovedDevice`, not the
+    /// token.
+    public static func revokeDevice(tokenHash: String) {
         deviceLock.lock(); defer { deviceLock.unlock() }
         var map = loadApprovedLocked()
-        map[token] = nil
+        map[tokenHash] = nil
         persistApprovedLocked(map)
     }
 
@@ -332,6 +379,12 @@ public final class LibraryShareServer: @unchecked Sendable {
         var header = "HTTP/1.1 \(status)\r\n"
         header += "Content-Type: \(ctype)\r\n"
         header += "Content-Length: \(body.count)\r\n"
+        // Every response here is either personal (library, history, taste) or
+        // credential-bearing (/settings); none of it may sit in an intermediary
+        // or on-disk cache. `nosniff` stops a JSON body being re-interpreted as
+        // something executable if a browser ever points at this server.
+        header += "Cache-Control: no-store\r\n"
+        header += "X-Content-Type-Options: nosniff\r\n"
         header += "Connection: close\r\n\r\n"
         var out = Data(header.utf8); out.append(body)
         conn.send(content: out, completion: .contentProcessed { _ in
@@ -360,27 +413,36 @@ public final class LibraryShareServer: @unchecked Sendable {
             }
         }
 
+        // /settings carries secrets, and ANY state-changing request (non-GET:
+        // POST /command, /track-feedback, /playlists, /radio-configs,
+        // /discovery/run, DELETE …) can drive Roon or mutate data.
+        let sensitive = path.hasPrefix("/settings") || method != "GET"
+
         // Auth: everything but /health needs a valid token, unless the peer is
-        // loopback (same machine — already OS-trusted) or we're in the grace
-        // window. A token is valid when it matches the master token OR the client
-        // has been approved in the analyzer's "Apparaten" list. An unknown token
-        // isn't a dead-end: it's filed in the pending queue for one-tap approval.
-        // /settings carries secrets (API keys, Last.fm session, Qobuz password) so
-        // it is ALWAYS gated — grace mode never applies to it.
-        if !path.hasPrefix("/health"), !loopback {
+        // loopback or we're in the grace window. A token is valid when it matches
+        // the master token OR the client has been approved in the analyzer's
+        // "Apparaten" list. An unknown token isn't a dead-end: it's filed in the
+        // pending queue for one-tap approval.
+        //
+        // The loopback exemption covers read-only GETs only. It used to cover
+        // everything, which meant any process or user on the server machine could
+        // read `/settings` (API keys, Last.fm session, Qobuz password) and drive
+        // Roon without a token — and that machine also runs Docker, Plex, rclone
+        // and the *arr stack. The client apps never target loopback anyway
+        // (`startServerMode` drops a loopback base URL on purpose), so nothing
+        // legitimate depended on it.
+        if !path.hasPrefix("/health"), !loopback || sensitive {
             // Brute-force throttle: after 5 consecutive bad tokens an IP gets
             // 429s for a few seconds — no token comparison, no oracle.
             if Self.authThrottler.isThrottled(peerIP) {
                 Log.warning("share-server: throttled \(method) \(path) from \(peerIP) (too many bad tokens)", category: .network)
                 return ("429 Too Many Requests", Data("too many attempts; retry later".utf8), "text/plain")
             }
-            // /settings carries secrets, and ANY state-changing request (non-GET:
-            // POST /command, /track-feedback, /playlists, /radio-configs,
-            // /discovery/run, DELETE …) can drive Roon or mutate data — grace mode
-            // NEVER applies to either. Read-only GETs keep the grace window only
-            // until the first device is paired, after which enforcement is
-            // automatic (hasApprovedDevices), so an un-paired peer can't read PII.
-            let sensitive = path.hasPrefix("/settings") || method != "GET"
+            // Grace mode NEVER applies to a sensitive request. Read-only GETs keep
+            // the grace window only until the first device is paired, after which
+            // enforcement is automatic (hasApprovedDevices), so an un-paired peer
+            // can't read PII. `enforceToken` now defaults to true, so the window is
+            // opt-in rather than the starting state.
             let enforcing = Self.enforceToken || Self.hasApprovedDevices()
             let provided = Self.headerValue(Self.tokenHeader, in: header)
             let deviceName = Self.headerValue(Self.deviceHeader, in: header) ?? ""
@@ -640,7 +702,12 @@ public final class LibraryShareServer: @unchecked Sendable {
             return ("500 Internal Server Error", Data("taste-timemachine failed".utf8), "text/plain")
         }
         if path.hasPrefix("/settings") {
-            if let body = try? JSONEncoder().encode(SyncableSettings.exportCurrent()) {
+            // Seal the credential half for the caller's token (see SecretsEnvelope).
+            // The route is token-gated for every peer including loopback, so a
+            // token is always present here; a missing one means "no secrets in the
+            // payload" rather than "secrets in the clear".
+            let callerToken = Self.headerValue(Self.tokenHeader, in: header)
+            if let body = try? JSONEncoder().encode(SyncableSettings.exportCurrent(encryptingFor: callerToken)) {
                 return ("200 OK", body, "application/json")
             }
             return ("500 Internal Server Error", Data("export failed".utf8), "text/plain")

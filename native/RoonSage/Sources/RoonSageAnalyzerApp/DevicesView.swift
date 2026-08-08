@@ -77,7 +77,7 @@ struct DevicesView: View {
                 ForEach(approved) { d in
                     deviceRow(name: d.name, subtitle: "goedgekeurd \(relative(d.approvedAt))") {
                         Button("Verwijder toegang", role: .destructive) {
-                            LibraryShareServer.revokeDevice(token: d.token); reload()
+                            LibraryShareServer.revokeDevice(tokenHash: d.tokenHash); reload()
                         }
                         .buttonStyle(.bordered).controlSize(.small)
                     }
