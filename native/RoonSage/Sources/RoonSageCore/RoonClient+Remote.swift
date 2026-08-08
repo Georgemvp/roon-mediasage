@@ -190,6 +190,7 @@ extension RoonClient {
             Self.rememberServerHosts([host])
         }
         startRemotePolling()
+        startRemoteEventStream()
         await pollPlaybackOnce()
     }
 
@@ -211,19 +212,93 @@ extension RoonClient {
         return true
     }
 
+    /// Poll cadence while no event stream is delivering. Unchanged from before.
+    private static let remotePollInterval: UInt64 = 1_500_000_000
+    /// Poll cadence while the stream IS delivering — a slow safety net, not the
+    /// primary path, so a stream that dies silently is still noticed.
+    private static let remotePollFallbackInterval: UInt64 = 15_000_000_000
+    /// How stale the last event may be before we stop trusting the stream.
+    private static let eventStreamFreshness: TimeInterval = 30
+
+    var eventStreamIsLive: Bool {
+        guard let last = lastPlaybackEventAt else { return false }
+        return Date().timeIntervalSince(last) < Self.eventStreamFreshness
+    }
+
     private func startRemotePolling() {
         guard remotePollTask == nil else { return }
         remotePollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.pollPlaybackOnce()
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                // Back right off while the stream is healthy: it already delivers
+                // every change within ~1.5 s, so polling on top of it is pure
+                // duplicate traffic. The slow tick stays as a safety net for a
+                // stream that dies without closing (NAT timeout, sleeping phone).
+                let live = await self?.eventStreamIsLive ?? false
+                try? await Task.sleep(nanoseconds: live ? Self.remotePollFallbackInterval
+                                                        : Self.remotePollInterval)
             }
         }
+    }
+
+    /// Subscribe to `GET /events` and apply snapshots as they arrive. Falls back
+    /// silently: if the server is too old to serve the route, or the stream dies,
+    /// the poll above simply keeps running at its original cadence.
+    private func startRemoteEventStream() {
+        guard remoteEventTask == nil else { return }
+        remoteEventTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.consumeEventStream()
+                guard !Task.isCancelled else { return }
+                // Reconnect, but never hot-loop against a server that refuses.
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+            }
+        }
+    }
+
+    private func consumeEventStream() async {
+        guard isRemote, let base = remoteBaseURL else { return }
+        var comps = URLComponents(string: "\(base)/events")
+        if let z = selectedZoneID { comps?.queryItems = [URLQueryItem(name: "zone", value: z)] }
+        guard let url = comps?.url else { return }
+        var req = URLRequest(url: url)
+        // The stream is meant to stay open; the server's keepalive comment every
+        // 30 s is what proves it is alive, so the timeout only needs to outlast that.
+        req.timeoutInterval = 120
+        req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        authorizeShareRequest(&req)
+
+        let serverHost = URL(string: base)?.host
+        do {
+            let (stream, resp) = try await URLSession.shared.bytes(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
+            Log.info("eventstream verbonden met \(base)", category: .network)
+            for try await line in stream.lines {
+                if Task.isCancelled { return }
+                // Keepalive comments start with ':' and carry no payload; they
+                // still count as proof of life.
+                if line.hasPrefix(":") { lastPlaybackEventAt = Date(); continue }
+                guard line.hasPrefix("data: ") else { continue }
+                let json = Data(line.dropFirst("data: ".count).utf8)
+                guard let snap = try? JSONDecoder().decode(PlaybackSnapshot.self, from: json) else { continue }
+                lastPlaybackEventAt = Date()
+                remotePollFailures = 0
+                applyPlaybackSnapshot(snap, base: base, serverHost: serverHost)
+            }
+        } catch {
+            // A dropped stream is ordinary (sleep, network switch, server restart).
+            // The poll keeps the UI correct meanwhile; the loop above reconnects.
+            Log.debug("eventstream onderbroken: \(error.localizedDescription)", category: .network)
+        }
+        lastPlaybackEventAt = nil
     }
 
     func stopServerMode() {
         remotePollTask?.cancel()
         remotePollTask = nil
+        remoteEventTask?.cancel()
+        remoteEventTask = nil
+        lastPlaybackEventAt = nil
     }
 
     /// Attach this device's token + friendly name so the server accepts the
@@ -273,6 +348,14 @@ extension RoonClient {
             return
         }
 
+        applyPlaybackSnapshot(snap, base: base, serverHost: serverHost)
+    }
+
+    /// Map a `PlaybackSnapshot` onto the observable state the UI binds to. Shared
+    /// by the `/playback` poll and the `/events` stream, so both paths produce
+    /// exactly the same result — the stream is a transport change, not a
+    /// behaviour change.
+    func applyPlaybackSnapshot(_ snap: PlaybackSnapshot, base: String, serverHost: String?) {
         zones = snap.zones
         zoneMap = Dictionary(uniqueKeysWithValues: snap.zones.map { ($0.id, $0) })
         queueItems = snap.queueItems

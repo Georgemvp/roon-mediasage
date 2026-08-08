@@ -15,6 +15,9 @@ import UIKit
 ///   GET  /taste-analysis → TasteAnalysis (time/genre/decade + like/dislike summary)
 ///   GET  /settings → SyncableSettings
 ///   GET  /playback?zone=… → PlaybackSnapshot (live zones/now-playing/queue)
+///   GET  /events?zone=… → text/event-stream: `playback`-events zodra de snapshot
+///                         wijzigt, plus een keepalive-comment elke 30 s. Vervangt
+///                         de poll van elke 1,5 s per client (zie PlaybackEventHub)
 ///   POST /command  → RemoteCommand (play/pause/volume/curate/…)
 ///   POST /track-feedback → TrackFeedback (like/dislike/clear a track)
 ///   GET  /feedback → [FeedbackEntry] (all like/dislike verdicts)
@@ -370,10 +373,84 @@ public final class LibraryShareServer: @unchecked Sendable {
             // used to trap here and crash the always-on extension process.
             let bodyEnd = min(bodyStart + contentLength, buf.endIndex)
             let body = buf.subdata(in: min(bodyStart, bodyEnd)..<bodyEnd)
+            // Anything after this request's body is the start of the next one on a
+            // kept-alive connection (HTTP pipelining, and the ordinary case where
+            // two requests land in one read).
+            let leftover = bodyEnd < buf.endIndex ? buf.subdata(in: bodyEnd..<buf.endIndex) : Data()
+
+            // The event stream never produces a single body, so it cannot go
+            // through `route`/`send`; it takes the connection over entirely.
+            if Self.requestTarget(header).path.hasPrefix("/events") {
+                self.startEventStream(conn, header: header, loopback: loopback, peerIP: peerIP)
+                return
+            }
+
             Task {
                 let (status, respBody, ctype) = await self.route(header: header, body: body, loopback: loopback, peerIP: peerIP)
-                self.send(conn, status: status, body: respBody, ctype: ctype, requestHeader: header)
+                self.send(conn, status: status, body: respBody, ctype: ctype,
+                          requestHeader: header, leftover: leftover,
+                          loopback: loopback, peerIP: peerIP)
             }
+        }
+    }
+
+    /// Method + path + full target of a raw request header.
+    static func requestTarget(_ header: String) -> (method: String, path: String, target: String) {
+        let requestLine = header.split(separator: "\r\n").first.map(String.init) ?? ""
+        let parts = requestLine.split(separator: " ").map(String.init)
+        let method = parts.first ?? "GET"
+        let target = parts.count > 1 ? parts[1] : "/"
+        let path = target.split(separator: "?").first.map(String.init) ?? target
+        return (method, path, target)
+    }
+
+    /// True when this request may reuse the connection: HTTP/1.1 defaults to
+    /// persistent, and only an explicit `Connection: close` opts out. Every poll
+    /// used to pay for a fresh TCP handshake — cheap on the LAN, not over ZeroTier.
+    static func wantsKeepAlive(_ header: String) -> Bool {
+        let requestLine = header.split(separator: "\r\n").first.map(String.init) ?? ""
+        guard requestLine.contains("HTTP/1.1") else { return false }
+        let connection = headerValue("Connection", in: header)?.lowercased() ?? ""
+        return !connection.contains("close")
+    }
+
+    // MARK: - Server-sent events (GET /events)
+
+    /// Hand this connection to `PlaybackEventHub` and keep it open. Auth is the
+    /// same gate every other route uses; a rejection is written as a normal
+    /// response and the connection closed.
+    private func startEventStream(_ conn: NWConnection, header: String, loopback: Bool, peerIP: String) {
+        let (method, path, target) = Self.requestTarget(header)
+        if let denial = Self.authorize(method: method, path: path, header: header,
+                                       loopback: loopback, peerIP: peerIP) {
+            send(conn, status: denial.0, body: denial.1, ctype: denial.2, requestHeader: header)
+            return
+        }
+        let zone = Self.queryValue("zone", in: target)
+
+        var head = "HTTP/1.1 200 OK\r\n"
+        head += "Content-Type: text/event-stream\r\n"
+        head += "Cache-Control: no-store\r\n"
+        head += "X-Content-Type-Options: nosniff\r\n"
+        // No Content-Length: the body is open-ended. Keep the socket alive.
+        head += "Connection: keep-alive\r\n\r\n"
+        conn.send(content: Data(head.utf8), completion: .contentProcessed { _ in })
+
+        Task {
+            let id = await PlaybackEventHub.shared.subscribe(zone: zone) { frame in
+                conn.send(content: frame, completion: .contentProcessed { _ in })
+            }
+            // The connection's own state handler is what ends the subscription:
+            // a phone that walks out of Wi-Fi never sends a goodbye.
+            conn.stateUpdateHandler = { state in
+                switch state {
+                case .failed, .cancelled:
+                    Task { await PlaybackEventHub.shared.unsubscribe(id) }
+                    conn.cancel()
+                default: break
+                }
+            }
+            Log.info("share-server: eventstream geopend voor \(peerIP)\(zone.map { " (zone \($0))" } ?? "")", category: .network)
         }
     }
 
@@ -386,7 +463,8 @@ public final class LibraryShareServer: @unchecked Sendable {
     }
 
     private func send(_ conn: NWConnection, status: String, body: Data, ctype: String,
-                      requestHeader: String = "") {
+                      requestHeader: String = "", leftover: Data = Data(),
+                      loopback: Bool = false, peerIP: String = "") {
         var payload = body
         var status = status
         var extraHeaders = ""
@@ -432,11 +510,81 @@ public final class LibraryShareServer: @unchecked Sendable {
             : "Cache-Control: private, no-cache\r\n"
         header += "X-Content-Type-Options: nosniff\r\n"
         header += extraHeaders
-        header += "Connection: close\r\n\r\n"
+
+        // Reuse the connection when the client speaks HTTP/1.1 and didn't ask to
+        // close. Every response used to end in a teardown, so a client doing any
+        // sequence of calls paid a TCP handshake each time — noticeable over
+        // ZeroTier, where the round trip can be relayed.
+        let keepAlive = Self.wantsKeepAlive(requestHeader)
+        header += keepAlive ? "Connection: keep-alive\r\n\r\n" : "Connection: close\r\n\r\n"
+
         var out = Data(header.utf8); out.append(payload)
-        conn.send(content: out, completion: .contentProcessed { _ in
-            conn.send(content: nil, isComplete: true, completion: .contentProcessed { _ in conn.cancel() })
+        conn.send(content: out, completion: .contentProcessed { [weak self] _ in
+            guard keepAlive, let self else {
+                conn.send(content: nil, isComplete: true, completion: .contentProcessed { _ in conn.cancel() })
+                return
+            }
+            // Carry any already-buffered next request straight into the next read.
+            self.receive(conn, accumulated: leftover, loopback: loopback, peerIP: peerIP)
         })
+    }
+
+    /// The token gate, shared by `route` and the `/events` stream (which cannot go
+    /// through `route` — it never returns a single body). Returns the response to
+    /// send when the request must be rejected, or nil when it may proceed.
+    static func authorize(method: String, path: String, header: String,
+                          loopback: Bool, peerIP: String) -> (String, Data, String)? {
+        // /settings carries secrets, and ANY state-changing request (non-GET:
+        // POST /command, /track-feedback, /playlists, /radio-configs,
+        // /discovery/run, DELETE …) can drive Roon or mutate data.
+        let sensitive = path.hasPrefix("/settings") || method != "GET"
+
+        // Everything but /health needs a valid token, unless the peer is loopback
+        // or we're in the grace window. A token is valid when it matches the master
+        // token OR the client has been approved in the analyzer's "Apparaten" list.
+        // An unknown token isn't a dead-end: it's filed in the pending queue for
+        // one-tap approval.
+        //
+        // The loopback exemption covers read-only GETs only. It used to cover
+        // everything, which meant any process or user on the server machine could
+        // read `/settings` (API keys, Last.fm session, Qobuz password) and drive
+        // Roon without a token — and that machine also runs Docker, Plex, rclone
+        // and the *arr stack. The client apps never target loopback anyway
+        // (`startServerMode` drops a loopback base URL on purpose), so nothing
+        // legitimate depended on it.
+        guard !path.hasPrefix("/health"), !loopback || sensitive else { return nil }
+
+        // Brute-force throttle: after 5 consecutive bad tokens an IP gets
+        // 429s for a few seconds — no token comparison, no oracle.
+        if authThrottler.isThrottled(peerIP) {
+            Log.warning("share-server: throttled \(method) \(path) from \(peerIP) (too many bad tokens)", category: .network)
+            return ("429 Too Many Requests", Data("too many attempts; retry later".utf8), "text/plain")
+        }
+        // Grace mode NEVER applies to a sensitive request. Read-only GETs keep the
+        // grace window only until the first device is paired, after which
+        // enforcement is automatic (hasApprovedDevices), so an un-paired peer can't
+        // read PII. `enforceToken` defaults to true, so the window is opt-in rather
+        // than the starting state.
+        let enforcing = enforceToken || hasApprovedDevices()
+        let provided = headerValue(tokenHeader, in: header)
+        let deviceName = headerValue(deviceHeader, in: header) ?? ""
+        if let provided {
+            let valid = constantTimeEquals(provided, currentToken()) || isApprovedDevice(provided)
+            if !valid {
+                authThrottler.recordFailure(peerIP)
+                recordPending(token: provided, name: deviceName, ip: peerIP)
+                Log.warning("share-server: rejected \(method) \(path) — unapproved device ‘\(deviceName.isEmpty ? "?" : deviceName)’ (\(peerIP)); approve it under Apparaten", category: .network)
+                return ("401 Unauthorized", Data("unauthorized; awaiting approval".utf8), "text/plain")
+            }
+            authThrottler.recordSuccess(peerIP)
+        } else if enforcing || sensitive {
+            let why = sensitive ? "secrets/mutation endpoint requires a token" : "pair this client via Apparaten"
+            Log.warning("share-server: rejected \(method) \(path) — no token; \(why)", category: .network)
+            return ("401 Unauthorized", Data("unauthorized".utf8), "text/plain")
+        } else {
+            Log.warning("share-server: serving \(method) \(path) WITHOUT a token (grace mode) — pair clients, then enable enforcement in Settings", category: .network)
+        }
+        return nil
     }
 
     private func route(header: String, body: Data, loopback: Bool, peerIP: String = "") async -> (String, Data, String) {
@@ -460,57 +608,9 @@ public final class LibraryShareServer: @unchecked Sendable {
             }
         }
 
-        // /settings carries secrets, and ANY state-changing request (non-GET:
-        // POST /command, /track-feedback, /playlists, /radio-configs,
-        // /discovery/run, DELETE …) can drive Roon or mutate data.
-        let sensitive = path.hasPrefix("/settings") || method != "GET"
-
-        // Auth: everything but /health needs a valid token, unless the peer is
-        // loopback or we're in the grace window. A token is valid when it matches
-        // the master token OR the client has been approved in the analyzer's
-        // "Apparaten" list. An unknown token isn't a dead-end: it's filed in the
-        // pending queue for one-tap approval.
-        //
-        // The loopback exemption covers read-only GETs only. It used to cover
-        // everything, which meant any process or user on the server machine could
-        // read `/settings` (API keys, Last.fm session, Qobuz password) and drive
-        // Roon without a token — and that machine also runs Docker, Plex, rclone
-        // and the *arr stack. The client apps never target loopback anyway
-        // (`startServerMode` drops a loopback base URL on purpose), so nothing
-        // legitimate depended on it.
-        if !path.hasPrefix("/health"), !loopback || sensitive {
-            // Brute-force throttle: after 5 consecutive bad tokens an IP gets
-            // 429s for a few seconds — no token comparison, no oracle.
-            if Self.authThrottler.isThrottled(peerIP) {
-                Log.warning("share-server: throttled \(method) \(path) from \(peerIP) (too many bad tokens)", category: .network)
-                return ("429 Too Many Requests", Data("too many attempts; retry later".utf8), "text/plain")
-            }
-            // Grace mode NEVER applies to a sensitive request. Read-only GETs keep
-            // the grace window only until the first device is paired, after which
-            // enforcement is automatic (hasApprovedDevices), so an un-paired peer
-            // can't read PII. `enforceToken` now defaults to true, so the window is
-            // opt-in rather than the starting state.
-            let enforcing = Self.enforceToken || Self.hasApprovedDevices()
-            let provided = Self.headerValue(Self.tokenHeader, in: header)
-            let deviceName = Self.headerValue(Self.deviceHeader, in: header) ?? ""
-            if let provided {
-                let valid = Self.constantTimeEquals(provided, Self.currentToken())
-                    || Self.isApprovedDevice(provided)
-                if !valid {
-                    Self.authThrottler.recordFailure(peerIP)
-                    Self.recordPending(token: provided, name: deviceName, ip: peerIP)
-                    Log.warning("share-server: rejected \(method) \(path) — unapproved device ‘\(deviceName.isEmpty ? "?" : deviceName)’ (\(peerIP)); approve it under Apparaten", category: .network)
-                    return ("401 Unauthorized", Data("unauthorized; awaiting approval".utf8), "text/plain")
-                }
-                Self.authThrottler.recordSuccess(peerIP)
-            } else {
-                if enforcing || sensitive {
-                    let why = sensitive ? "secrets/mutation endpoint requires a token" : "pair this client via Apparaten"
-                    Log.warning("share-server: rejected \(method) \(path) — no token; \(why)", category: .network)
-                    return ("401 Unauthorized", Data("unauthorized".utf8), "text/plain")
-                }
-                Log.warning("share-server: serving \(method) \(path) WITHOUT a token (grace mode) — pair clients, then enable enforcement in Settings", category: .network)
-            }
+        if let denial = Self.authorize(method: method, path: path, header: header,
+                                       loopback: loopback, peerIP: peerIP) {
+            return denial
         }
 
         if method == "POST", path.hasPrefix("/command") {
