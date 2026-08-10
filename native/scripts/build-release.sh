@@ -113,13 +113,32 @@ STAGING=$(mktemp -d)
 cp -R "$APP_PATH" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
 
-hdiutil create \
-    -volname "$APP_NAME $VERSION" \
-    -srcfolder "$STAGING" \
-    -ov \
-    -format UDZO \
-    -imagekey zlib-level=9 \
-    "$DMG_PATH"
+# `hdiutil create` attaches a shadow volume while it builds the image, and on a
+# CI runner something else can still be holding the freshly-stapled bundle (mds
+# indexing it, or a leftover attached device) — which surfaces as
+# "hdiutil: create failed - Resource busy" and kills the release. Seen on
+# v1.10.228 (2026-08-10); the identical commit produced a DMG on re-run, so it's
+# timing, not content. Retry with a short backoff and detach any stale volume of
+# ours first, rather than losing a whole release to it.
+for attempt in 1 2 3; do
+    if hdiutil create \
+        -volname "$APP_NAME $VERSION" \
+        -srcfolder "$STAGING" \
+        -ov \
+        -format UDZO \
+        -imagekey zlib-level=9 \
+        "$DMG_PATH"; then
+        break
+    fi
+    if [[ $attempt -eq 3 ]]; then
+        echo "   ✗ hdiutil create failed after 3 attempts" >&2
+        rm -rf "$STAGING"
+        exit 1
+    fi
+    echo "   ⚠ hdiutil create failed (attempt $attempt/3) — detaching stale volumes and retrying"
+    hdiutil detach "/Volumes/$APP_NAME $VERSION" -force 2>/dev/null || true
+    sleep $((attempt * 5))
+done
 
 rm -rf "$STAGING"
 

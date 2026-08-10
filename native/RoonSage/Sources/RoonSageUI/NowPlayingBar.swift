@@ -44,6 +44,14 @@ public struct NowPlayingBar: View {
                 onOpen: { client.selectLocalOutput(); navigateTo(.nowPlaying) },
                 accessibilityLabel: "Lokaal afspelen op \(Self.localNoun): \(track.title). Tik om Nu speelt te openen."
             )
+        } else if client.localOutputSelected {
+            // This device is the CHOSEN output and it's idle, so there is nothing
+            // to show. Falling through to a Roon zone here made the bar advertise
+            // a zone's music (with its transport!) while the Now Playing screen —
+            // which branches on `localOutputSelected` — correctly showed an idle
+            // local player. Two surfaces, two answers; this is the one that was
+            // wrong. Zone playback stays reachable via the output picker.
+            EmptyView()
         } else if let zone = client.selectedZone, let np = zone.nowPlaying,
                   zone.state == .playing || zone.state == .paused {
             bar(

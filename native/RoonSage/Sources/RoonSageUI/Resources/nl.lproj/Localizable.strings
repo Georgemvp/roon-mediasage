@@ -428,6 +428,9 @@
 
 /* localNowPlaying */
 "localNowPlaying.deviceNounDevice"  = "dit apparaat";
+"localNowPlaying.nothingPlaying"    = "Niets aan het spelen";
+"localNowPlaying.stopOnDevice"      = "Stop afspelen op %@";
+"localNowPlaying.upNext"            = "HIERNA";
 "localNowPlaying.deviceNounMac"     = "deze Mac";
 "localNowPlaying.dislike"           = "Vind ik niet leuk — sla over en leer ervan";
 "localNowPlaying.like"              = "Vind ik leuk";
@@ -444,9 +447,6 @@
 "localNowPlaying.tapToContinue"     = "Tik om door te spelen";
 "localNowPlaying.unmute"            = "Dempen opheffen";
 
-/* localPlayButton */
-"localPlayButton.deviceNounDevice" = "dit apparaat";
-"localPlayButton.deviceNounMac"    = "deze Mac";
 
 /* logConsole */
 "logConsole.clear"        = "Wis";
@@ -490,6 +490,10 @@
 "nowPlaying.discoverMusic"    = "Ontdek muziek";
 "nowPlaying.dislike"          = "Vind ik niet leuk — sla over en leer ervan";
 "nowPlaying.journey"          = "Reis";
+"nowPlaying.nothingPlaying"   = "Niets aan het spelen";
+"nowPlaying.selectZoneHint"   = "Kies waar je wilt luisteren.";
+"nowPlaying.startPlaybackHint" = "Start iets in Roon, of kies dit apparaat als uitvoer.";
+"nowPlaying.upNext"           = "HIERNA";
 "nowPlaying.journeyHelp"      = "Een sonische reis die vanaf deze track wegdrijft naar een heel ander klankgebied";
 "nowPlaying.keepPlayingHint"  = "Tik om door te spelen";
 "nowPlaying.like"             = "Vind ik leuk";

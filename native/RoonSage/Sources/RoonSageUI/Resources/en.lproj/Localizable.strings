@@ -428,6 +428,9 @@
 
 /* localNowPlaying */
 "localNowPlaying.deviceNounDevice"  = "this device";
+"localNowPlaying.nothingPlaying"    = "Nothing playing";
+"localNowPlaying.stopOnDevice"      = "Stop playing on %@";
+"localNowPlaying.upNext"            = "UP NEXT";
 "localNowPlaying.deviceNounMac"     = "this Mac";
 "localNowPlaying.dislike"           = "Dislike — skip it and learn from it";
 "localNowPlaying.like"              = "Like";
@@ -444,9 +447,6 @@
 "localNowPlaying.tapToContinue"     = "Tap to keep playing";
 "localNowPlaying.unmute"            = "Unmute";
 
-/* localPlayButton */
-"localPlayButton.deviceNounDevice" = "this device";
-"localPlayButton.deviceNounMac"    = "this Mac";
 
 /* logConsole */
 "logConsole.clear"        = "Clear";
@@ -490,6 +490,10 @@
 "nowPlaying.discoverMusic"    = "Discover music";
 "nowPlaying.dislike"          = "Dislike — skip it and learn from it";
 "nowPlaying.journey"          = "Journey";
+"nowPlaying.nothingPlaying"   = "Nothing playing";
+"nowPlaying.selectZoneHint"   = "Pick where you want to listen.";
+"nowPlaying.startPlaybackHint" = "Start something in Roon, or choose this device as the output.";
+"nowPlaying.upNext"           = "UP NEXT";
 "nowPlaying.journeyHelp"      = "A sonic journey drifting from this track into an entirely different soundscape";
 "nowPlaying.keepPlayingHint"  = "Tap to keep playing";
 "nowPlaying.like"             = "Like";

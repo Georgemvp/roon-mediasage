@@ -504,7 +504,14 @@ private struct LocalNowPlayingHero: View {
                 Haptics.tap()
                 client.stopLocalPlayback()
             } label: {
-                Label(LS("Stop afspelen op \(LocalNowPlayingScreen.deviceNoun)"), systemImage: "stop.circle")
+                // Built with String(format:) rather than interpolated into the LS
+                // key: interpolation makes the *lookup key* "Stop afspelen op %@",
+                // a hardcoded-Dutch key that is in neither catalogue — so it fell
+                // back to the literal and rendered "Stop afspelen op this device"
+                // in an English UI.
+                Label(String(format: LS("localNowPlaying.stopOnDevice"),
+                             LocalNowPlayingScreen.deviceNoun),
+                      systemImage: "stop.circle")
                     .font(.callout.weight(.medium))
             }
             .buttonStyle(.bordered)

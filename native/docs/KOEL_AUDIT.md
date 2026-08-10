@@ -1,8 +1,10 @@
-# Koel Player-audit — wat de RoonSage-mobiele-app ervan kan leren
+# Koel-audit — wat de RoonSage-mobiele-app ervan kan leren
 
-> Gegenereerd: 2026-07-08. Bron: [koel/player](https://github.com/koel/player) (Flutter
-> iOS/Android-client voor de Koel-muziekserver) — volledige `lib/`-boom doorgelicht —
-> vergeleken met de native RoonSage-app (shell `native/iosapp` + gedeelde views in
+> Gegenereerd: 2026-07-08. Bronnen: [koel/player](https://github.com/koel/player)
+> (Flutter iOS/Android-client, volledige `lib/`-boom doorgelicht) én
+> [koel/koel](https://github.com/koel/koel) (Laravel+Vue webapp/server, volledige
+> `resources/assets/js/components/`-boom doorgelicht) — vergeleken met de native
+> RoonSage-app (shell `native/iosapp` + gedeelde views in
 > `native/RoonSage/Sources/RoonSageUI`).
 >
 > Architectuur-noot: Koel Player is exact dezelfde vorm als RoonSage-mobiel — een
@@ -28,9 +30,9 @@ Sonische radio's/adventure, AI-playlistgeneratie + templates, Ontdek-pipeline
 (weekly/feed/insights), smaakprofiel + feedback-leren, karaoke-lyrics in DB,
 BeatVisualizer, sleeptimer, opdrachtenpalet (⌘K), thema-presets + ambient-tint,
 Live Activity/Dynamic Island, home-widget, Siri/Shortcuts, Handoff, Qobuz-sync,
-loudness-normalisatie, onderweg-AAC-transcoding. Koel's "smart playlists" zijn een
-zwakkere variant van onze RadioConfig-radio's; Koel's web-EQ/visualizer zitten
-niet eens in hun mobiele app.
+loudness-normalisatie, onderweg-AAC-transcoding. Koel's web-EQ/visualizer zitten
+niet eens in hun mobiele app. Koel's smart playlists overlappen deels met onze
+RadioConfig-radio's maar dekken een ander vlak (metadata-regels) — zie K11.
 
 ## 3. Gap-analyse — wat Koel Player wél heeft
 
@@ -118,14 +120,93 @@ vergelijking legde het bloot: onze lokale engine is één `AVPlayer` die pas bij
 `didPlayToEndTime` de volgende track laadt (`LocalPlayback.swift:99,112`) → hoorbaar
 gat. `AVQueuePlayer` met pre-enqueue van het volgende item dicht dat gat.
 
+---
+
+## 3b. Gap-analyse deel 2 — koel/koel (webapp/server)
+
+De webapp is véél rijker dan hun mobiele player; dit zijn de features die naar
+RoonSage-mobiel vertaalbaar zijn. (Web-vondsten die K1/K4 bevestigen:
+`OfflineSongsScreen.vue`/`OfflineMark.vue`/`OfflineNotification.vue` en
+`profile-preferences/QRLogin.vue` — zelfde patroon als voorgesteld.)
+
+### K11 🟠 M — Slimme playlists (regel-gebaseerd, zelf-actualiserend)
+**Koel:** regel-builder met AND-groepen/OR tussen groepen
+(`smart-playlist/SmartPlaylistRule*.vue`); velden: titel, album, artiest, genre,
+jaar, **play count**, **laatst gespeeld**, lengte, **datum toegevoegd**, datum
+gewijzigd (`config/smart-playlist/models.ts`).
+**RoonSage:** RadioConfig-radio's zijn sonisch/facet-gebaseerd (artiest/genre/
+mood/activiteit) maar er is geen metadata-regel-playlist: "jazz uit >2015 dat ik
+<3× speelde" of "toegevoegd afgelopen maand, nog nooit gespeeld" kan nu niet.
+**Voorstel:** regel-laag bovenop de bestaande server-of-record: alle velden
+zitten al in library.db (`listening_history` voor play count/laatst gespeeld,
+track.year, genres, duur). Server evalueert regels bij afspelen → altijd actueel;
+UI als extra sectie in CustomRadioEditorView (zelfde multi-select-patronen).
+Complementair aan sonic radio's, niet concurrerend.
+
+### K12 ⚪ S/M — Home-shelves: herordenen + "zelden gespeeld"/"willekeurig"
+**Koel:** home met blokken Most/Least played, New/Random albums & artists,
+Similar songs — en een **ReorderBlocksModal** waarmee de gebruiker de blokken
+zelf herschikt (`screens/home/*.vue`).
+**RoonSage:** Bibliotheek-Overzicht heeft shelves (stats-hero, radiostations,
+snelkoppelingen, filtertegels) maar vaste volgorde, en geen "zelden gespeeld"-
+of "willekeurig album"-shelf — juist sterke herontdek-triggers voor 76,5k tracks.
+**Voorstel:** 2 nieuwe shelves (goedkoop: data zit in listening_history) +
+shelf-volgorde als user-preference.
+
+### K13 🟠 M — AI-assistent als chat met acties
+**Koel:** volwaardige AI-chat: geschiedenis, floating button, voorbeeldprompts,
+natural-language-commando's die écht dingen doen (`ai/AiAssistantScreen.vue`,
+`AiChatHistory.vue`, `AiSamplePrompts.vue`).
+**RoonSage:** AskView is één-shot vraag→antwoord; generatie/afspelen zijn
+losse schermen.
+**Voorstel:** AskView → chat-UI met historie + voorbeeldprompts + acties
+("speel iets rustigs op de woonkamer", "maak hier een playlist van") die naar de
+bestaande generate/radio/transport-endpoints routeren. De LLM-infra (qwen op de
+mini) en het opdrachtenpalet-vocabulaire bestaan al.
+
+### K14 ⚪ M — Map-browser (bestandsstructuur) met breadcrumbs
+**Koel:** MediaBrowserScreen: door de mappenstructuur bladeren met breadcrumbs
+(`media-browser/*`, `playable/media-browser/Breadcrumbs.vue`).
+**RoonSage:** geen map-weergave; de analyzer scant nota bene zelf het
+bestandssysteem (4tbdrive). Handig voor boxsets/klassiek waar mapstructuur
+betekenis draagt. Laag-prio maar goedkoop: paden staan al in de analyzer-DB.
+
+### K15 ⚪ L — Echte equalizer (lokaal afspelen)
+**Koel:** 10-bands Web-Audio-EQ met presets + eigen presets opslaan
+(`ui/equalizer/*`, incl. `EqualizerSavePresetForm.vue`).
+**RoonSage:** bewust overgeslagen in de LMS-audit (B4); alleen
+loudness-normalisatie. Roon-zones doen hun eigen DSP — dit zou alléén lokaal
+afspelen gelden en vergt AVPlayer → AVAudioEngine-ombouw. Tweede audit op rij
+waar dit gat opduikt; blijft backlog, maar de ombouw kan meeliften met K10
+(gapless), dat dezelfde engine-wissel nodig heeft.
+
+### K16 ⚪ M — Fullscreen-visualizer-modus
+**Koel:** apart visualizer-scherm met verwisselbare visualizer-plug-ins op echte
+audio-analyse (`VisualizerScreen.vue`, `visualizers/asteroid/…/AudioAnalyzer.ts`,
+three.js).
+**RoonSage:** BeatVisualizer is een inline synthetische canvas (BPM/energie).
+**Voorstel (licht):** fullscreen-modus voor de bestaande BeatVisualizer +
+art/lyrics-combinatie ("kiosk/party-modus") — géén echte audio-tap nodig; de
+synthetische aanpak schaalt prima naar fullscreen.
+
 ### Bewust NIET overnemen
-- **Podcasts** (`podcasts.dart` e.v.) — buiten de product-constitutie
-  (library-first: Roon-bibliotheek + Qobuz).
-- **Broadcast/internet-radio** (`radio_stations.dart`) — onze radio's zijn
-  algoritmisch over de eigen bibliotheek; dat is het product.
-- **Metadata-editing op mobiel** (`edit_album_sheet.dart` e.v.) — Roon is de
-  metadata-bron; muteren vanaf de telefoon is een voetgeweer.
+- **Podcasts** (`podcasts.dart`, `PodcastScreen.vue` e.v.) — buiten de
+  product-constitutie (library-first: Roon-bibliotheek + Qobuz).
+- **Broadcast/internet-radio** (`radio_stations.dart`, `RadioStationListScreen.vue`)
+  — onze radio's zijn algoritmisch over de eigen bibliotheek; dat is het product.
+- **Metadata-editing op mobiel** (`edit_album_sheet.dart`, `EditSongForm.vue`) —
+  Roon is de metadata-bron; muteren vanaf de telefoon is een voetgeweer.
 - **Frosted context-menu's** — native `contextMenu` is op iOS de juiste keuze.
+- **Multi-user/SSO/2FA/uitnodigingen, playlist-collaboration, uploads, embeds/
+  sharing, YouTube-integratie** (`auth/sso`, `two-factor`, `PlaylistCollaboration*`,
+  `UploadScreen.vue`, `embed/*`, `YouTubeScreen.vue`) — RoonSage is één-persoons
+  en library-first.
+- **Star-rating** (`StarRating.vue`) — het feedback-leren is bewust binair
+  (thumbs → leer-chokepoint); 5-sterren fragmenteert dat signaal.
+- **Subsonic/OpenSubsonic-API-compat** (`SubsonicCredentials.vue`) — géén
+  mobiel-item, maar noteer als los server-idee: een OpenSubsonic-laag op de
+  analyzer zou elke bestaande Subsonic-client (Symfonium e.d.) compatibel maken.
+  NOTED (not done).
 
 ## 4. Aanbevolen batches
 
@@ -133,14 +214,20 @@ gat. `AVQueuePlayer` met pre-enqueue van het volgende item dicht dat gat.
 |---|---|---|---|
 | 1 | K2 swipe-to-queue + `insertNext` lokaal; K7 marquee; K8 sort-persist | S/M | dagelijkse-UX-winst, klein |
 | 2 | K3 globale zoek + K5 alfabet-index | M | vindbaarheid bij 76,5k tracks |
-| 3 | K4 QR-pairing | M | lost #1-supportklacht structureel op |
-| 4 | K1 offline downloads + offline-modus | L | grootste feature-gat; bouwt op transcode-pad |
-| Backlog | K6 playlist-mappen; K9 states-uniformering (→ UX_AUDIT); K10 gapless | S–M | |
+| 3 | K12 home-shelves (zelden gespeeld/willekeurig + herordenen) | S/M | herontdekking, goedkoop |
+| 4 | K4 QR-pairing | M | lost #1-supportklacht structureel op |
+| 5 | K11 slimme playlists (regel-laag) | M | uniek gat naast sonic radio's; data ligt klaar |
+| 6 | K13 AI-chat-assistent | M | bestaande LLM-infra, hoge zichtbaarheid |
+| 7 | K1 offline downloads + offline-modus | L | grootste feature-gat; bouwt op transcode-pad |
+| Backlog | K6 playlist-mappen; K9 states-uniformering (→ UX_AUDIT); K10 gapless + K15 EQ (zelfde engine-ombouw); K14 map-browser; K16 fullscreen-visualizer | S–L | |
 
 ## 5. Status
 
 - [ ] Batch 1 — K2/K7/K8
 - [ ] Batch 2 — K3/K5
-- [ ] Batch 3 — K4
-- [ ] Batch 4 — K1
-- [ ] Backlog — K6/K9/K10
+- [ ] Batch 3 — K12
+- [ ] Batch 4 — K4
+- [ ] Batch 5 — K11
+- [ ] Batch 6 — K13
+- [ ] Batch 7 — K1
+- [ ] Backlog — K6/K9/K10+K15/K14/K16
