@@ -454,7 +454,12 @@ public final class LocalPlaybackController {
     private func activateSession() {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default)
+        // `.longFormAudio` marks this as a music/podcast session rather than
+        // incidental audio: it's what lets iOS hand the session to AirPlay 2 and
+        // CarPlay as a long-form route, and it's the documented setup for
+        // continuous playlist playback. (The older `.longForm` spelling is
+        // deprecated since iOS 13 — see AVAudioSessionTypes.h.)
+        try? session.setCategory(.playback, mode: .default, policy: .longFormAudio)
         try? session.setActive(true)
         #endif
     }
