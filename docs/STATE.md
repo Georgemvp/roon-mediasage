@@ -35,6 +35,20 @@ NU (2026-08-10): **LOKAAL AFSPELEN IS EEN VOLWAARDIGE UITVOER** (user: "Local pl
 - Gapless (AVQueuePlayer) en offline downloads: stap 3 en 4 uit het oorspronkelijke plan, nog niet begonnen.
 - `native/docs/KOEL_AUDIT.md` heeft ongecommitte wijzigingen van een eerdere sessie — **niet van deze batch**, met rust gelaten.
 
+**VERVOLG 2026-08-10 (avond) — geshipt t/m v1.10.229 / ios-v1.7.194, gepusht, alle workflows groen.**
+
+- **Gapless** (v1.10.228): `AVQueuePlayer` met één item vooruit; `LocalQueue.followerIndex` kiest de opvolger (loop_one geeft dezelfde index → herhalen is óók gapless). Elke queue-mutatie roept `invalidateFollower()`, anders speelt de speler een al overhandigd nummer dat niet meer aan de beurt is. **NIET geverifieerd: of het hóórbaar gaploos is — vereist een luistertest op het apparaat, ook met scherm uit (daar valt Finamp om).**
+- **Lokaal is standaarduitvoer** (v1.10.228); audiosessie op `.longFormAudio`.
+- **Afspeel-cache J1** (v1.10.229): `LocalAudioCache`, gekeyd op match key + transcode-profiel, niet op de URL (die draagt een roterend token en wisselt van host tussen LAN en ZeroTier). Vulling is een tweede fetch, overgeslagen op een expensive path. Standaard 2 GB, instelbaar.
+- **`native/docs/JELLYFIN_AUDIT.md`**: 9 gaten, 6 batches. Batch 1 (J1 + J9) hiermee klaar.
+
+**DRIE OPENSTAANDE ZAKEN, in volgorde van belang:**
+1. **109 ontbrekende tekstsleutels.** Gevonden via een user-screenshot waarin letterlijk `localNowPlaying.nothingPlaying` stond. Een ontbrekende sleutel is géén compileerfout — SwiftUI rendert dan de sleutel zelf. Nieuw: `native/scripts/check-localization.sh` (missende + weeskeys + catalogus-drift). 7 gefixt, **109 blijven staan**, verspreid over Generate, CustomRadio, Discovery, Onboarding, LiveDJ e.a. Zodra de lijst leeg is: `--strict` als CI-poort. Nu een poort maken zou CI meteen rood zetten.
+2. **De app draait in het Engels terwijl er hardgecodeerde Nederlandse literals in staan** (`RoonClient.localOutputName` geeft "Dit apparaat"; Core kan geen `LS` gebruiken). Vandaar mengvormen als "Stop afspelen op this device". Aparte klus van punt 1.
+3. **Loudness-gain hangt aan `player.volume`** (per speler, niet per item), dus hij verschuift pas ná de gapless-overgang — het mechanisme achter de "klik tussen nummers" die Finamp-gebruikers melden. Fix = per-item `AVAudioMix`, vereist async laden van de asset-track.
+
+**CI-les:** v1.10.228's DMG-job faalde op `hdiutil: create failed - Resource busy` in stap 5 (build, signing en notarisatie wél geslaagd). Re-run van dezelfde commit slaagde → timing, geen inhoud. `build-release.sh` probeert nu 3× met backoff + detach van een blijven hangen volume. **Let op het onderscheid:** de eerdere DMG-mislukkingen (v1.10.223/.224/.201/.202) waren compileerfouten omdat CI strenger is dan een lokale debug-build — daarvoor is `swift build -c release -Xswiftc -swift-version -Xswiftc 6` de poort, en die is deze keer wél gedraaid.
+
 EERDER (2026-08-08, ochtend): **BENCHMARK-PROGRAMMA LIDARR + DROPPEDNEEDLE — user: "Doe alles"**. Vraag was een plan hoe Lidarr (GPL-3.0) en DroppedNeedle (AGPL-3.0) RoonSage kunnen verbeteren op snelheid/functionaliteit/design/theme/veiligheid; plan staat in `docs/BENCHMARK-LIDARR-DROPPEDNEEDLE.md` (25 items, 4 fasen, 8 batches). **LICENTIE-HEK: geen regel code overgenomen — beide bronnen zijn copyleft, deze repo MIT; alleen mechanismen zelfstandig herbouwd** (zelfde regel als bij de discovery-batch hieronder). User gaf expliciet push+tag-toestemming per batch ("Ja, push + tag per batch") en koos reikwijdte "Alles, batch voor batch".
 
 **GESHIPT: batch 1/8** (beveiliging V1–V4+V6) = v1.10.217 / ios-v1.7.182 / analyzer-v1.1.187 · **batch 2/8** (S4 TaskScheduler) = v1.10.218 / ios-v1.7.183 / analyzer-v1.1.188 · **batch 3/8** (S2 ETag+gzip) = v1.10.219 / ios-v1.7.184 / analyzer-v1.1.189 · **batch 4/8** (S1 SSE-push + S3 keep-alive) = v1.10.220 / ios-v1.7.185 / analyzer-v1.1.190 · **batch 5/8** (V5 inkomende rate-limiting) = v1.10.221 / ios-v1.7.186 / analyzer-v1.1.191. Zie ## Done per batch.
