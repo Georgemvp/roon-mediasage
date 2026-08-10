@@ -14,6 +14,9 @@ public struct QueueView: View {
     @State private var showSaveSheet = false
     @State private var newPlaylistName = ""
     @State private var similarSeed: SonicSeed?
+    /// Set by the toolbar to ask the local queue's ScrollViewReader to jump to a
+    /// row; cleared again once the scroll has been requested.
+    @State private var scrollTarget: Int?
 
     public var body: some View {
         Group {
@@ -178,23 +181,34 @@ public struct QueueView: View {
                 ContentUnavailableView(LS("queue.localEmptyTitle"), systemImage: "list.number",
                     description: LT("queue.localEmptyDescription"))
             } else {
-                List {
-                    Section {
-                        Text(localSummary)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .listRowSeparator(.hidden)
+                // ScrollViewReader so "spring naar nu" can reach the playing row
+                // in a queue of hundreds. The toolbar can't hold the proxy, so it
+                // sets `scrollTarget` and the change is observed in here.
+                ScrollViewReader { proxy in
+                    List {
+                        Section {
+                            Text(localSummary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .listRowSeparator(.hidden)
+                        }
+                        // Keyed on position, not on the track's id: a queue may
+                        // legitimately hold the same song twice, and duplicate ids
+                        // break List's diffing — and with it onMove/onDelete.
+                        ForEach(Array(lp.queue.enumerated()), id: \.offset) { index, track in
+                            localRow(track, index: index, playingAt: lp.index)
+                                .id(index)
+                        }
+                        .onDelete { lp.removeFromQueue(atOffsets: $0) }
+                        .onMove { lp.moveInQueue(fromOffsets: $0, toOffset: $1) }
                     }
-                    // Keyed on position, not on the track's id: a queue may
-                    // legitimately hold the same song twice, and duplicate ids
-                    // break List's diffing — and with it onMove/onDelete.
-                    ForEach(Array(lp.queue.enumerated()), id: \.offset) { index, track in
-                        localRow(track, index: index, playingAt: lp.index)
+                    .listStyle(.plain)
+                    .onChange(of: scrollTarget) { _, target in
+                        guard let target else { return }
+                        withAnimation { proxy.scrollTo(target, anchor: .center) }
+                        scrollTarget = nil
                     }
-                    .onDelete { lp.removeFromQueue(atOffsets: $0) }
-                    .onMove { lp.moveInQueue(fromOffsets: $0, toOffset: $1) }
                 }
-                .listStyle(.plain)
             }
         }
     }
@@ -264,6 +278,25 @@ public struct QueueView: View {
             #if os(iOS)
             EditButton().disabled(lp.queue.isEmpty)
             #endif
+            Button {
+                scrollTarget = lp.index
+            } label: {
+                Image(systemName: "scope")
+            }
+            .disabled(lp.queue.isEmpty)
+            .accessibilityLabel(LS("queue.jumpToCurrent"))
+            .help(LS("queue.jumpToCurrent"))
+
+            Button {
+                Haptics.tap()
+                lp.clearUpcoming()
+            } label: {
+                Image(systemName: "text.badge.minus")
+            }
+            .disabled(lp.index + 1 >= lp.queue.count)
+            .accessibilityLabel(LS("queue.clearUpcoming"))
+            .help(LS("queue.clearUpcomingHelp"))
+
             Button {
                 showSaveSheet = true
             } label: {

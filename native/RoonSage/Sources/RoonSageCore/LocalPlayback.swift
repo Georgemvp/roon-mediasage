@@ -365,6 +365,26 @@ public final class LocalPlaybackController {
         onStateChange?()
     }
 
+    /// Drop everything after the playing track — "wachtrij leegmaken" without
+    /// interrupting what you're hearing. Stopping outright is a different verb
+    /// (the Now Playing screen owns that one).
+    public func clearUpcoming() {
+        guard isEngaged, index + 1 < queue.count else { return }
+        let dropped = Array(queue[(index + 1)...])
+        queue = Array(queue.prefix(index + 1))
+        if shuffle {
+            // Shuffled, the base order is a different sequence — drop one
+            // occurrence per removed track rather than truncating blindly.
+            for track in dropped {
+                if let i = baseQueue.firstIndex(where: { $0.id == track.id }) { baseQueue.remove(at: i) }
+            }
+        } else {
+            baseQueue = queue
+        }
+        invalidateFollower()
+        onStateChange?()
+    }
+
     /// Play from here — the queue view's tap action.
     public func jump(to i: Int) {
         guard isEngaged, queue.indices.contains(i) else { return }
@@ -518,16 +538,45 @@ public final class LocalPlaybackController {
     private func makeItem(for track: Track) -> AVPlayerItem? {
         // Qobuz (or any direct CDN URL): play it straight, no /audio server.
         if let override = track.streamURLOverride { return AVPlayerItem(url: override) }
+        // Onderweg: ask the server for AAC instead of the original (policy-gated).
+        let transcode = LocalTranscode.queryItems()
+        let variant = LocalAudioCache.variant(for: transcode)
+        // Already on disk from an earlier play: skip the network entirely. This
+        // is what makes stepping back, repeating and replaying instant — and it
+        // works with no server at all.
+        if let cached = LocalAudioCache.cachedFile(forKey: track.id, variant: variant) {
+            return AVPlayerItem(url: cached)
+        }
         var comps = URLComponents(string: "\(streamBase)/audio")
         // AVPlayer can't attach a custom auth header without private API, so the
         // token rides in the query (the /audio endpoint accepts both).
         var items = [URLQueryItem(name: "match_key", value: track.id)]
         if let token, !token.isEmpty { items.append(URLQueryItem(name: "token", value: token)) }
-        // Onderweg: ask the server for AAC instead of the original (policy-gated).
-        items.append(contentsOf: LocalTranscode.queryItems())
+        items.append(contentsOf: transcode)
         comps?.queryItems = items
         guard let url = comps?.url else { return nil }
+        fillCache(from: url, key: track.id, variant: variant)
         return AVPlayerItem(url: url)
+    }
+
+    /// Populate the cache in the background so the *next* play of this track is
+    /// local. Deliberately a second fetch rather than tapping the player's own
+    /// stream: intercepting that needs an `AVAssetResourceLoaderDelegate` with
+    /// range-request handling, which is a subsystem, not a cache.
+    ///
+    /// Skipped on an expensive path — doubling cellular data to warm a cache is
+    /// exactly the wrong trade. (`NetworkPathMonitor` already drives the
+    /// transcode policy, so the two agree on what "onderweg" means.)
+    private func fillCache(from url: URL, key: String, variant: String) {
+        guard LocalAudioCache.enabled, !key.isEmpty,
+              !NetworkPathMonitor.shared.isExpensive else { return }
+        Task.detached(priority: .utility) {
+            guard let (data, response) = try? await URLSession.shared.data(from: url),
+                  (response as? HTTPURLResponse)?.statusCode == 200,
+                  !data.isEmpty else { return }
+            LocalAudioCache.store(data, forKey: key, variant: variant)
+            LocalAudioCache.prune()
+        }
     }
     #endif
 

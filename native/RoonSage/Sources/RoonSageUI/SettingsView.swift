@@ -553,6 +553,8 @@ public struct SettingsView: View {
 
             TranscodeSettingsSection()
 
+            AudioCacheSettingsSection()
+
             // Audio analyzer
             Section("Audio-analyzer (BPM / toonsoort / tags)") {
                 LabeledContent("Analyzer-URL") {
@@ -808,6 +810,48 @@ public struct SettingsView: View {
         if !models.isEmpty, !models.contains(llmModel) {
             llmModel = models.first ?? llmModel
         }
+    }
+}
+
+/// Disk cache of already-streamed audio: what makes stepping back, repeating
+/// and replaying instant instead of a re-fetch. Filling it costs a second
+/// download, so it is skipped on mobile data — same "onderweg" notion the
+/// transcode policy above uses.
+struct AudioCacheSettingsSection: View {
+    @AppStorage(LocalAudioCache.enabledKey) private var enabled = true
+    @AppStorage(LocalAudioCache.limitKey) private var limitMB = 2048
+    @State private var sizeBytes = 0
+
+    private static let sizeFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useMB, .useGB]
+        f.countStyle = .file
+        return f
+    }()
+
+    var body: some View {
+        Section("Muziek bewaren op dit apparaat") {
+            Toggle("Bewaar wat je afspeelt", isOn: $enabled)
+            if enabled {
+                Picker("Maximaal", selection: $limitMB) {
+                    Text("1 GB").tag(1024)
+                    Text("2 GB").tag(2048)
+                    Text("5 GB").tag(5120)
+                    Text("10 GB").tag(10240)
+                }
+                LabeledContent("Nu in gebruik",
+                               value: Self.sizeFormatter.string(fromByteCount: Int64(sizeBytes)))
+                Button("Leeg de cache", role: .destructive) {
+                    LocalAudioCache.clear()
+                    sizeBytes = 0
+                }
+                .disabled(sizeBytes == 0)
+            }
+            Text("Nummers die je speelt worden lokaal bewaard, zodat terugspringen en herhalen direct gaan — en zonder server blijven werken. Wordt overgeslagen op mobiele data.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .task { sizeBytes = LocalAudioCache.sizeBytes() }
     }
 }
 
