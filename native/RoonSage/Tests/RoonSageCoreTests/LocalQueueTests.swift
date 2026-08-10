@@ -8,6 +8,38 @@ import XCTest
 final class LocalQueueTests: XCTestCase {
     private let q = ["0", "1", "2", "3", "4"]
 
+    // MARK: - followerIndex (what gets pre-enqueued for gapless)
+
+    func testFollowerIsTheNextTrack() {
+        XCTAssertEqual(LocalQueue.followerIndex(after: 1, count: 5, loopMode: "disabled"), 2)
+    }
+
+    func testFollowerAtTheEndIsNilWithoutRepeat() {
+        XCTAssertNil(LocalQueue.followerIndex(after: 4, count: 5, loopMode: "disabled"))
+    }
+
+    func testFollowerWrapsWhenLooping() {
+        XCTAssertEqual(LocalQueue.followerIndex(after: 4, count: 5, loopMode: "loop"), 0)
+    }
+
+    /// loop_one pre-enqueues the SAME track, so repeating one song is gapless
+    /// rather than a reload at every boundary.
+    func testFollowerRepeatsItselfOnLoopOne() {
+        XCTAssertEqual(LocalQueue.followerIndex(after: 2, count: 5, loopMode: "loop_one"), 2)
+        XCTAssertEqual(LocalQueue.followerIndex(after: 4, count: 5, loopMode: "loop_one"), 4)
+    }
+
+    func testFollowerOfAnEmptyOrOutOfRangeQueueIsNil() {
+        XCTAssertNil(LocalQueue.followerIndex(after: 0, count: 0, loopMode: "loop"))
+        XCTAssertNil(LocalQueue.followerIndex(after: 7, count: 5, loopMode: "loop"))
+        XCTAssertNil(LocalQueue.followerIndex(after: -1, count: 5, loopMode: "loop"))
+    }
+
+    func testSingleTrackQueueFollowsOnlyWhenRepeating() {
+        XCTAssertNil(LocalQueue.followerIndex(after: 0, count: 1, loopMode: "disabled"))
+        XCTAssertEqual(LocalQueue.followerIndex(after: 0, count: 1, loopMode: "loop"), 0)
+    }
+
     // MARK: - insert
 
     func testInsertNextGoesAfterThePlayingTrack() {

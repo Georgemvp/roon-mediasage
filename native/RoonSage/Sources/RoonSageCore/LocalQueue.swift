@@ -27,6 +27,20 @@ public enum LocalQueue {
         }
     }
 
+    /// Which queue position plays after `index` finishes on its own, given the
+    /// repeat mode — nil when the session should end there.
+    ///
+    /// This is what makes gapless possible: the engine enqueues this track into
+    /// `AVQueuePlayer` *while the current one is still playing*, so the handover
+    /// needs no work at the boundary. `loop_one` returns the same index on
+    /// purpose — repeating one track is then gapless too, instead of a reload.
+    public static func followerIndex(after index: Int, count: Int, loopMode: String) -> Int? {
+        guard count > 0, index >= 0, index < count else { return nil }
+        if loopMode == "loop_one" { return index }
+        if index + 1 < count { return index + 1 }
+        return loopMode == "loop" ? 0 : nil
+    }
+
     /// Insert `newItems` either straight after the playing track ("speel hierna")
     /// or at the end ("achteraan toevoegen"). The playing track keeps its
     /// position in both cases, so the engine never reloads.

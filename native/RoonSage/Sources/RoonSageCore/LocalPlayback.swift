@@ -96,9 +96,18 @@ public final class LocalPlaybackController {
     public var onStateChange: (@MainActor () -> Void)?
 
     #if canImport(AVFoundation)
-    @ObservationIgnored private let player = AVPlayer()
+    /// `AVQueuePlayer`, not `AVPlayer`, so the next track can be handed to the
+    /// render pipeline *before* the current one ends — that's what removes the
+    /// gap. It holds at most two items (playing + follower); `queue`/`index`
+    /// above stay the single source of truth for the whole play order.
+    @ObservationIgnored private let player = AVQueuePlayer()
+    /// The items currently handed to the player, paired with the queue position
+    /// each one came from. Head = playing, optional tail = pre-enqueued
+    /// follower. This mapping is how an automatic handover is detected: when
+    /// `currentItem` changes to the tail, the player advanced by itself.
+    @ObservationIgnored private var scheduled: [(index: Int, item: AVPlayerItem)] = []
     @ObservationIgnored private var timeObserver: Any?
-    @ObservationIgnored private var endObserver: NSObjectProtocol?
+    @ObservationIgnored private var currentItemObserver: NSKeyValueObservation?
     /// Watches the current item's `status` so a server-side failure surfaces as a
     /// visible error instead of a silent "engaged but no sound".
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
@@ -108,17 +117,14 @@ public final class LocalPlaybackController {
 
     private init() {
         #if canImport(AVFoundation)
-        // Advance when the current item finishes (single AVPlayer + manual queue,
-        // so end-of-track is a notification, not AVQueuePlayer item management).
-        // Both callbacks are delivered on the main queue (the main actor's
-        // executor), so assume isolation rather than hop through a Task — that
-        // keeps it synchronous and avoids sending the non-Sendable AVPlayerItem
-        // across an actor boundary.
-        endObserver = NotificationCenter.default.addObserver(
-            forName: AVPlayerItem.didPlayToEndTimeNotification, object: nil, queue: .main
-        ) { [weak self] note in
-            let finished = note.object as? AVPlayerItem
-            MainActor.assumeIsolated { self?.handleItemEnded(finished) }
+        // The player advances on its own now, so end-of-track is observed as a
+        // change of `currentItem` rather than a didPlayToEndTime notification.
+        // KVO fires on the main queue here (the main actor's executor), so assume
+        // isolation instead of hopping through a Task — that keeps the handover
+        // synchronous and avoids sending the non-Sendable item across actors.
+        currentItemObserver = player.observe(\.currentItem, options: [.new]) { [weak self] player, _ in
+            let item = player.currentItem
+            MainActor.assumeIsolated { self?.handleCurrentItemChanged(to: item) }
         }
         // ~2 Hz position updates drive the scrubber + lock-screen elapsed time.
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
@@ -173,12 +179,17 @@ public final class LocalPlaybackController {
             queue = baseQueue
             index = cur.flatMap { c in baseQueue.firstIndex(where: { $0.id == c.id }) } ?? 0
         }
+        invalidateFollower()
         onStateChange?()
     }
 
     /// Set the repeat mode ("disabled" | "loop" | "loop_one").
     public func setLoop(_ mode: String) {
         loopMode = mode
+        // The mode decides what plays next, and that track may already be handed
+        // to the player — re-pick it. (Switching to "repeat one" mid-track makes
+        // the current track its own follower.)
+        invalidateFollower()
         onStateChange?()
     }
 
@@ -221,26 +232,26 @@ public final class LocalPlaybackController {
         #endif
     }
 
+    /// User-pressed Next: always steps forward, even under "repeat one" (where
+    /// the automatic follower is the same track again). "loop" wraps at the end;
+    /// otherwise the session stops.
     public func next() {
         guard isEngaged else { return }
-        advance(auto: false)
-    }
-
-    /// Advance the queue, honouring the repeat mode. `auto` is true when a track
-    /// finished on its own (so "loop_one" replays it); a user-pressed Next always
-    /// steps forward. "loop" wraps at the end; otherwise the session stops.
-    private func advance(auto: Bool) {
-        if auto, loopMode == "loop_one" {
-            seek(toSeconds: 0)
-            #if canImport(AVFoundation)
-            player.play(); isPlaying = true
-            #endif
-            onStateChange?()
+        let target: Int?
+        if index + 1 < queue.count { target = index + 1 }
+        else if loopMode == "loop" { target = 0 }
+        else { target = nil }
+        guard let target else { stop(); return }
+        #if canImport(AVFoundation)
+        // When the follower the player already holds IS the track we want, skip
+        // to it instead of rebuilding: no re-fetch, no reload, instant.
+        if scheduled.count > 1, scheduled[1].index == target {
+            player.advanceToNextItem()
+            if !isPlaying { player.play(); isPlaying = true }
             return
         }
-        if index + 1 < queue.count { load(index: index + 1, autoPlay: true) }
-        else if loopMode == "loop" { load(index: 0, autoPlay: true) }
-        else { stop() }
+        #endif
+        load(index: target, autoPlay: true)
     }
 
     public func previous() {
@@ -269,14 +280,18 @@ public final class LocalPlaybackController {
 
     /// Tear down the session and clear state — local playback fully stops.
     public func stop() {
+        // Cleared FIRST: emptying the player drives `currentItem` to nil, and the
+        // observer treats that as "queue ran dry" and calls back into stop().
+        // The flag makes that re-entry a no-op.
+        isPlaying = false
+        isEngaged = false
         #if canImport(AVFoundation)
         statusObserver?.invalidate()
         statusObserver = nil
         player.pause()
-        player.replaceCurrentItem(with: nil)
+        player.removeAllItems()
+        scheduled = []
         #endif
-        isPlaying = false
-        isEngaged = false
         queue = []
         baseQueue = []
         index = 0
@@ -308,6 +323,7 @@ public final class LocalPlaybackController {
         baseQueue = shuffle
             ? baseQueue + tracks
             : LocalQueue.insert(tracks, into: baseQueue, playingAt: index, next: next)
+        invalidateFollower()
         onStateChange?()
     }
 
@@ -329,6 +345,7 @@ public final class LocalPlaybackController {
             load(index: update.index, autoPlay: isPlaying)
         } else {
             index = update.index
+            invalidateFollower()
             onStateChange?()
         }
     }
@@ -344,6 +361,7 @@ public final class LocalPlaybackController {
         // the shuffled view must not rewrite the order shuffle-off restores.
         if !shuffle { baseQueue = update.items }
         index = update.index
+        invalidateFollower()
         onStateChange?()
     }
 
@@ -354,12 +372,21 @@ public final class LocalPlaybackController {
     }
 
     // MARK: - Internals
+    //
+    // Two ways a track starts. `load` is a HARD start — the user jumped, skipped
+    // or the queue was rebuilt, so the player is emptied and refilled; a gap
+    // there is expected and inaudible because the user caused it. The other way
+    // is the automatic handover: `scheduleFollower` hands the next item to the
+    // player while the current one still plays, so `AVQueuePlayer` crosses the
+    // boundary with no reload. That path is the gapless one.
 
     private func load(index i: Int, autoPlay: Bool) {
         index = i
         positionSec = 0
         lastError = nil
         #if canImport(AVFoundation)
+        player.removeAllItems()
+        scheduled = []
         guard let item = makeItem(for: queue[i]) else {
             lastError = "Kon dit nummer niet laden."
             isPlaying = false
@@ -367,11 +394,72 @@ public final class LocalPlaybackController {
             return
         }
         observeFailures(of: item)
-        player.replaceCurrentItem(with: item)
+        player.insert(item, after: nil)
+        scheduled = [(index: i, item: item)]
         applyLoudness(for: queue[i])
         if autoPlay { player.play(); isPlaying = true } else { player.pause(); isPlaying = false }
+        scheduleFollower()
         #endif
         onStateChange?()
+    }
+
+    #if canImport(AVFoundation)
+    /// Hand the next track to the player *now*, while the current one is still
+    /// playing — the whole point of `AVQueuePlayer`. Cheap and idempotent: does
+    /// nothing when a follower is already queued or when the queue ends here.
+    private func scheduleFollower() {
+        guard isEngaged, scheduled.count == 1, let head = scheduled.first else { return }
+        guard let nextIndex = LocalQueue.followerIndex(
+            after: head.index, count: queue.count, loopMode: loopMode) else { return }
+        guard let item = makeItem(for: queue[nextIndex]),
+              player.canInsert(item, after: head.item) else { return }
+        player.insert(item, after: head.item)
+        scheduled.append((index: nextIndex, item: item))
+    }
+
+    /// The player moved to another item. Either it advanced by itself (the
+    /// gapless handover — the new item is our scheduled follower) or the queue
+    /// ran dry. A hard `load` also triggers this, but there the item is already
+    /// the head, so it's a no-op beyond re-scheduling.
+    private func handleCurrentItemChanged(to item: AVPlayerItem?) {
+        guard isEngaged else { return }
+        guard let item else {
+            // Nothing left to play: the last track finished with no follower.
+            stop()
+            return
+        }
+        guard let position = scheduled.firstIndex(where: { $0.item === item }) else { return }
+        scheduled.removeFirst(position)
+        guard let head = scheduled.first else { return }
+        if head.index != index {
+            index = head.index
+            positionSec = 0
+            lastError = nil
+            observeFailures(of: head.item)
+            // The loudness gain rides on `player.volume`, which is per-player and
+            // not per-item, so it can only change once the handover has happened
+            // — a fraction of a second late. Inaudible for the small deltas
+            // normalization produces, but it IS the mechanism behind the "click
+            // between tracks" other clients report. Fixing it properly means a
+            // per-item AVAudioMix; noted as a follow-up rather than done blind.
+            applyLoudness(for: queue[head.index])
+            onStateChange?()
+        }
+        scheduleFollower()
+    }
+    #endif
+
+    /// Drop the pre-enqueued follower and pick a new one. Any queue mutation
+    /// (enqueue-next, remove, reorder, shuffle, repeat-mode change) can make the
+    /// already-handed-over track the wrong one, and the player would happily
+    /// play it — so every one of those verbs comes through here.
+    private func invalidateFollower() {
+        #if canImport(AVFoundation)
+        guard isEngaged else { return }
+        for entry in scheduled.dropFirst() { player.remove(entry.item) }
+        scheduled = Array(scheduled.prefix(1))
+        scheduleFollower()
+        #endif
     }
 
     #if canImport(AVFoundation)
@@ -440,12 +528,6 @@ public final class LocalPlaybackController {
         comps?.queryItems = items
         guard let url = comps?.url else { return nil }
         return AVPlayerItem(url: url)
-    }
-
-    private func handleItemEnded(_ finished: AVPlayerItem?) {
-        // Ignore stale notifications from a replaced item.
-        guard isEngaged, finished === player.currentItem else { return }
-        advance(auto: true)
     }
     #endif
 

@@ -246,12 +246,19 @@ public final class RoonClient {
     public internal(set) var corePort: UInt16 = 9330
     public internal(set) var selectedZoneID: String?
 
-    /// Whether the user chose to listen on this device instead of a Roon zone.
+    /// Whether we're listening on this device rather than through a Roon zone.
     /// STORED + observable (unlike the old UserDefaults-computed version) so that
     /// SwiftUI re-renders the moment it flips — NowPlayingView branches on it, and
     /// a non-observable value left the screen stuck on the local player after
     /// picking a zone. Persisted to UserDefaults in didSet; restored at init.
-    public internal(set) var localOutputSelected: Bool = UserDefaults.standard.bool(forKey: "local_output_selected") {
+    ///
+    /// **Defaults to on.** RoonSage is a local music player that can also drive
+    /// Roon zones, not a Roon remote that can also play locally — so a fresh
+    /// install listens here until the user deliberately picks a zone. `bool(forKey:)`
+    /// can't express that (it returns false for "never set"), hence the explicit
+    /// object lookup: only a value the user actually chose overrides the default.
+    public internal(set) var localOutputSelected: Bool =
+        (UserDefaults.standard.object(forKey: "local_output_selected") as? Bool) ?? true {
         didSet { UserDefaults.standard.set(localOutputSelected, forKey: "local_output_selected") }
     }
 
