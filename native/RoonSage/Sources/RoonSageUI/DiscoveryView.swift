@@ -304,14 +304,11 @@ public struct DiscoveryView: View {
         HStack(spacing: Spacing.sm) {
             Button {
                 Haptics.tap()
-                play { await client.curateTracks(tracks, zoneID: $0) }
+                Task { await client.playToActiveOutput(tracks) }
             } label: { Label(LS("discovery.playAll"), systemImage: "play.fill") }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(client.selectedZone == nil)
-            LocalPlayButton { tracks }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .disabled(!client.hasActiveOutput)
         }
     }
 

@@ -77,11 +77,23 @@ extension RoonClient {
         return LocalPlayability.partition(tracks, playableKeys: keys)
     }
 
-    /// Start playing `tracks` on this device, dropping any that aren't locally
-    /// playable. Records a `LocalPlaybackSummary` for the UI. Returns it (nil
-    /// when there was nothing to resolve / no server).
-    @discardableResult
-    public func playLocally(_ tracks: [TrackRecord], startAt: Int = 0) async -> LocalPlaybackSummary? {
+    /// Resolved input for the on-device engine: the stream base to fetch from,
+    /// the playable tracks in their original order, and what got dropped.
+    struct LocalPlaybackRequest {
+        let base: String
+        let items: [LocalPlaybackController.Track]
+        let summary: LocalPlaybackSummary
+    }
+
+    /// Turn library records into engine tracks — drop what can't play here,
+    /// attach loudness references, and (optionally) resolve Qobuz CDN URLs.
+    /// Shared by every local verb so "speel" and "zet in de wachtrij" filter and
+    /// normalize identically.
+    ///
+    /// Returns nil when there was nothing to try (empty input, no server); an
+    /// empty `items` means everything was filtered out. Both paths have already
+    /// set `lastActionError` / `lastLocalPlaybackSummary` for the UI.
+    private func resolveLocalPlayback(_ tracks: [TrackRecord]) async -> LocalPlaybackRequest? {
         guard !tracks.isEmpty else { return nil }
         let base = localStreamBase()
         guard !base.isEmpty else {
@@ -125,15 +137,40 @@ extension RoonClient {
             requested: tracks.count, playable: items.count, blocked: blockedTitles.count,
             blockedExamples: Array(blockedTitles.prefix(3)))
         lastLocalPlaybackSummary = summary
-        guard !items.isEmpty else {
+        if items.isEmpty {
             lastActionError = ActionError(
                 message: "Geen van deze nummers is lokaal te spelen op deze iPhone (Qobuz/stream of niet op schijf).")
-            return summary
         }
+        return LocalPlaybackRequest(base: base, items: items, summary: summary)
+    }
+
+    /// Start playing `tracks` on this device, dropping any that aren't locally
+    /// playable. Records a `LocalPlaybackSummary` for the UI. Returns it (nil
+    /// when there was nothing to resolve / no server).
+    ///
+    /// NOTED (pre-existing, not changed here): `startAt` indexes the resolved
+    /// list, so it points at the wrong track when a blocked one precedes it.
+    @discardableResult
+    public func playLocally(_ tracks: [TrackRecord], startAt: Int = 0) async -> LocalPlaybackSummary? {
+        guard let request = await resolveLocalPlayback(tracks) else { return nil }
+        guard !request.items.isEmpty else { return request.summary }
         localOutputSelected = true
-        localPlayback.play(items, streamBase: base,
+        localPlayback.play(request.items, streamBase: request.base,
                            token: LibraryShareServer.configuredToken, startAt: startAt)
-        return summary
+        return request.summary
+    }
+
+    /// Add `tracks` to this device's queue — straight after the current track
+    /// (`next: true`) or at the end. With nothing playing yet the engine treats
+    /// it as "play these", so the verb always does something sensible.
+    @discardableResult
+    public func enqueueLocally(_ tracks: [TrackRecord], next: Bool) async -> LocalPlaybackSummary? {
+        guard let request = await resolveLocalPlayback(tracks) else { return nil }
+        guard !request.items.isEmpty else { return request.summary }
+        localOutputSelected = true
+        localPlayback.enqueue(request.items, streamBase: request.base,
+                              token: LibraryShareServer.configuredToken, next: next)
+        return request.summary
     }
 
     /// Resolve Qobuz CDN URLs for blocked tracks when the experimental toggle is
@@ -194,6 +231,17 @@ extension RoonClient {
             await playLocally(tracks)
         } else if let zone = selectedZone {
             await curateTracks(tracks, zoneID: zone.id)
+        }
+    }
+
+    /// Route a "queue" request to whichever output is active. The local engine
+    /// gained insert-next/append, so the queue verbs are no longer Roon-only —
+    /// "speel hierna" and "achteraan toevoegen" work on this device too.
+    public func queueToActiveOutput(_ tracks: [TrackRecord], next: Bool) async {
+        if localOutputSelected {
+            await enqueueLocally(tracks, next: next)
+        } else if let zone = selectedZone {
+            await queueTracks(tracks, next: next, zoneID: zone.id)
         }
     }
 

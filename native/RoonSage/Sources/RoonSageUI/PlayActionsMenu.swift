@@ -19,19 +19,20 @@ struct PlayActionsMenu: View {
 
     var body: some View {
         let hasZone = client.selectedZone != nil
-        // The primary "play now" verbs follow the active output — the selected
-        // Roon zone, or this device when "dit apparaat" is chosen. The queue verbs
-        // are Roon-only (the local engine has no insert-next), so they stay zoned.
+        // Every play AND queue verb follows the active output — the selected Roon
+        // zone, or this device when "dit apparaat" is chosen. The queue verbs used
+        // to be Roon-only because the local engine had no insert-next; it has one
+        // now (`LocalPlaybackController.enqueue`), so they route like the rest.
         let hasOutput = client.hasActiveOutput
         Button(LS("bm.playNow"), systemImage: "play.fill") {
             runOutput { await client.playToActiveOutput($0) }
         }.disabled(!hasOutput)
         Button(LS("playActionsMenu.playNext"), systemImage: "text.line.first.and.arrowtriangle.forward") {
-            run { records, zone in await client.queueTracks(records, next: true, zoneID: zone) }
-        }.disabled(!hasZone)
+            runOutput { await client.queueToActiveOutput($0, next: true) }
+        }.disabled(!hasOutput)
         Button(LS("playActionsMenu.queueLast"), systemImage: "text.append") {
-            run { records, zone in await client.queueTracks(records, next: false, zoneID: zone) }
-        }.disabled(!hasZone)
+            runOutput { await client.queueToActiveOutput($0, next: false) }
+        }.disabled(!hasOutput)
         Button(LS("playActionsMenu.playShuffled"), systemImage: "shuffle") {
             runOutput { await client.playToActiveOutput($0.shuffled()) }
         }.disabled(!hasOutput)
@@ -71,18 +72,9 @@ struct PlayActionsMenu: View {
         }
     }
 
-    private func run(_ action: @escaping (_ records: [TrackRecord], _ zoneID: String) async -> Void) {
-        guard let zone = client.selectedZone else { return }
-        Haptics.tap()
-        Task {
-            let records = await fetch()
-            guard !records.isEmpty else { return }
-            await action(records, zone.id)
-        }
-    }
-
-    /// Like `run`, but output-agnostic — the action decides where playback goes
-    /// (zone or this device) via `client.playToActiveOutput`.
+    /// Fetch the entity's tracks, then hand them to an output-agnostic action —
+    /// the action itself decides where they go (zone or this device) via
+    /// `client.playToActiveOutput` / `client.queueToActiveOutput`.
     private func runOutput(_ action: @escaping (_ records: [TrackRecord]) async -> Void) {
         Haptics.tap()
         Task {

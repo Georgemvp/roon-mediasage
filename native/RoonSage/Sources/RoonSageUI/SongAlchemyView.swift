@@ -209,17 +209,13 @@ public struct SongAlchemyView: View {
     private var resultsSection: some View {
         Section(LS("Alchemieresultaten (\(results.count))")) {
             HStack(spacing: Spacing.sm) {
-                if let zone = client.selectedZone {
-                    Button {
-                        Haptics.success()
-                        Task { await client.curateTracks(topRecords, zoneID: zone.id) }
-                    } label: { Label(LS("songAlchemy.playTop20"), systemImage: "play.fill").frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.roonGold)
-                }
-                LocalPlayButton { topRecords }
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
+                Button {
+                    Haptics.success()
+                    Task { await client.playToActiveOutput(topRecords) }
+                } label: { Label(LS("songAlchemy.playTop20"), systemImage: "play.fill").frame(maxWidth: .infinity) }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.roonGold)
+                .disabled(!client.hasActiveOutput)
             }
             ForEach(results.prefix(30)) { scored in
                 HStack(spacing: Spacing.md) {

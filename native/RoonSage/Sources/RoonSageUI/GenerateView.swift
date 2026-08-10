@@ -618,12 +618,6 @@ public struct GenerateView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!client.hasActiveOutput || model.tracks.isEmpty)
-
-                // Local playback needs no zone — always offered alongside Roon.
-                LocalPlayButton(style: .labeled) { model.tracks }
-                    .buttonStyle(.bordered)
-                    .disabled(model.tracks.isEmpty)
-                    .frame(maxWidth: .infinity)
             }
             if !client.hasActiveOutput {
                 LT("generate.noZone")

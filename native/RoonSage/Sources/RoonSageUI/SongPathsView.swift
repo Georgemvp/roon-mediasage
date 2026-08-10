@@ -176,17 +176,13 @@ public struct SongPathsView: View {
     private var pathResultSection: some View {
         Section(LS("Sonisch pad (\(path.count) tracks)")) {
             HStack(spacing: Spacing.sm) {
-                if let zone = client.selectedZone {
-                    Button {
-                        Haptics.success()
-                        Task { await client.curateTracks(pathRecords, zoneID: zone.id) }
-                    } label: { Label(LS("songPaths.playPath"), systemImage: "play.fill").frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.roonGold)
-                }
-                LocalPlayButton { pathRecords }
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
+                Button {
+                    Haptics.success()
+                    Task { await client.playToActiveOutput(pathRecords) }
+                } label: { Label(LS("songPaths.playPath"), systemImage: "play.fill").frame(maxWidth: .infinity) }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.roonGold)
+                .disabled(!client.hasActiveOutput)
             }
             if client.qobuzConfigured {
                 Button {

@@ -87,17 +87,12 @@ struct MultitagView: View {
     private var resultsSection: some View {
         Section(LS("Resultaten (\(results.count))")) {
             HStack(spacing: Spacing.sm) {
-                if client.selectedZone != nil {
-                    Button {
-                        Haptics.success()
-                        if let zone = client.selectedZone {
-                            Task { await client.curateTracks(Array(results.prefix(60)), zoneID: zone.id) }
-                        }
-                    } label: { Label(LS("multitag.play"), systemImage: "play.fill").frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent).tint(Color.roonGold)
-                }
-                LocalPlayButton { Array(results.prefix(60)) }
-                    .buttonStyle(.bordered).frame(maxWidth: .infinity)
+                Button {
+                    Haptics.success()
+                    Task { await client.playToActiveOutput(Array(results.prefix(60))) }
+                } label: { Label(LS("multitag.play"), systemImage: "play.fill").frame(maxWidth: .infinity) }
+                .buttonStyle(.borderedProminent).tint(Color.roonGold)
+                .disabled(!client.hasActiveOutput)
             }
             ForEach(results.prefix(80), id: \.id) { t in
                 VStack(alignment: .leading, spacing: 2) {

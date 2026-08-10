@@ -121,10 +121,6 @@ public struct FilteredTracksView: View {
                 .controlSize(.small)
                 .disabled(client.selectedZone == nil)
 
-            LocalPlayButton(style: .labeled, tracks: { tracks })
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
             Spacer(minLength: Spacing.sm)
             Text(reachedEnd ? "\(tracks.count)" : "\(tracks.count)+")
                 .font(.caption.monospacedDigit())

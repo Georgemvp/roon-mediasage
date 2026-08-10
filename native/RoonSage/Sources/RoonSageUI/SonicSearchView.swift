@@ -94,16 +94,12 @@ public struct SonicSearchView: View {
     private var resultsSection: some View {
         Section("Resultaten (\(results.count))") {
             HStack(spacing: Spacing.sm) {
-                if let zone = client.selectedZone {
-                    Button {
-                        Haptics.success()
-                        Task { await client.curateTracks(topRecords, zoneID: zone.id) }
-                    } label: { Label("Speel top 20", systemImage: "play.fill").frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent).tint(Color.roonGold)
-                }
-                LocalPlayButton { topRecords }
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
+                Button {
+                    Haptics.success()
+                    Task { await client.playToActiveOutput(topRecords) }
+                } label: { Label("Speel top 20", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                .buttonStyle(.borderedProminent).tint(Color.roonGold)
+                .disabled(!client.hasActiveOutput)
             }
             ForEach(results.prefix(40)) { scored in
                 HStack(spacing: Spacing.md) {

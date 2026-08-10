@@ -583,8 +583,12 @@
 /* queue */
 "queue.cancel"                  = "Annuleer";
 "queue.emptyTitle"              = "Wachtrij is leeg";
+"queue.localEmptyDescription"   = "Speel iets af op dit apparaat; wat je daarna in de wachtrij zet, komt hier te staan.";
+"queue.localEmptyTitle"         = "Niets in de wachtrij van dit apparaat";
+"queue.noZoneDescription"       = "Kies een Roon-zone of dit apparaat om de wachtrij te zien.";
 "queue.noZoneTitle"             = "Geen zone gekozen";
 "queue.nowPlaying"              = "Speelt nu";
+"queue.removeFromQueue"         = "Uit wachtrij verwijderen";
 "queue.playFromHereHint"        = "Tik om vanaf hier af te spelen";
 "queue.playlistNamePlaceholder" = "Naam playlist";
 "queue.save"                    = "Bewaar";

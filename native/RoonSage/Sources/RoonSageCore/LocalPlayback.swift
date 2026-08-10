@@ -285,6 +285,74 @@ public final class LocalPlaybackController {
         onStateChange?()
     }
 
+    // MARK: - Queue editing
+    //
+    // Roon's extension API offers no reorder/remove, so these verbs exist only
+    // for the local engine — on this device the queue is a plain array we own.
+    // The index bookkeeping lives in `LocalQueue` (pure, unit-tested); this layer
+    // only decides when a mutation forces the player to reload.
+
+    /// Add tracks to the queue without interrupting what's playing: straight
+    /// after the current track (`next: true`) or at the end. Starting from an
+    /// idle engine is the same thing as "play these" — so it delegates.
+    public func enqueue(_ tracks: [Track], streamBase: String, token: String?, next: Bool) {
+        guard !tracks.isEmpty else { return }
+        guard isEngaged, !queue.isEmpty else {
+            play(tracks, streamBase: streamBase, token: token)
+            return
+        }
+        queue = LocalQueue.insert(tracks, into: queue, playingAt: index, next: next)
+        // `baseQueue` is the unshuffled order used to restore when shuffle goes
+        // off. Unshuffled it mirrors the queue exactly; shuffled, new arrivals
+        // simply join at the end — their "original" order is arrival order.
+        baseQueue = shuffle
+            ? baseQueue + tracks
+            : LocalQueue.insert(tracks, into: baseQueue, playingAt: index, next: next)
+        onStateChange?()
+    }
+
+    /// Remove queued tracks. Removing the playing track advances to the next
+    /// survivor (keeping the play/pause state); removing everything stops.
+    public func removeFromQueue(atOffsets offsets: IndexSet) {
+        guard isEngaged else { return }
+        let removed = offsets.sorted().compactMap { queue.indices.contains($0) ? queue[$0] : nil }
+        guard !removed.isEmpty else { return }
+        let update = LocalQueue.remove(atOffsets: offsets, from: queue, playingAt: index)
+        queue = update.items
+        // Drop one base-queue occurrence per removed track, so a queue holding
+        // the same song twice loses only the copy the user actually swiped.
+        for track in removed {
+            if let i = baseQueue.firstIndex(where: { $0.id == track.id }) { baseQueue.remove(at: i) }
+        }
+        guard !queue.isEmpty else { stop(); return }
+        if update.currentRemoved {
+            load(index: update.index, autoPlay: isPlaying)
+        } else {
+            index = update.index
+            onStateChange?()
+        }
+    }
+
+    /// Reorder the queue (SwiftUI `onMove` offsets). Never interrupts playback —
+    /// the playing track keeps going wherever it lands.
+    public func moveInQueue(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        guard isEngaged else { return }
+        let update = LocalQueue.move(fromOffsets: offsets, toOffset: destination,
+                                     in: queue, playingAt: index)
+        queue = update.items
+        // Only mirror into the base order when it IS the queue's order; a drag in
+        // the shuffled view must not rewrite the order shuffle-off restores.
+        if !shuffle { baseQueue = update.items }
+        index = update.index
+        onStateChange?()
+    }
+
+    /// Play from here — the queue view's tap action.
+    public func jump(to i: Int) {
+        guard isEngaged, queue.indices.contains(i) else { return }
+        load(index: i, autoPlay: true)
+    }
+
     // MARK: - Internals
 
     private func load(index i: Int, autoPlay: Bool) {

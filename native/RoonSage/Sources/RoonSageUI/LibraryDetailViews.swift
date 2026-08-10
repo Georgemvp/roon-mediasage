@@ -132,18 +132,18 @@ struct AlbumDetailView: View {
                 Text(subtitle).font(.caption).foregroundStyle(.tertiary)
                 Spacer(minLength: 0)
                 HStack(spacing: Spacing.sm) {
+                    // Play + queue both follow the active output, so they work on
+                    // this device as well as on a zone — hence no separate
+                    // on-device button, and no zone in the disabled condition.
                     Button { play(tracks) } label: { Label(LS("libraryDetail.play"), systemImage: "play.fill") }
                         .buttonStyle(.borderedProminent).tint(Color.roonGold)
-                        .disabled(client.selectedZone == nil || tracks.isEmpty)
-                    // Queue + listen-on-device kept icon-only so the row fits on iPhone.
+                        .disabled(!client.hasActiveOutput || tracks.isEmpty)
+                    // Queue kept icon-only so the row fits on iPhone.
                     Button { queue(tracks) } label: { Image(systemName: "text.append") }
                         .buttonStyle(.bordered)
-                        .disabled(client.selectedZone == nil || tracks.isEmpty)
+                        .disabled(!client.hasActiveOutput || tracks.isEmpty)
                         .accessibilityLabel(LS("libraryDetail.addToQueue"))
                         .help(LS("libraryDetail.addToQueue"))
-                    LocalPlayButton { tracks.map(record) }
-                        .buttonStyle(.bordered)
-                        .disabled(tracks.isEmpty)
                     Button {
                         guard let zone = client.selectedZone else { return }
                         Haptics.tap()
@@ -179,18 +179,18 @@ struct AlbumDetailView: View {
         TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album, year: t.year, isLive: t.isLive)
     }
 
+    /// Play now on the active output — a Roon zone, or this device.
     private func play(_ rows: [DatabaseManager.LibraryTrackRow]) {
         guard !rows.isEmpty else { return }
         Haptics.tap()
-        // Per-row "play now" follows the active output (local or Roon); the album
-        // header's "Speel alles" stays Roon beside its own on-device button.
         Task { await client.playToActiveOutput(rows.map(record)) }
     }
 
+    /// Append to the active output's queue — Roon's, or this device's.
     private func queue(_ rows: [DatabaseManager.LibraryTrackRow]) {
-        guard let zone = client.selectedZone, !rows.isEmpty else { return }
+        guard !rows.isEmpty else { return }
         Haptics.tap()
-        Task { await client.queueTracks(rows.map(record), zoneID: zone.id) }
+        Task { await client.queueToActiveOutput(rows.map(record), next: false) }
     }
 }
 

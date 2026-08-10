@@ -228,14 +228,13 @@ public struct SonicFingerprintView: View {
                 Text("Aanbevolen voor jou").font(.headline).lineLimit(1)
                 Spacer(minLength: Spacing.sm)
                 Button {
-                    play { await client.curateTracks(asTracks(fp.recommendations), zoneID: $0) }
+                    Haptics.tap()
+                    Task { await client.playToActiveOutput(asTracks(fp.recommendations)) }
                 } label: {
                     Label("Speel alles", systemImage: "play.fill")
                 }
                 .buttonStyle(.bordered).controlSize(.small)
-                .disabled(client.selectedZone == nil)
-                LocalPlayButton { asTracks(fp.recommendations) }
-                    .buttonStyle(.bordered).controlSize(.small)
+                .disabled(!client.hasActiveOutput)
             }
             Text("Het dichtst bij jouw smaak, met ruimte voor ontdekking.")
                 .font(.caption).foregroundStyle(.secondary)
