@@ -99,8 +99,8 @@ public struct SettingsView: View {
     public var body: some View {
         Form {
             // Appearance
-            Section("Verschijning") {
-                Picker("Thema", selection: $themePreset) {
+            Section(LS("settings.appearance")) {
+                Picker(LS("settings.theme"), selection: $themePreset) {
                     ForEach(ThemePreset.allCases) { preset in
                         Label {
                             Text(preset.label)
@@ -117,12 +117,12 @@ public struct SettingsView: View {
                 // The custom accent + light/dark pickers only apply to "Aangepast";
                 // a named preset pins its own accent and scheme.
                 if themePreset == .custom {
-                    Picker("Lichtmodus", selection: $themeMode) {
+                    Picker(LS("settings.lightMode"), selection: $themeMode) {
                         ForEach(ThemeMode.allCases) { mode in
                             Text(mode.label).tag(mode)
                         }
                     }
-                    Picker("Accentkleur", selection: $accent) {
+                    Picker(LS("settings.accentColour"), selection: $accent) {
                         ForEach(AccentChoice.allCases) { choice in
                             Label {
                                 Text(choice.label)
@@ -133,42 +133,42 @@ public struct SettingsView: View {
                         }
                     }
                 }
-                Toggle("Visualizer bij 'Nu speelt'", isOn: $showVisualizer)
+                Toggle(LS("settings.visualizerNowPlaying"), isOn: $showVisualizer)
                 Picker(LS("settings.language"), selection: $appLanguage) {
                     ForEach(LocalePreference.allCases) { Text($0.label).tag($0) }
                 }
             }
 
             // Ambient backdrop (C6): dial the album-art wash + optional wallpaper.
-            Section("Achtergrond") {
+            Section(LS("settings.background")) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
-                        Text("Sfeer-intensiteit")
+                        LT("settings.ambientIntensity")
                         Spacer()
                         Text("\(Int(ambientIntensity * 100))%")
                             .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     }
                     Slider(value: $ambientIntensity, in: 0...1, step: 0.05)
                         .tint(Color.roonGold)
-                    Text("Hoeveel de album-art de app kleurt. 0% = vlakke achtergrond.")
+                    LT("settings.ambientIntensityHelp")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Toggle("Album-hoes als achtergrond", isOn: $ambientWallpaper)
+                Toggle(LS("settings.albumArtBackground"), isOn: $ambientWallpaper)
             }
 
             // Connection
-            Section("Roon-verbinding") {
+            Section(LS("settings.roonConnection")) {
                 LabeledContent("Status", value: client.connectionState.label)
                 if let host = client.coreHost {
                     LabeledContent("Host", value: "\(host):\(client.corePort)")
                 }
                 HStack {
-                    Button("Verbreek verbinding") {
+                    Button(LS("settings.disconnect")) {
                         Task { await client.disconnect() }
                     }
                     .disabled(!client.connectionState.isConnected)
 
-                    Button("Opnieuw autoriseren", role: .destructive) {
+                    Button(LS("settings.reauthorise"), role: .destructive) {
                         Task { await client.clearAndReauthorize() }
                     }
                     .disabled(!client.connectionState.isConnected)
@@ -192,7 +192,7 @@ public struct SettingsView: View {
                     HStack {
                         TextField("http://10.94.184.22:5767", text: $serverURL)
                             .textFieldStyle(.roundedBorder)
-                        Button("Synchroniseer") {
+                        Button(LS("settings.sync")) {
                             Task { await syncFromServer(explicit: serverURL) }
                         }
                         .disabled(settingsSyncBusy || client.isSyncing
@@ -204,33 +204,33 @@ public struct SettingsView: View {
                     HStack(spacing: Spacing.sm) {
                         // Save on commit (Enter / Bewaar), not on every keystroke —
                         // a half-typed token used to overwrite the working one.
-                        SecureField("Servertoken", text: $serverToken)
+                        SecureField(LS("settings.serverToken"), text: $serverToken)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { saveServerToken() }
                         if tokenSaved {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(Color.roonSuccess)
-                                .accessibilityLabel("Token bewaard")
+                                .accessibilityLabel(LS("settings.tokenSaved"))
                                 .transition(.opacity)
                         }
-                        Button("Bewaar") { saveServerToken() }
+                        Button(LS("settings.save")) { saveServerToken() }
                             .disabled(serverToken.trimmingCharacters(in: .whitespaces) == savedServerToken)
                     }
                     .animation(Motion.quick, value: tokenSaved)
-                    Text("Haalt instellingen, de muziekbibliotheek en de analyses op van de RoonSage-server (de analyzer op je always-on Mac). Je hoeft hier niets in te vullen: dit apparaat meldt zich automatisch aan en verschijnt op de server onder ‘Apparaten’, waar je het met één tik goedkeurt. (Het veld is alleen nodig als je liever de master-token handmatig plakt.) De app onthoudt álle adressen van de server (thuisnetwerk én ZeroTier) en kiest onderweg op 4G/5G automatisch het adres dat bereikbaar is.")
+                    LT("settings.serverSyncHelp")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
 
             // Library — counts always; sync/share controls only on the server.
-            Section("Bibliotheek") {
-                LabeledContent("Tracks in database", value: "\(client.trackCount)")
-                LabeledContent("Genres in database", value: genreCountLabel)
-                LabeledContent("Laatste sync", value: lastSync)
+            Section(LS("settings.library")) {
+                LabeledContent(LS("settings.tracksInDatabase"), value: "\(client.trackCount)")
+                LabeledContent(LS("settings.genresInDatabase"), value: genreCountLabel)
+                LabeledContent(LS("settings.lastSync"), value: lastSync)
 
                 if role == .server {
                     HStack {
-                        Button("Synchroniseer nu") { client.startSync() }
+                        Button(LS("settings.syncNow")) { client.startSync() }
                             .disabled(!client.connectionState.isConnected || client.isSyncing || client.isGenreSyncing)
                         if client.isSyncing {
                             ProgressView()
@@ -241,7 +241,7 @@ public struct SettingsView: View {
                         }
                     }
                     HStack {
-                        Button("Synchroniseer genres") { client.startGenreSync() }
+                        Button(LS("settings.syncGenres")) { client.startGenreSync() }
                             .disabled(!client.connectionState.isConnected || client.isSyncing || client.isGenreSyncing)
                         if client.isGenreSyncing {
                             ProgressView()
@@ -252,26 +252,26 @@ public struct SettingsView: View {
                         }
                     }
 
-                    Toggle("Deel bibliotheek voor import (poort 5767)", isOn: Binding(
+                    Toggle(LS("settings.shareLibrary"), isOn: Binding(
                         get: { client.isLibrarySharing },
                         set: { client.setLibrarySharing(enabled: $0) }
                     ))
-                    Text("Client-apps (Mac/iPhone) halen de bibliotheek hiervandaan op in plaats van zelf urenlang te syncen.")
+                    LT("settings.shareLibraryHelp")
                         .font(.caption).foregroundStyle(.secondary)
 
                     if client.isLibrarySharing {
-                        LabeledContent("Toegangstoken") {
+                        LabeledContent(LS("settings.accessToken")) {
                             Text(LibraryShareServer.currentToken())
                                 .font(.caption.monospaced())
                                 .textSelection(.enabled)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
-                        Toggle("Forceer token (weiger niet-gekoppelde clients)", isOn: Binding(
+                        Toggle(LS("settings.enforceToken"), isOn: Binding(
                             get: { LibraryShareServer.enforceToken },
                             set: { LibraryShareServer.enforceToken = $0 }
                         ))
-                        Text("De server deelt ook je instellingen — inclusief API-sleutels en wachtwoorden. Nieuwe clients koppel je zonder token: ze verschijnen onder ‘Apparaten’, waar je ze goedkeurt. Dit token is de handmatige fallback. Met ‘Forceer’ aan krijgen alleen goedgekeurde clients toegang.")
+                        LT("settings.shareTokenHelp")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -304,7 +304,7 @@ public struct SettingsView: View {
                             llmBaseURL = "http://\(host):11434"
                             Task { await fetchOllamaModels() }
                         } label: {
-                            Label("Vind automatisch", systemImage: "magnifyingglass")
+                            Label(LS("settings.findAutomatically"), systemImage: "magnifyingglass")
                         }
                     }
                 }
@@ -323,8 +323,8 @@ public struct SettingsView: View {
                 }
 
                 if llmProvider.needsAPIKey {
-                    LabeledContent("API-sleutel") {
-                        SecureField("Plak hier je sleutel", text: $llmApiKey)
+                    LabeledContent(LS("settings.apiKey")) {
+                        SecureField(LS("settings.pasteKeyHere"), text: $llmApiKey)
                             .textFieldStyle(.roundedBorder)
                     }
                 }
@@ -335,7 +335,7 @@ public struct SettingsView: View {
                         Task { await testLLM() }
                     } label: {
                         if isTestingLLM { ProgressView().controlSize(.small) }
-                        else { Label("Test verbinding", systemImage: "bolt.horizontal.circle") }
+                        else { Label(LS("settings.testConnection"), systemImage: "bolt.horizontal.circle") }
                     }
                     .disabled(isTestingLLM)
                 }
@@ -348,16 +348,16 @@ public struct SettingsView: View {
                 }
 
                 if llmProvider == .gemini {
-                    Text("Gebruik je Google AI Studio-sleutel (generativelanguage.googleapis.com). Groot contextvenster — ideaal voor curatie uit een grote bibliotheek.")
+                    LT("settings.geminiHelp")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
 
             // External Services
-            Section("Externe diensten") {
-                LabeledContent("ListenBrainz-token") {
+            Section(LS("settings.externalServices")) {
+                LabeledContent(LS("settings.listenbrainzToken")) {
                     HStack(spacing: Spacing.sm) {
-                        SecureField("Plak hier je token", text: $lbToken)
+                        SecureField(LS("settings.pasteTokenHere"), text: $lbToken)
                             .textFieldStyle(.roundedBorder)
                         Button(lbSaved ? "Bewaard!" : "Bewaar") {
                             if lbToken.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -370,7 +370,7 @@ public struct SettingsView: View {
                         }
                     }
                 }
-                Text("Scrobblet elke track naar ListenBrainz zodra hij echt geluisterd is.")
+                LT("settings.listenbrainzScrobbleHelp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -383,17 +383,17 @@ public struct SettingsView: View {
                     }
                 }
                 .disabled(lbLovesBusy)
-                Text("Haalt je ListenBrainz-‘loved’ tracks op en zet ze als duim-omhoog op de server; bestaande oordelen blijven staan.")
+                LT("settings.listenbrainzLovedHelp")
                     .font(.caption).foregroundStyle(.secondary)
 
-                Toggle("Importeer ListenBrainz-playlists dagelijks", isOn: Binding(
+                Toggle(LS("settings.importListenbrainzPlaylists"), isOn: Binding(
                     get: { client.lbPlaylistSyncEnabled },
                     set: { client.setListenBrainzPlaylistSync(enabled: $0) }
                 ))
-                Text("Haalt elke dag je ListenBrainz-playlists (eigen + ‘voor jou samengesteld’) op en zet ze in de playlist-bibliotheek van de server, zodat ze in de Playlists-tab verschijnen.")
+                LT("settings.listenbrainzPlaylistsHelp")
                     .font(.caption).foregroundStyle(.secondary)
                 if client.lbPlaylistSyncEnabled {
-                    Toggle("Sync ze ook naar Qobuz", isOn: Binding(
+                    Toggle(LS("settings.alsoSyncToQobuz"), isOn: Binding(
                         get: { client.lbQobuzSyncEnabled },
                         set: { client.setListenBrainzQobuzSync(enabled: $0) }
                     ))
@@ -403,7 +403,7 @@ public struct SettingsView: View {
                          : "Stel eerst je Qobuz-account in (sectie Qobuz) om dit te kunnen gebruiken.")
                         .font(.caption).foregroundStyle(.secondary)
 
-                    Button("Synchroniseer playlists nu") { client.syncListenBrainzPlaylistsNow() }
+                    Button(LS("settings.syncPlaylistsNow")) { client.syncListenBrainzPlaylistsNow() }
                     if !client.lbPlaylistSyncStatus.isEmpty {
                         Text(client.lbPlaylistSyncStatus)
                             .font(.caption).foregroundStyle(.secondary)
@@ -413,9 +413,9 @@ public struct SettingsView: View {
 
             // Discogs (F7 — Discogs Labels discovery producer)
             Section("Discogs") {
-                LabeledContent("Persoonlijke access token") {
+                LabeledContent(LS("settings.personalAccessToken")) {
                     HStack(spacing: Spacing.sm) {
-                        SecureField("Plak hier je token", text: $discogsToken)
+                        SecureField(LS("settings.pasteTokenHere"), text: $discogsToken)
                             .textFieldStyle(.roundedBorder)
                         Button(discogsSaved ? "Bewaard!" : "Bewaar") {
                             if discogsToken.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -428,7 +428,7 @@ public struct SettingsView: View {
                         }
                     }
                 }
-                Text("Schakelt de \"Discogs\"-bron in Ontdekkingen in: artiesten op hetzelfde platenlabel als artiesten die je veel speelt. Token aanmaken via discogs.com → instellingen → Developers.")
+                LT("settings.discogsHelp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -436,9 +436,9 @@ public struct SettingsView: View {
             // Last.fm
             Section("Last.fm") {
                 if lfConnected {
-                    LabeledContent("Verbonden als", value: lfUsername.isEmpty ? "✓" : lfUsername)
-                    Toggle("Scrobble vanuit de app", isOn: $lfScrobbleFromApp)
-                    Text("Laat uit als Roon zelf al naar Last.fm scrobbelt — anders krijg je dubbele scrobbles. Het importeren en de top-lijsten hieronder werken los hiervan.")
+                    LabeledContent(LS("settings.connectedAs"), value: lfUsername.isEmpty ? "✓" : lfUsername)
+                    Toggle(LS("settings.scrobbleFromApp"), isOn: $lfScrobbleFromApp)
+                    LT("settings.lastfmDoubleScrobbleHelp")
                         .font(.caption).foregroundStyle(.secondary)
                     Button {
                         Task { await client.importLastfmHistory() }
@@ -453,18 +453,18 @@ public struct SettingsView: View {
                     if !client.lastfmImportStatus.isEmpty {
                         Text(client.lastfmImportStatus).font(.caption).foregroundStyle(.secondary)
                     }
-                    Text("Eenmalig je hele scrobble-historie binnenhalen — vult jaaroverzicht, smaakprofiel en aanbevelingen. Kan bij een grote historie even duren.")
+                    LT("settings.lastfmImportHelp")
                         .font(.caption).foregroundStyle(.secondary)
 
                     Divider()
-                    Toggle("Importeer top-tracks als playlists", isOn: Binding(
+                    Toggle(LS("settings.importTopTracksAsPlaylists"), isOn: Binding(
                         get: { client.lastfmPlaylistSyncEnabled },
                         set: { client.setLastfmPlaylistSync(enabled: $0) }
                     ))
-                    Text("Last.fm heeft geen eigen playlists; dit maakt dagelijks playlists van je top-tracks (laatste 7 dagen, maand, jaar, aller tijden). Ze verschijnen met een Last.fm-label in de Playlists-tab.")
+                    LT("settings.lastfmTopTracksHelp")
                         .font(.caption).foregroundStyle(.secondary)
                     if client.lastfmPlaylistSyncEnabled {
-                        Toggle("Sync ze ook naar Qobuz", isOn: Binding(
+                        Toggle(LS("settings.alsoSyncToQobuz"), isOn: Binding(
                             get: { client.lastfmQobuzSyncEnabled },
                             set: { client.setLastfmQobuzSync(enabled: $0) }
                         ))
@@ -473,25 +473,25 @@ public struct SettingsView: View {
                              ? "Maakt voor elke lijst een Qobuz-playlist “Last.fm · …” aan en werkt die dagelijks bij."
                              : "Stel eerst je Qobuz-account in (sectie Qobuz) om dit te kunnen gebruiken.")
                             .font(.caption).foregroundStyle(.secondary)
-                        Button("Synchroniseer playlists nu") { client.syncLastfmPlaylistsNow() }
+                        Button(LS("settings.syncPlaylistsNow")) { client.syncLastfmPlaylistsNow() }
                         if !client.lastfmPlaylistSyncStatus.isEmpty {
                             Text(client.lastfmPlaylistSyncStatus)
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
 
-                    Button("Ontkoppel Last.fm", role: .destructive) {
+                    Button(LS("settings.disconnectLastfm"), role: .destructive) {
                         KeychainStore.delete(key: "lastfm_session_key")
                         KeychainStore.delete(key: "lastfm_username")
                         lfConnected = false; lfUsername = ""; lfStatus = ""
                     }
                 } else {
-                    LabeledContent("API-sleutel") {
-                        SecureField("Last.fm API-sleutel", text: $lfApiKey)
+                    LabeledContent(LS("settings.apiKey")) {
+                        SecureField(LS("settings.lastfmApiKey"), text: $lfApiKey)
                             .textFieldStyle(.roundedBorder)
                     }
-                    LabeledContent("API-secret") {
-                        SecureField("Last.fm API-secret", text: $lfApiSecret)
+                    LabeledContent(LS("settings.apiSecret")) {
+                        SecureField(LS("settings.lastfmApiSecret"), text: $lfApiSecret)
                             .textFieldStyle(.roundedBorder)
                     }
                     if lfPendingToken == nil {
@@ -505,20 +505,20 @@ public struct SettingsView: View {
                 if !lfStatus.isEmpty {
                     Text(lfStatus).font(.caption).foregroundStyle(.secondary)
                 }
-                Text("Scrobblet elke track naar Last.fm. Maak API-gegevens aan op last.fm/api/account/create.")
+                LT("settings.lastfmScrobbleHelp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             // Qobuz
             Section("Qobuz") {
-                LabeledContent("E-mail") {
-                    TextField("jij@voorbeeld.nl", text: $qbEmail)
+                LabeledContent(LS("settings.email")) {
+                    TextField(LS("settings.emailPlaceholder"), text: $qbEmail)
                         .textFieldStyle(.roundedBorder)
                         .textContentType(.username)
                 }
-                LabeledContent("Wachtwoord") {
-                    SecureField("Qobuz-wachtwoord", text: $qbPassword)
+                LabeledContent(LS("settings.password")) {
+                    SecureField(LS("settings.qobuzPassword"), text: $qbPassword)
                         .textFieldStyle(.roundedBorder)
                 }
                 Button(qbBusy ? "Verifiëren…" : "Bewaar & verifieer") { Task { await saveQobuz() } }
@@ -526,7 +526,7 @@ public struct SettingsView: View {
                 if !qbStatus.isEmpty {
                     Text(qbStatus).font(.caption).foregroundStyle(.secondary)
                 }
-                Text("Hiermee kun je gegenereerde en bewaarde playlists in je Qobuz-account opslaan.")
+                LT("settings.qobuzHelp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -537,8 +537,8 @@ public struct SettingsView: View {
             // THIS device, so behind the server gate a phone could never turn it
             // on — Qobuz tracks stayed silently skipped there with no way to
             // change it. The credentials it needs arrive via settings sync.
-            Section("Qobuz lokaal streamen (experimenteel)") {
-                Toggle("Qobuz-tracks hier afspelen", isOn: $qbStreamLocal)
+            Section(LS("settings.qobuzLocalStreaming")) {
+                Toggle(LS("settings.playQobuzHere"), isOn: $qbStreamLocal)
                     .onChange(of: qbStreamLocal) { _, v in client.qobuzLocalStreamEnabled = v }
                     .disabled(!client.qobuzConfigured)
                 if qbStreamLocal {
@@ -546,10 +546,10 @@ public struct SettingsView: View {
                         SecureField("Qobuz web-player app_secret", text: $qbAppSecret)
                             .textFieldStyle(.roundedBorder)
                     }
-                    Button("Bewaar app_secret") { client.qobuzAppSecret = qbAppSecret }
+                    Button(LS("settings.saveAppSecret")) { client.qobuzAppSecret = qbAppSecret }
                         .disabled(qbAppSecret.isEmpty)
                 }
-                Text("Speelt Qobuz-nummers uit je bibliotheek lokaal op je telefoon via Qobuz' onofficiële API (vereist een actief abonnement en de huidige web-player app_secret). Niet door Qobuz ondersteund; werkt mogelijk niet en kan wijzigen. Zonder dit blijven Qobuz-tracks overgeslagen bij lokaal afspelen.")
+                LT("settings.qobuzLocalHelp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -557,8 +557,8 @@ public struct SettingsView: View {
             if role == .server {
             // Audio analyzer — configures the analyzer host itself, so it stays
             // server-only; a client receives the results through settings sync.
-            Section("Audio-analyzer (BPM / toonsoort / tags)") {
-                LabeledContent("Analyzer-URL") {
+            Section(LS("settings.audioAnalyzer")) {
+                LabeledContent(LS("settings.analyzerURL")) {
                     TextField("http://10.94.184.22:5766", text: $analyzerURL)
                         .textFieldStyle(.roundedBorder)
                 }
@@ -566,23 +566,23 @@ public struct SettingsView: View {
                     Button {
                         analyzerURL = "http://\(host):5766"
                     } label: {
-                        Label("Vind automatisch", systemImage: "magnifyingglass")
+                        Label(LS("settings.findAutomatically"), systemImage: "magnifyingglass")
                     }
                 }
-                LabeledContent("Gesyncte kenmerken", value: "\(afStats.matched) gematcht / \(afStats.total) totaal")
+                LabeledContent(LS("settings.syncedFeatures"), value: "\(afStats.matched) gematcht / \(afStats.total) totaal")
                 Button(afBusy ? "Synchroniseren…" : "Bewaar & sync kenmerken") { Task { await syncAnalyzer() } }
                     .disabled(afBusy || analyzerURL.isEmpty)
-                Button("Diagnose match-percentage") { Task { await diagnoseAnalyzer() } }
+                Button(LS("settings.diagnoseMatchRate")) { Task { await diagnoseAnalyzer() } }
                     .disabled(afBusy || analyzerURL.isEmpty)
                 if !afStatus.isEmpty {
                     Text(afStatus).font(.caption).foregroundStyle(.secondary)
                 }
-                Toggle("Sonische embeddings (CLAP)", isOn: Binding(
+                Toggle(LS("settings.sonicEmbeddings"), isOn: Binding(
                     get: { client.useSonicEmbeddings },
                     set: { client.useSonicEmbeddings = $0 }))
-                Text("Aan: Vergelijkbaar / Sonic DNA / Song Paths / Alchemy / Music Map draaien op de geleerde CLAP-vectoren. Uit: terug naar de BPM/toonsoort/tag-regels (om te vergelijken).")
+                LT("settings.clapHelp")
                     .font(.caption).foregroundStyle(.secondary)
-                Text("Haalt BPM, Camelot-toonsoort, energie en LLM-tags op van de analyzer op je muziek-host. Gebruikt voor DJ-sets en tag-curatie.")
+                LT("settings.analyzerHelp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -604,8 +604,8 @@ public struct SettingsView: View {
             OfflineDownloadsSection()
 
             // About
-            Section("Over") {
-                LabeledContent("Versie", value: appVersion)
+            Section(LS("settings.about")) {
+                LabeledContent(LS("settings.version"), value: appVersion)
                 LabeledContent("Protocol", value: "MOO/1 · SOOD · GRDB 6")
                 #if os(macOS)
                 LabeledContent("Platform", value: "macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
@@ -615,7 +615,7 @@ public struct SettingsView: View {
                 NavigationLink {
                     LogConsoleView()
                 } label: {
-                    Label("Logboek bekijken / delen", systemImage: "doc.text.magnifyingglass")
+                    Label(LS("settings.viewShareLog"), systemImage: "doc.text.magnifyingglass")
                 }
             }
         }
@@ -902,24 +902,24 @@ struct AudioCacheSettingsSection: View {
     }()
 
     var body: some View {
-        Section("Muziek bewaren op dit apparaat") {
-            Toggle("Bewaar wat je afspeelt", isOn: $enabled)
+        Section(LS("settings.keepMusicOnDevice")) {
+            Toggle(LS("settings.keepWhatYouPlay"), isOn: $enabled)
             if enabled {
-                Picker("Maximaal", selection: $limitMB) {
+                Picker(LS("settings.maximum"), selection: $limitMB) {
                     Text("1 GB").tag(1024)
                     Text("2 GB").tag(2048)
                     Text("5 GB").tag(5120)
                     Text("10 GB").tag(10240)
                 }
-                LabeledContent("Nu in gebruik",
+                LabeledContent(LS("settings.currentlyUsed"),
                                value: Self.sizeFormatter.string(fromByteCount: Int64(sizeBytes)))
-                Button("Leeg de cache", role: .destructive) {
+                Button(LS("settings.emptyCache"), role: .destructive) {
                     LocalAudioCache.clear()
                     sizeBytes = 0
                 }
                 .disabled(sizeBytes == 0)
             }
-            Text("Nummers die je speelt worden lokaal bewaard, zodat terugspringen en herhalen direct gaan — en zonder server blijven werken. Wordt overgeslagen op mobiele data.")
+            LT("settings.audioCacheHelp")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -935,11 +935,11 @@ struct LoudnessSettingsSection: View {
     @AppStorage("local_loudness_preamp_db") private var preampDB = 0.0
 
     var body: some View {
-        Section("Loudness-normalisatie") {
-            Picker("Modus", selection: $modeRaw) {
-                Text("Uit").tag(LocalLoudness.Mode.off.rawValue)
-                Text("Per track").tag(LocalLoudness.Mode.track.rawValue)
-                Text("Per album").tag(LocalLoudness.Mode.album.rawValue)
+        Section(LS("settings.loudnessNormalisation")) {
+            Picker(LS("settings.mode"), selection: $modeRaw) {
+                LT("settings.off").tag(LocalLoudness.Mode.off.rawValue)
+                LT("settings.perTrack").tag(LocalLoudness.Mode.track.rawValue)
+                LT("settings.perAlbum").tag(LocalLoudness.Mode.album.rawValue)
             }
             .onChange(of: modeRaw) { _, _ in LocalPlaybackController.shared.reapplyLoudness() }
             if modeRaw != LocalLoudness.Mode.off.rawValue {
@@ -956,7 +956,7 @@ struct LoudnessSettingsSection: View {
                     }
                 }
             }
-            Text("Egaliseert het volume tussen tracks op dit apparaat op basis van de gemeten LUFS-loudness (doel −14 LUFS). \u{201C}Per album\u{201D} behoudt de dynamiek binnen een album. Werkt alleen bij lokaal afspelen; Roon-zones regelen dit zelf.")
+            LT("settings.loudnessHelp")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -973,22 +973,22 @@ struct TranscodeSettingsSection: View {
     @AppStorage("local_transcode_kbps") private var kbps = LocalTranscode.defaultBitrateKbps
 
     var body: some View {
-        Section("Onderweg streamen") {
-            Picker("Transcodeer naar AAC", selection: $modeRaw) {
-                Text("Nooit").tag(LocalTranscode.Mode.off.rawValue)
-                Text("Alleen mobiele data").tag(LocalTranscode.Mode.cellular.rawValue)
-                Text("Altijd").tag(LocalTranscode.Mode.always.rawValue)
+        Section(LS("settings.streamingOnTheGo")) {
+            Picker(LS("settings.transcodeToAAC"), selection: $modeRaw) {
+                LT("settings.never").tag(LocalTranscode.Mode.off.rawValue)
+                LT("settings.cellularOnly").tag(LocalTranscode.Mode.cellular.rawValue)
+                LT("settings.always").tag(LocalTranscode.Mode.always.rawValue)
             }
             if modeRaw != LocalTranscode.Mode.off.rawValue {
                 Picker("Bitrate", selection: $kbps) {
-                    Text("64 kbps — zuinigst").tag(64)
-                    Text("96 kbps — aanbevolen").tag(96)
+                    LT("settings.bitrate64").tag(64)
+                    LT("settings.bitrate96").tag(96)
                     Text("128 kbps").tag(128)   // blijft staan: wie dit ooit koos, houdt een geldige selectie
                     Text("192 kbps").tag(192)
-                    Text("256 kbps — beste kwaliteit").tag(256)
+                    LT("settings.bitrate256").tag(256)
                 }
             }
-            Text("Laat de server FLAC/lossless omzetten naar AAC vóór het streamen — veel lichter over ZeroTier op mobiele data. Onder 128 kbps gebruikt de server HE-AAC, dat op die bitrates veel beter klinkt dan gewone AAC. 96 kbps kost ongeveer 43 MB per uur, 256 kbps ongeveer 115 MB, FLAC ongeveer 400 MB. Bronnen die al zuiniger zijn dan de gekozen bitrate worden ongemoeid gelaten. Geldt vanaf de volgende track.")
+            LT("settings.transcodeHelp")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
