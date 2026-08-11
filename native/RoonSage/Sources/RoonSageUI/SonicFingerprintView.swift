@@ -201,7 +201,7 @@ public struct SonicFingerprintView: View {
                                 Label("Speel", systemImage: "play.fill")
                             }
                             .buttonStyle(.bordered).controlSize(.small)
-                            .disabled(client.selectedZone == nil)
+                            .disabled(!client.hasActiveOutput)
                         }
                     }
                     if !core.topArtists.isEmpty {
@@ -299,6 +299,8 @@ public struct SonicFingerprintView: View {
         }
     }
 
+    /// Legacy zone-scoped helper, still used by the station verbs that address a
+    /// specific Roon zone. Play verbs route themselves via the active output.
     private func play(_ action: @escaping (String) async -> Void) {
         guard let zone = client.selectedZone else { return }
         Task { await action(zone.id) }

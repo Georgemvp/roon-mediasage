@@ -40,6 +40,25 @@ final class LocalQueueTests: XCTestCase {
         XCTAssertEqual(LocalQueue.followerIndex(after: 0, count: 1, loopMode: "loop"), 0)
     }
 
+    // MARK: - upcomingCount (what a station reads to decide on a top-up)
+
+    func testUpcomingCountsOnlyWhatIsStillAhead() {
+        XCTAssertEqual(LocalQueue.upcomingCount(count: 5, playingAt: 0), 4)
+        XCTAssertEqual(LocalQueue.upcomingCount(count: 5, playingAt: 3), 1)
+    }
+
+    /// On the last track nothing is upcoming — this is the boundary that decides
+    /// whether an endless station tops up or lets the queue die.
+    func testUpcomingIsZeroOnTheLastTrack() {
+        XCTAssertEqual(LocalQueue.upcomingCount(count: 5, playingAt: 4), 0)
+    }
+
+    func testUpcomingNeverGoesNegative() {
+        XCTAssertEqual(LocalQueue.upcomingCount(count: 0, playingAt: 0), 0)
+        XCTAssertEqual(LocalQueue.upcomingCount(count: 3, playingAt: 9), 0)
+        XCTAssertEqual(LocalQueue.upcomingCount(count: 3, playingAt: -1), 0)
+    }
+
     // MARK: - insert
 
     func testInsertNextGoesAfterThePlayingTrack() {

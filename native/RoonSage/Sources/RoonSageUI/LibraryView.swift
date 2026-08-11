@@ -502,9 +502,8 @@ public struct LibraryView: View {
         PlayActionsMenu(fetch: { [rec] })
         Divider()
         Button("Start Sonic Radio") {
-            guard let zone = client.selectedZone else { return }
-            Task { await client.playSonicRadio(title: track.title, artist: track.artist, album: track.album, zoneID: zone.id) }
-        }.disabled(client.selectedZone == nil)
+            Task { await client.playSonicRadio(title: track.title, artist: track.artist, album: track.album) }
+        }.disabled(!client.hasActiveOutput)
         Button(LS("library.sonicallySimilar"), systemImage: "waveform.path.ecg") {
             similarSeed = SonicSeed(title: track.title, artist: track.artist,
                                     album: track.album, imageKey: track.imageKey)
@@ -891,9 +890,8 @@ public struct LibraryView: View {
 
     private func stationTile(_ radio: RoonClient.SonicRadio) -> some View {
         Button {
-            guard let zone = client.selectedZone else { return }
             Haptics.tap()
-            Task { await client.startRadio(radio, zoneID: zone.id) }
+            Task { await client.startRadio(radio) }
         } label: {
             VStack(spacing: Spacing.xs) {
                 AlbumArtView(imageKey: radio.imageKey, size: 110, cornerRadius: 55)
@@ -908,7 +906,7 @@ public struct LibraryView: View {
             .frame(width: 110)
         }
         .buttonStyle(.plain)
-        .disabled(client.selectedZone == nil)
+        .disabled(!client.hasActiveOutput)
         .accessibilityLabel(LS("Start radio op \(radio.artist)"))
     }
 

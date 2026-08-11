@@ -41,6 +41,18 @@ public enum LocalQueue {
         return loopMode == "loop" ? 0 : nil
     }
 
+    /// How many tracks are still ahead of the playing one — what a station reads
+    /// to decide whether to top up.
+    ///
+    /// A Roon zone's queue shrinks as it plays, so its `count` IS the remaining
+    /// depth. The local queue keeps everything and moves an index instead, so the
+    /// same number is `count - index - 1`. Getting that off by one either starves
+    /// the station or makes it top up forever.
+    public static func upcomingCount(count: Int, playingAt index: Int) -> Int {
+        guard count > 0, index >= 0 else { return 0 }
+        return max(0, count - index - 1)
+    }
+
     /// Insert `newItems` either straight after the playing track ("speel hierna")
     /// or at the end ("achteraan toevoegen"). The playing track keeps its
     /// position in both cases, so the engine never reloads.

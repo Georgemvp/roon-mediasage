@@ -149,13 +149,12 @@ public struct MusicMapView: View {
                 .font(.caption2.monospacedDigit()).foregroundStyle(.tertiary)
             }
             Button {
-                guard let zone = client.selectedZone else { return }
-                Task { await client.startTrackRadio(title: t.title, artist: t.artist, album: t.album, zoneID: zone.id) }
+                Task { await client.startTrackRadio(title: t.title, artist: t.artist, album: t.album) }
             } label: { Image(systemName: "dot.radiowaves.left.and.right").tappable44() }
             .buttonStyle(.borderless)
-            .disabled(client.selectedZone == nil)
+            .disabled(!client.hasActiveOutput)
             .accessibilityLabel(LS("Start station vanaf \(t.title)"))
-            .help(client.selectedZone == nil ? LS("musicMap.pickZoneFirst") : LS("musicMap.startStationHelp"))
+            .help(client.hasActiveOutput ? LS("musicMap.startStationHelp") : LS("musicMap.pickZoneFirst"))
             Button {
                 Task { await client.playTrack(id: t.id, title: t.title, artist: t.artist) }
             } label: { Image(systemName: "play.fill").tappable44() }

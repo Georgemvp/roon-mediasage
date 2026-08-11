@@ -529,7 +529,7 @@ extension RoonClient {
     /// Start an endless station from a custom config. Resolves the seeds, then hands
     /// off to the shared `startRadio` — whose top-up re-applies the combined gate via
     /// `candidateGate(for:)`, keeping the station true to the config's definition.
-    public func startCustomRadio(_ cfg: RadioConfig, zoneID: String) async {
+    public func startCustomRadio(_ cfg: RadioConfig, zoneID: String? = nil) async {
         guard cfg.hasFacets else {
             reportError("Deze radio heeft nog geen bron — voeg een artiest, nummer, genre, sfeer of activiteit toe.")
             return

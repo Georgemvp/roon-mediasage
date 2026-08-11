@@ -125,7 +125,7 @@ public struct CustomRadioView: View {
                 play(cfg)
             } label: { Label(LS("customRadio.play"), systemImage: "play.fill") }
             .tint(Color.roonGold)
-            .disabled(client.selectedZone == nil)
+            .disabled(!client.hasActiveOutput)
         }
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) { delete(cfg) } label: { Label(LS("action.delete"), systemImage: "trash") }
@@ -297,9 +297,9 @@ public struct CustomRadioView: View {
     }
 
     private func play(_ cfg: RadioConfig) {
-        guard let zone = client.selectedZone else { return }
+
         Haptics.tap()
-        Task { await client.startCustomRadio(cfg, zoneID: zone.id) }
+        Task { await client.startCustomRadio(cfg) }
     }
 
     private func delete(_ cfg: RadioConfig) {

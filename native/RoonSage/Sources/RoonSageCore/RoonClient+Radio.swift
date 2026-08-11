@@ -43,14 +43,17 @@ extension RoonClient {
     /// Public, observable summary of the running radio (drives the banner).
     public struct RadioStatus: Sendable, Equatable {
         public let artist: String
-        public let zoneID: String
+        /// The Roon zone the station feeds, or nil when it plays on this device.
+        public let zoneID: String?
     }
 
     /// Internal run state: the ordered candidate pool + how far we've queued.
     struct RadioRunState {
         let artist: String
         let artistKey: String      // stable id ("artist:<lower>")
-        let zoneID: String
+        /// nil = this device. A station is a continuous process, so it has to know
+        /// which queue to watch and top up — see `topUpRadioIfNeeded`.
+        let zoneID: String?
         let seedIds: [String]
         var pool: [TrackRecord]
         var cursor: Int
@@ -143,9 +146,12 @@ extension RoonClient {
 
     // MARK: Playback control
 
-    /// Start an endless station for `radio` in `zoneID`: play the first batch,
-    /// subscribe to the queue, and let the monitor refill it as it drains.
-    public func startRadio(_ radio: SonicRadio, zoneID: String, djMode: DJMode? = nil) async {
+    /// Start an endless station for `radio`: play the first batch, watch the
+    /// output's queue, and let the monitor refill it as it drains.
+    ///
+    /// `zoneID` nil means this device — the station then feeds the local engine's
+    /// queue instead of a Roon zone's.
+    public func startRadio(_ radio: SonicRadio, zoneID: String? = nil, djMode: DJMode? = nil) async {
         guard let db = database else {
             reportError("Radio mislukt — geen bibliotheek beschikbaar.")
             return
@@ -189,10 +195,13 @@ extension RoonClient {
             djMode: djMode)
         activeRadio = RadioStatus(artist: radio.artist, zoneID: zoneID)
 
-        await curateTracks(first, zoneID: zoneID)   // first plays now, rest queue
-        startQueue(zoneID: zoneID)                   // observe depth for top-ups
+        await deliver(first, to: zoneID)            // first plays now, rest queue
+        // Only a Roon zone needs a queue subscription; the local engine's queue is
+        // ours already and `topUpRadioIfNeeded` reads it directly.
+        if let zoneID { startQueue(zoneID: zoneID) }
         startRadioMonitor()
-        Log.info("Sonic Radio gestart: \(radio.artist) → zone \(zoneID) (\(pool.count) kandidaten)", category: .roon)
+        let target = zoneID ?? "dit apparaat"
+        Log.info("Sonic Radio gestart: \(radio.artist) → \(target) (\(pool.count) kandidaten)", category: .roon)
     }
 
     /// Start an endless station seeded on ONE track — song radio, the Spotify/
@@ -202,7 +211,7 @@ extension RoonClient {
     /// radio machinery: a song radio is a playback session, not a mirrored
     /// playlist.
     public func startTrackRadio(title: String, artist: String?, album: String? = nil,
-                                zoneID: String, djMode: DJMode? = nil) async {
+                                zoneID: String? = nil, djMode: DJMode? = nil) async {
         let lib = await radioLibrary()
         guard !lib.isEmpty else {
             reportError("Radio mislukt — nog geen geanalyseerde bibliotheek beschikbaar.")
@@ -298,9 +307,20 @@ extension RoonClient {
         }
     }
 
+    /// Refill when the output's queue runs low. The two outputs expose their
+    /// depth differently: a Roon zone through the subscribed `queueItems`, this
+    /// device through the local engine's own array — where only the tracks AFTER
+    /// the current index are still upcoming.
     func topUpRadioIfNeeded() async {
-        guard let state = radioState, queueZoneID == state.zoneID else { return }
-        guard queueItems.count <= Self.radioLowWater else { return }
+        guard let state = radioState else { return }
+        if let zoneID = state.zoneID {
+            guard queueZoneID == zoneID, queueItems.count <= Self.radioLowWater else { return }
+        } else {
+            guard localPlayback.isEngaged else { return }
+            let upcoming = LocalQueue.upcomingCount(count: localPlayback.queue.count,
+                                                    playingAt: localPlayback.index)
+            guard upcoming <= Self.radioLowWater else { return }
+        }
         await appendNextRadioBatch()
     }
 
@@ -326,7 +346,7 @@ extension RoonClient {
         state.cursor = end
         radioState = state
         guard !batch.isEmpty else { return }
-        await queueTracks(batch, zoneID: state.zoneID)
+        await deliverToQueue(batch, to: state.zoneID)
     }
 
     /// Rebuild a fresh candidate pool with a new generation salt so the endless

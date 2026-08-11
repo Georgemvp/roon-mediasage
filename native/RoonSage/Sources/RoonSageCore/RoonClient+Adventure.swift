@@ -13,7 +13,7 @@ extension RoonClient {
 
     /// Start a Sonic Adventure from a now-playing track (resolved by content key).
     public func playSonicAdventure(title: String, artist: String?, album: String?,
-                                   steps: Int = 40, zoneID: String) async {
+                                   steps: Int = 40, zoneID: String? = nil) async {
         await playSonicAdventure(
             fromMatchKey: TrackIdentity.matchKey(artist: artist, album: album, title: title),
             steps: steps, zoneID: zoneID)
@@ -21,7 +21,7 @@ extension RoonClient {
 
     /// Build and play a journey from `matchKey` to the most sonically distant
     /// region of the library, smoothed into a flowing path.
-    public func playSonicAdventure(fromMatchKey matchKey: String, steps: Int = 40, zoneID: String) async {
+    public func playSonicAdventure(fromMatchKey matchKey: String, steps: Int = 40, zoneID: String? = nil) async {
         guard let db = database, !matchKey.isEmpty else { return }
         let lib = await radioLibrary()
         guard let index = await activeIndex(db) else {
@@ -68,6 +68,6 @@ extension RoonClient {
                 message: "Sonische reis kon geen route vinden — analyseer wat meer muziek.")
             return
         }
-        await curateTracks(journey, zoneID: zoneID)
+        await deliver(journey, to: zoneID)
     }
 }

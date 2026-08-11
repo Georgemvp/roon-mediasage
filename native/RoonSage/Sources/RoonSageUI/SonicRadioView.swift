@@ -310,7 +310,7 @@ public struct SonicRadioView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
-        .disabled(client.selectedZone == nil)
+        .disabled(!client.hasActiveOutput)
     }
 
     private var emptyState: some View {
@@ -331,9 +331,9 @@ public struct SonicRadioView: View {
     // MARK: Actions
 
     private func start(_ radio: RoonClient.SonicRadio) {
-        guard let zone = client.selectedZone else { return }
+
         Haptics.tap()
-        Task { await client.startRadio(radio, zoneID: zone.id) }
+        Task { await client.startRadio(radio) }
     }
 
     private func load(force: Bool) async {
@@ -495,7 +495,7 @@ public struct SonicRadioView: View {
                     Text("\(pl.artist) · \(pl.tracks.count) tracks · \(pl.qobuzPlaylistID != nil ? "op Qobuz" : "nog niet gesynct")")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
-                    if client.selectedZone != nil {
+                    if client.hasActiveOutput {
                         Button {
                             guard let z = client.selectedZone?.id else { return }
                             Haptics.tap()

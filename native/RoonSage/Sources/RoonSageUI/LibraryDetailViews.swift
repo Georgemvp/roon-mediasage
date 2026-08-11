@@ -145,16 +145,14 @@ struct AlbumDetailView: View {
                         .accessibilityLabel(LS("libraryDetail.addToQueue"))
                         .help(LS("libraryDetail.addToQueue"))
                     Button {
-                        guard let zone = client.selectedZone else { return }
                         Haptics.tap()
                         Task {
                             await client.startAlbumRadio(albumKey: album.albumKey, title: album.album,
-                                                         artist: album.artist, imageKey: album.imageKey,
-                                                         zoneID: zone.id)
+                                                         artist: album.artist, imageKey: album.imageKey)
                         }
                     } label: { Image(systemName: "dot.radiowaves.left.and.right") }
                         .buttonStyle(.bordered)
-                        .disabled(client.selectedZone == nil)
+                        .disabled(!client.hasActiveOutput)
                         .accessibilityLabel(LS("libraryDetail.albumRadio"))
                         .help(LS("libraryDetail.albumRadioHelp"))
                     FavoriteStarButton(isOn: client.isFavoriteAlbum(album: album.album, artist: album.artist)) {

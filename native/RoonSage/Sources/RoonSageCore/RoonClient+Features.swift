@@ -737,7 +737,7 @@ extension RoonClient {
     /// steering + live re-steer + endless top-up — instead of the old one-shot
     /// nearest-30 queue dump. An unanalyzed track surfaces the usual toast.
     /// `count` is retained for source compatibility; an endless station ignores it.
-    public func playSonicRadio(title: String, artist: String?, album: String?, count: Int = 30, zoneID: String) async {
+    public func playSonicRadio(title: String, artist: String?, album: String?, count: Int = 30, zoneID: String? = nil) async {
         await startTrackRadio(title: title, artist: artist, album: album, zoneID: zoneID)
     }
 

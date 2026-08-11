@@ -39,25 +39,23 @@ struct PlayActionsMenu: View {
         if let seed = trackRadioSeed {
             Divider()
             Button(LS("playActionsMenu.radioOnTrack"), systemImage: "dot.radiowaves.left.and.right") {
-                guard let zone = client.selectedZone else { return }
                 Haptics.tap()
                 Task {
                     await client.startTrackRadio(title: seed.title, artist: seed.artist,
-                                                 album: seed.album, zoneID: zone.id)
+                                                 album: seed.album)
                 }
-            }.disabled(!hasZone)
+            }.disabled(!hasOutput)
             Menu(LS("playActionsMenu.startAsDJ"), systemImage: "person.wave.2") {
                 ForEach(DJMode.allCases, id: \.self) { mode in
                     Button(mode.title) {
-                        guard let zone = client.selectedZone else { return }
                         Haptics.tap()
                         Task {
                             await client.startTrackRadio(title: seed.title, artist: seed.artist,
-                                                         album: seed.album, zoneID: zone.id, djMode: mode)
+                                                         album: seed.album, djMode: mode)
                         }
                     }
                 }
-            }.disabled(!hasZone)
+            }.disabled(!hasOutput)
         }
         if includeLocal {
             Divider()

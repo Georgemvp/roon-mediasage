@@ -22,7 +22,7 @@ extension RoonClient {
     /// unanalyzed album rows are dropped; we check for at least one here to give a
     /// clean message instead of an empty station.
     public func startAlbumRadio(albumKey: String, title: String, artist: String?,
-                                imageKey: String? = nil, zoneID: String, djMode: DJMode? = nil) async {
+                                imageKey: String? = nil, zoneID: String? = nil, djMode: DJMode? = nil) async {
         guard let db = database else {
             reportError("Album-radio mislukt — geen bibliotheek beschikbaar.")
             return
