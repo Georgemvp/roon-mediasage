@@ -40,9 +40,12 @@ public struct NowPlayingView: View {
                     // already provides the picker, so no in-body duplicate. Always
                     // shown so you can switch to "dit apparaat" even with one zone.
                     #if os(iOS)
-                    OutputSelector()
-                        .padding(.top, Spacing.sm)
-                        .padding(.bottom, Spacing.xs)
+                    HStack(spacing: Spacing.xs) {
+                        OutputSelector()
+                        AirPlayRouteButton()
+                    }
+                    .padding(.top, Spacing.sm)
+                    .padding(.bottom, Spacing.xs)
                     #endif
                     NowPlayingHero(zone: zone)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

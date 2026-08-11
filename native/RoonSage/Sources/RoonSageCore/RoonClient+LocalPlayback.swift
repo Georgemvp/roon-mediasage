@@ -327,7 +327,8 @@ extension RoonClient {
     /// Sleep-timer action: pause whatever is playing on this device — the local
     /// ("Deze iPhone") player if engaged, and the selected Roon zone if playing.
     public func pauseForSleep() async {
-        if localPlayback.isPlaying { localPlayback.togglePlayPause() }
+        // Ease out rather than cut: the sleep timer gets the long ramp.
+        localPlayback.fadeOutAndPause(over: LocalPlaybackController.sleepFade)
         if let zone = selectedZone, zone.state == .playing {
             await playPause(zoneID: zone.id)
         }

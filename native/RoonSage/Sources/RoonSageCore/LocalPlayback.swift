@@ -135,6 +135,12 @@ public final class LocalPlaybackController {
     /// visible error instead of a silent "engaged but no sound".
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
     #endif
+    /// Ramp length for pause/resume, and the longer one the sleep timer uses.
+    static let transportFade: Double = 0.12
+    public static let sleepFade: Double = 2.0
+    #if canImport(AVFoundation)
+    @ObservationIgnored private var fadeTask: Task<Void, Never>?
+    #endif
     @ObservationIgnored private var streamBase: String = ""
     @ObservationIgnored private var token: String?
 
@@ -243,15 +249,60 @@ public final class LocalPlaybackController {
 
     private func reapplyVolume() {
         #if canImport(AVFoundation)
-        player.volume = loudnessGain * Float(isMuted ? 0 : volume)
+        player.volume = targetVolume
         #endif
     }
+
+    #if canImport(AVFoundation)
+    /// The level the player should sit at: loudness gain × user volume × mute.
+    private var targetVolume: Float { loudnessGain * Float(isMuted ? 0 : volume) }
+
+    /// Ramp `player.volume` to `to` over `duration`, then run `then`.
+    ///
+    /// A hard cut at pause or stop is audible as a click — the waveform is
+    /// chopped mid-cycle. ~120 ms is enough to make it a fade without feeling
+    /// sluggish; the sleep timer gets a longer one, since being eased out is the
+    /// whole point of falling asleep to music.
+    ///
+    /// Stepped with a timer rather than an `AVAudioMix`: this ramps the PLAYER,
+    /// which is exactly what pause/stop/sleep want, and needs no per-item asset
+    /// loading. (The per-item mix is a separate job — it fixes the loudness step
+    /// at a gapless track boundary, which this cannot reach.)
+    private func fade(to target: Float, over duration: Double, then: (@MainActor () -> Void)? = nil) {
+        fadeTask?.cancel()
+        let from = player.volume
+        guard duration > 0, abs(from - target) > 0.001 else {
+            player.volume = target; then?(); return
+        }
+        let steps = max(1, Int(duration / 0.02))
+        fadeTask = Task { @MainActor [weak self] in
+            for step in 1...steps {
+                if Task.isCancelled { return }
+                try? await Task.sleep(nanoseconds: 20_000_000)
+                guard let self, !Task.isCancelled else { return }
+                self.player.volume = from + (target - from) * Float(step) / Float(steps)
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.player.volume = target
+            then?()
+        }
+    }
+    #endif
 
     public func togglePlayPause() {
         #if canImport(AVFoundation)
         guard isEngaged else { return }
-        if isPlaying { player.pause(); isPlaying = false }
-        else { player.play(); isPlaying = true }
+        if isPlaying {
+            // Fade out, THEN pause — pausing first would cut the ramp off.
+            isPlaying = false
+            fade(to: 0, over: Self.transportFade) { [weak self] in self?.player.pause() }
+        } else {
+            // Start silent and come up, so resuming doesn't thump.
+            player.volume = 0
+            player.play()
+            isPlaying = true
+            fade(to: targetVolume, over: Self.transportFade)
+        }
         onStateChange?()
         #endif
     }
@@ -259,6 +310,17 @@ public final class LocalPlaybackController {
     /// User-pressed Next: always steps forward, even under "repeat one" (where
     /// the automatic follower is the same track again). "loop" wraps at the end;
     /// otherwise the session stops.
+    /// Sleep timer: a long ramp instead of the transport's short one — being
+    /// eased out is the whole point of falling asleep to music.
+    public func fadeOutAndPause(over duration: Double) {
+        #if canImport(AVFoundation)
+        guard isEngaged, isPlaying else { return }
+        isPlaying = false
+        fade(to: 0, over: duration) { [weak self] in self?.player.pause() }
+        onStateChange?()
+        #endif
+    }
+
     public func next() {
         guard isEngaged else { return }
         let target: Int?
@@ -310,6 +372,7 @@ public final class LocalPlaybackController {
         isPlaying = false
         isEngaged = false
         #if canImport(AVFoundation)
+        fadeTask?.cancel()
         statusObserver?.invalidate()
         statusObserver = nil
         player.pause()
@@ -430,6 +493,7 @@ public final class LocalPlaybackController {
         durationSec = queue.indices.contains(i) ? (queue[i].durationSec ?? 0) : 0
         lastError = nil
         #if canImport(AVFoundation)
+        fadeTask?.cancel()
         player.removeAllItems()
         scheduled = []
         guard let item = makeItem(for: queue[i]) else {
@@ -441,7 +505,7 @@ public final class LocalPlaybackController {
         observeFailures(of: item)
         player.insert(item, after: nil)
         scheduled = [(index: i, item: item)]
-        applyLoudness(for: queue[i])
+        applyLoudness(for: queue[i])   // also restores the level after a fade-out
         if autoPlay { player.play(); isPlaying = true } else { player.pause(); isPlaying = false }
         scheduleFollower()
         if autoPlay { onTrackChange?(queue[i]) }

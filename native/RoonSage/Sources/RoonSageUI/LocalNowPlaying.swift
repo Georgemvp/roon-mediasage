@@ -22,9 +22,12 @@ struct LocalNowPlayingScreen: View {
                 // Same output switcher as the zone hero, so you can hop back to a
                 // Roon zone from the local screen. On macOS the toolbar carries it.
                 #if os(iOS)
-                OutputSelector()
-                    .padding(.top, Spacing.sm)
-                    .padding(.bottom, Spacing.xs)
+                HStack(spacing: Spacing.xs) {
+                    OutputSelector()
+                    AirPlayRouteButton()
+                }
+                .padding(.top, Spacing.sm)
+                .padding(.bottom, Spacing.xs)
                 #endif
                 LocalNowPlayingHero()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

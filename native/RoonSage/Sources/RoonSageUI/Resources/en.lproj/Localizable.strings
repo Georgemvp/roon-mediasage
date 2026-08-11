@@ -838,5 +838,6 @@
 "tasteHub.modeYear"    = "Year";
 
 /* output */
+"output.airplay" = "Choose AirPlay output";
 "output.thisDevice" = "This device";
 "output.thisMac"    = "This Mac";
