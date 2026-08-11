@@ -77,7 +77,6 @@ te vervangen:
 | `playDJSet` | `RoonClient+Features.swift:406` |
 | `playShuffledMix` | `RoonClient+Features.swift:486` |
 | `playPlaylist` | `RoonClient+Playlists.swift:120` |
-| `playRecommendation` | `RoonClient+Discovery.swift:239` |
 | `playAlbum` / `playAlbums` | `RoonClient+Features.swift:497/521` |
 | `playArtist` | `RoonClient+Features.swift:508` |
 | `playTrack` | `RoonClient+Library.swift:390` |
@@ -154,12 +153,34 @@ het niet. Zichtbaar in de uitvoerkiezer van een Engelstalige app.
 Batch 3 staat bewust ná 1 en 2: de radio's leunen op `enqueueLocally`, en die
 route wil je bewezen hebben vóór je er een doorlopend proces op zet.
 
-## 5. Status
+## 5. Status — ALLE VIER GESHIPT op 2026-08-11
 
-- [ ] Batch 1 — L2
-- [ ] Batch 2 — L3
-- [ ] Batch 3 — L1
-- [ ] Batch 4 — L4/L5/L6
+- [x] Batch 1 — L2 · v1.10.232 / ios-v1.7.197
+- [x] Batch 2 — L3 · v1.10.232 (vervolg) — zone-gates 62 → 31
+- [x] Batch 3 — L1 · v1.10.233 / ios-v1.7.198 — zone-gates → 15
+- [x] Batch 4 — L4/L5/L6 · v1.10.234 / ios-v1.7.199
+
+**Correctie op L2 tijdens de uitvoering:** `playRecommendation` is uit de lijst
+gehaald. Die speelt een nog-niet-bezeten album via Qobuz→Roon, en dat staat per
+definitie niet op schijf — dus terecht zone-only. Zes verbs omgezet, niet zeven.
+
+**Correctie op de aanpak:** de verbs kregen `zoneID: String? = nil` in plaats van
+géén zone, want `RoonSageMCP/main.swift:508` adresseert terecht een zone bij
+naam. Eén router (`deliver` / `deliverToQueue`) beslist: expliciete zone → die
+zone, nil → de actieve uitvoer.
+
+**Wat de 15 resterende gates zijn (bewust):** QueueView's Roon-tak, de zone-hero
+in NowPlayingView, de zonekiezers zelf, `maybeAutoplayGuestDJ` (reageert per
+definitie op zone-frames) en de transport-verbs met een zoneID.
+
+**Niet geverifieerd:** dat een station op dit apparaat werkelijk blijft
+doorspelen. De boekhouding is getest (`LocalQueue.upcomingCount`, 3 tests op de
+randgevallen), maar of de top-up in de praktijk op tijd aanvult vraagt een
+luistertest waarbij je de wachtrij laat leeglopen.
+
+**Rest, niet gedaan:** `LocalPlayback.swift` produceert nog twee Nederlandse
+foutteksten in Core; die naar de UI tillen vraagt een omweg voor de hele
+error-plumbing.
 
 ## 6. Hoe dit gevonden is (herhaalbaar)
 
