@@ -128,7 +128,14 @@ public final class LocalPlaybackController {
     /// each one came from. Head = playing, optional tail = pre-enqueued
     /// follower. This mapping is how an automatic handover is detected: when
     /// `currentItem` changes to the tail, the player advanced by itself.
-    @ObservationIgnored private var scheduled: [(index: Int, item: AVPlayerItem)] = []
+    /// `hasMix` records HOW this item's loudness gain is applied. A hard load
+    /// keeps using `player.volume` (the user just pressed play; a settle there is
+    /// unremarkable). The pre-enqueued follower instead carries its gain in its
+    /// own `AVAudioMix`, attached seconds in advance — because at a gapless
+    /// boundary the player-level route lands a KVO hop late, which is exactly the
+    /// level step other clients report as a click. One mechanism per item, chosen
+    /// when the item is made; they never both apply.
+    @ObservationIgnored private var scheduled: [(index: Int, item: AVPlayerItem, hasMix: Bool)] = []
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var currentItemObserver: NSKeyValueObservation?
     /// Watches the current item's `status` so a server-side failure surfaces as a
@@ -504,7 +511,7 @@ public final class LocalPlaybackController {
         }
         observeFailures(of: item)
         player.insert(item, after: nil)
-        scheduled = [(index: i, item: item)]
+        scheduled = [(index: i, item: item, hasMix: false)]
         applyLoudness(for: queue[i])   // also restores the level after a fade-out
         if autoPlay { player.play(); isPlaying = true } else { player.pause(); isPlaying = false }
         scheduleFollower()
@@ -524,7 +531,8 @@ public final class LocalPlaybackController {
         guard let item = makeItem(for: queue[nextIndex]),
               player.canInsert(item, after: head.item) else { return }
         player.insert(item, after: head.item)
-        scheduled.append((index: nextIndex, item: item))
+        scheduled.append((index: nextIndex, item: item, hasMix: false))
+        attachLoudnessMix(to: item, for: queue[nextIndex])
     }
 
     /// The player moved to another item. Either it advanced by itself (the
@@ -552,7 +560,13 @@ public final class LocalPlaybackController {
             // normalization produces, but it IS the mechanism behind the "click
             // between tracks" other clients report. Fixing it properly means a
             // per-item AVAudioMix; noted as a follow-up rather than done blind.
-            applyLoudness(for: queue[head.index])
+            if head.hasMix {
+                // The item carries its own gain; the player must NOT apply it too.
+                loudnessGain = 1
+                reapplyVolume()
+            } else {
+                applyLoudness(for: queue[head.index])
+            }
             onTrackChange?(queue[head.index])
             onStateChange?()
         }
@@ -610,7 +624,19 @@ public final class LocalPlaybackController {
     public func reapplyLoudness() {
         #if canImport(AVFoundation)
         guard isEngaged, let track = current else { return }
-        applyLoudness(for: track)
+        if scheduled.first?.hasMix == true {
+            // This track's gain lives in its own mix. Re-applying it through the
+            // player as well would square it — audibly quieter, not louder. The
+            // mix can't be changed mid-track without a seek either, so the new
+            // setting takes effect from the next track on.
+            loudnessGain = 1
+            reapplyVolume()
+        } else {
+            applyLoudness(for: track)
+        }
+        // The follower was handed over with a gain baked at the OLD setting —
+        // rebuild it so the change is heard from the next track.
+        invalidateFollower()
         #endif
     }
 
@@ -648,6 +674,31 @@ public final class LocalPlaybackController {
         guard let url = comps?.url else { return nil }
         fillCache(from: url, key: track.id, variant: variant)
         return AVPlayerItem(url: url)
+    }
+
+    /// Give the follower its loudness gain as a per-item `AVAudioMix`, so the
+    /// level is already right the instant `AVQueuePlayer` crosses into it.
+    ///
+    /// Only for pre-enqueued items: there the async track load has seconds to
+    /// finish. Unity gain needs no mix at all, which is the common case when a
+    /// track has no measured LUFS. If the load is slow or fails, `hasMix` simply
+    /// stays false and the handover falls back to the player-level route — the
+    /// behaviour we had before, never worse.
+    private func attachLoudnessMix(to item: AVPlayerItem, for track: Track) {
+        let gain = LocalLoudness.volume(
+            trackLufs: track.lufs, albumLufs: track.albumLufs,
+            mode: LocalLoudness.mode, preampDB: LocalLoudness.preampDB)
+        guard abs(gain - 1) > 0.001, let asset = item.asset as? AVURLAsset else { return }
+        Task { @MainActor [weak self] in
+            guard let audio = try? await asset.loadTracks(withMediaType: .audio).first else { return }
+            let params = AVMutableAudioMixInputParameters(track: audio)
+            params.setVolume(gain, at: .zero)
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = [params]
+            item.audioMix = mix
+            guard let self, let i = self.scheduled.firstIndex(where: { $0.item === item }) else { return }
+            self.scheduled[i].hasMix = true
+        }
     }
 
     /// Populate the cache in the background so the *next* play of this track is
