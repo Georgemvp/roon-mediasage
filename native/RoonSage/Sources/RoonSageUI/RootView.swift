@@ -17,15 +17,17 @@ public struct ContentView: View {
             // session is live — only a cold start or a deliberate disconnect
             // drops to the connect screen. Prevents a heavy generate stalling
             // /playback from tearing down views and losing in-flight state.
-            if client.connectionState.isConnected || client.hasLiveSession {
+            if client.connectionState.isConnected || client.hasLiveSession || client.offlineMode {
                 RootView()
                     .overlay(alignment: .top) { ReconnectingBanner() }
+                    .safeAreaInset(edge: .top, spacing: 0) { OfflineBanner() }
             } else {
                 WelcomeGate()
             }
         }
         .animation(Motion.standard, value: client.connectionState.isConnected)
         .animation(Motion.standard, value: client.hasLiveSession)
+        .animation(Motion.standard, value: client.offlineMode)
         .overlay(alignment: .bottom) { ActionErrorToast() }
         .roonSageAppearance()
         .appLanguage()
@@ -86,6 +88,47 @@ struct ReconnectingBanner: View {
                 .background(.ultraThinMaterial, in: Capsule())
                 .padding(.top, 8)
                 .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+}
+
+// MARK: - Offline banner
+
+/// One honest line while there is no server.
+///
+/// Without it, offline mode is indistinguishable from "everything is broken":
+/// the library browses fine, but a station or a sonic search silently fails
+/// because those live on the analyzer. Say so once, at the top, instead of
+/// letting the user discover it one dead button at a time.
+@MainActor
+struct OfflineBanner: View {
+    @Environment(RoonClient.self) private var client
+    @State private var retrying = false
+
+    var body: some View {
+        if client.offlineMode {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "wifi.slash").font(.caption)
+                Text(LS("offline.bannerText"))
+                    .font(.caption).lineLimit(2)
+                Spacer(minLength: Spacing.xs)
+                Button {
+                    retrying = true
+                    Task {
+                        await client.discoverAndConnect()
+                        retrying = false
+                    }
+                } label: {
+                    if retrying { ProgressView().controlSize(.mini) }
+                    else { Text(LS("offline.retry")).font(.caption.weight(.semibold)) }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.roonGold)
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.xs)
+            .frame(maxWidth: .infinity)
+            .background(.ultraThinMaterial)
         }
     }
 }

@@ -79,7 +79,18 @@ public final class RoonClient {
     public internal(set) var radioVisibilityRevision = 0
 
     public internal(set) var connectionState: ConnectionState = .disconnected {
-        didSet { if connectionState.isConnected { hasLiveSession = true } }
+        didSet {
+            if connectionState.isConnected {
+                hasLiveSession = true
+                offlineMode = false
+            }
+            // A failed attempt with a synced library on disk means offline, not
+            // broken. Slide into offline mode rather than leaving the user on a
+            // connect screen with a phone full of music they can't reach.
+            if case .failed = connectionState, !hasLiveSession, hasLocalLibrary {
+                enterOfflineMode()
+            }
+        }
     }
     public internal(set) var zones: [Zone] = []
 
@@ -328,6 +339,31 @@ public final class RoonClient {
     let sonicCache = SonicLibraryCache()
     /// Gated, serialised listen-logging + LB/Last.fm scrobbling.
     let scrobbler = ScrobbleCoordinator()
+    /// Using the app with no server reachable.
+    ///
+    /// The whole UI used to be gated on a live connection, so in airplane mode
+    /// RoonSage was a connect screen and nothing else — even though the library
+    /// database, the downloads and the album art all sit on the device. Offline
+    /// mode opens the app with what is genuinely local and says what is missing.
+    ///
+    /// Entered deliberately (the connect screen offers it) or automatically when
+    /// a connect attempt fails while a synced library exists. Cleared the moment
+    /// a real connection comes back.
+    public internal(set) var offlineMode = false
+
+    /// Is there anything to browse without a server? A synced library means yes.
+    public var hasLocalLibrary: Bool { trackCount > 0 }
+
+    public func enterOfflineMode() {
+        guard hasLocalLibrary else { return }
+        offlineMode = true
+        // Anything queued locally keeps playing; downloads and the cache answer
+        // without the network. Nothing to tear down.
+        Log.info("Offlinemodus aan — \(trackCount) tracks lokaal beschikbaar", category: .app)
+    }
+
+    public func leaveOfflineMode() { offlineMode = false }
+
     /// Live progress of a running offline download, or nil when idle.
     public internal(set) var downloadProgress: DownloadProgress?
     /// Match keys that are pinned to this device — read per row to show a mark,

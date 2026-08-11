@@ -96,6 +96,19 @@ public struct ConnectView: View {
                 }
 
                 // Manual entry toggle
+                // The way in when there is no network at all. Only offered when
+                // a synced library exists — without one there is nothing to show.
+                if client.hasLocalLibrary {
+                    Button {
+                        Haptics.tap()
+                        client.enterOfflineMode()
+                    } label: {
+                        Label(LS("offline.useOffline"), systemImage: "arrow.down.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.roonGold)
+                }
+
                 Button(LS("connect.enterIPManually")) {
                     withAnimation { showManual.toggle() }
                 }

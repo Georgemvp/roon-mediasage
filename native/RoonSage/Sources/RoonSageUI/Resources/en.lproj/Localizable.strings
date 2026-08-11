@@ -855,3 +855,8 @@
 "downloads.sectionTitle" = "Downloads";
 "downloads.trackPlural" = "tracks";
 "downloads.trackSingular" = "track";
+
+/* offline */
+"offline.bannerText" = "Offline — your library and downloads work. Stations, sonic search and Roon zones don't.";
+"offline.retry" = "Retry";
+"offline.useOffline" = "Use offline";

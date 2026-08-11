@@ -93,7 +93,15 @@ extension RoonClient {
     func resolveLocalPlayback(_ tracks: [TrackRecord]) async -> LocalPlaybackRequest? {
         guard !tracks.isEmpty else { return nil }
         let base = localStreamBase()
-        guard !base.isEmpty else {
+        // No server address is only fatal when the tracks aren't already here.
+        // Downloads and the playback cache resolve to a file before any URL is
+        // built, so refusing outright would break exactly the airplane case this
+        // whole tier exists for.
+        let variant = LocalAudioCache.variant(for: LocalTranscode.queryItems())
+        let anyLocal = tracks.contains {
+            LocalAudioCache.localFile(forKey: LocalPlayability.matchKey(for: $0), variant: variant) != nil
+        }
+        guard !base.isEmpty || anyLocal else {
             lastActionError = ActionError(message: "Geen analyzer-server gevonden om lokaal af te spelen.")
             return nil
         }

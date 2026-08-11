@@ -855,3 +855,8 @@
 "downloads.sectionTitle" = "Downloads";
 "downloads.trackPlural" = "nummers";
 "downloads.trackSingular" = "nummer";
+
+/* offline */
+"offline.bannerText" = "Offline — je bibliotheek en downloads werken. Stations, sonisch zoeken en Roon-zones niet.";
+"offline.retry" = "Opnieuw";
+"offline.useOffline" = "Offline gebruiken";
