@@ -74,6 +74,7 @@
 
 /* aIComponents */
 "aIComponents.chooseZone"   = "Kies zone";
+"aIComponents.chooseZoneToPlay" = "Kies eerst een zone om op af te spelen.";
 "aIComponents.wholeLibrary" = "hele bibliotheek";
 
 /* ask */
@@ -83,6 +84,7 @@
 "ask.interpreting"            = "Bezig met interpreteren…";
 "ask.nothingFound"            = "Niets gevonden — probeer het anders te formuleren of synchroniseer je bibliotheek.";
 "ask.playAll"                 = "Speel alles";
+"ask.playOn"                  = "Speel op";
 "ask.playlistNamePlaceholder" = "Naam playlist";
 "ask.refineHelp"              = "Neem deze vraag mee naar Genereer voor een gecureerde, flow-geordende playlist";
 "ask.refineToPlaylist"        = "Verfijn tot playlist →";
@@ -118,14 +120,19 @@
 "commandPalette.volumeUp"          = "Volume omhoog";
 
 /* connect */
+"connect.autoConnect"         = "Automatisch verbinden";
 "connect.connect"             = "Verbind";
 "connect.coreIPPlaceholder"   = "Roon Core IP";
 "connect.discoverCore"        = "Zoek Roon Core";
 "connect.discoverLocal"       = "Zoek op lokaal netwerk";
 "connect.discoverServer"      = "Zoek RoonSage-server";
 "connect.enterIPManually"     = "Voer IP-adres handmatig in";
+"connect.helpLocal"           = "Zorg dat RoonSage is ingeschakeld in Roon → Instellingen → Extensies.";
+"connect.helpServer"          = "Verbind met de RoonSage-server op je Mac mini. Die draait de bibliotheeksync en de analyses.";
 "connect.portPlaceholder"     = "Poort";
 "connect.serverIPPlaceholder" = "Server-IP";
+"connect.subtitleIOS"         = "Je muziek, slimmer";
+"connect.subtitleMac"         = "Je Roon-bibliotheek, slimmer";
 
 /* createHub */
 "createHub.mode"      = "Modus";
@@ -133,11 +140,18 @@
 
 /* customRadio */
 "customRadio.adoptAsEditable"    = "Overnemen als bewerkbare eigen radio";
+"customRadio.aiRadiosSubtitle"   = "Stations op maat van je luistergeschiedenis.";
+"customRadio.aiRadiosTitle"      = "Door AI voorgesteld";
 "customRadio.awaitingSync"       = "wacht op sync";
 "customRadio.category"           = "Categorie";
+"customRadio.emptyBody"          = "Maak er een met de knop hierboven — je instellingen worden bewaard.";
+"customRadio.emptyTitle"         = "Nog geen eigen radio's";
+"customRadio.headerSubtitle"     = "Stel je eigen station samen uit genres, tijdvakken en sfeer.";
+"customRadio.headerTitle"        = "Eigen radio's";
 "customRadio.hiddenOnMain"       = "Verborgen op hoofdscherm — tik om te tonen";
 "customRadio.hideOnMain"         = "Verberg op het hoofdscherm";
 "customRadio.newRadioHelp"       = "Nieuwe radio samenstellen";
+"customRadio.noAIRadios"         = "Geen voorstellen op dit moment.";
 "customRadio.noSourceChosen"     = "Nog geen bron gekozen";
 "customRadio.notSyncing"         = "niet syncen";
 "customRadio.onQobuz"            = "op Qobuz";
@@ -145,6 +159,8 @@
 "customRadio.qobuzNotConfigured" = "Qobuz is niet ingesteld — je kunt radio's samenstellen en afspelen, maar synchroniseren naar Qobuz kan pas na het invullen van je inloggegevens bij Instellingen.";
 "customRadio.radioOff"           = "Radio staat uit";
 "customRadio.radioOn"            = "Radio staat aan";
+"customRadio.radioPlaying"       = "Radio speelt";
+"customRadio.selfComposed"       = "Zelf samengesteld";
 "customRadio.statusOff"          = "Uit";
 "customRadio.statusOn"           = "Aan";
 "customRadio.stop"               = "Stop";
@@ -159,6 +175,7 @@
 "customRadioEditor.adventureExploring" = "Verkennend";
 "customRadioEditor.adventureFamiliar"  = "Vooral bekend";
 "customRadioEditor.adventureLight"     = "Lichte verkenning";
+"customRadioEditor.adventurousness"    = "Avontuurlijkheid";
 "customRadioEditor.all"                = "Alle";
 "customRadioEditor.cancel"             = "Annuleer";
 "customRadioEditor.clearSelection"     = "Selectie wissen";
@@ -175,23 +192,35 @@
 "customRadioEditor.sectionMood"        = "Sfeer";
 "customRadioEditor.sectionName"        = "Naam";
 "customRadioEditor.sectionSync"        = "Synchronisatie";
+"customRadioEditor.sourceSeedsFooter"  = "Laat alles leeg om je hele bibliotheek te gebruiken.";
+"customRadioEditor.sourceSeedsHeader"  = "Bronnen";
 "customRadioEditor.toggleEnabled"      = "Radio aan";
 "customRadioEditor.toggleSyncQobuz"    = "Automatisch naar Qobuz synchroniseren";
+"customRadioEditor.tuningFooter"       = "Hoe hoger, hoe verder van je gebruikelijke smaak.";
+"customRadioEditor.tuningHeader"       = "Afstemming";
 
 /* dJ */
 "dJ.mode" = "Modus";
 
 /* dJModes */
+"dJModes.autoPersonaToggle"   = "Persona automatisch kiezen";
+"dJModes.autoplayDescription" = "Vult de wachtrij automatisch aan zodra die leegloopt.";
+"dJModes.autoplayToggle"      = "Automatisch aanvullen";
+"dJModes.headerBlurb" = "Kies een persona; de DJ bouwt verder op wat er nu speelt.";
+"dJModes.needNowPlaying"      = "Start eerst een nummer — de DJ heeft een vertrekpunt nodig.";
+"dJModes.radioPlaying"        = "Radio speelt";
 "dJModes.stop"  = "Stop";
 "dJModes.title" = "DJ-modi";
 
 /* dJSet */
 "dJSet.analysis"            = "Analyse";
+"dJSet.analyzerHint"        = "De analyzer moet eerst BPM en toonsoort bepalen; die draait op de Mac mini.";
 "dJSet.avgTempo"            = "Gem. tempo";
 "dJSet.buildSet"            = "Bouw DJ-set";
 "dJSet.cancel"              = "Annuleer";
 "dJSet.chooseZone"          = "Kies zone…";
 "dJSet.chooseZoneFirst"     = "Kies eerst een zone";
+"dJSet.curve"               = "Curve";
 "dJSet.energy"              = "energie";
 "dJSet.equalTempo"          = "gelijk tempo";
 "dJSet.export"              = "Exporteer";
@@ -206,6 +235,7 @@
 "dJSet.noAnalyzedTracks"    = "Nog geen geanalyseerde tracks";
 "dJSet.noTracksFound"       = "Geen tracks gevonden — verbreed het BPM-bereik of laat de tags weg.";
 "dJSet.play"                = "Speel";
+"dJSet.playOn"              = "Speel op";
 "dJSet.playSetHelp"         = "Speel de set af";
 "dJSet.playlistName"        = "Naam playlist";
 "dJSet.range"               = "Bereik";
@@ -213,6 +243,7 @@
 "dJSet.rebuildConfirm"      = "Set opnieuw bouwen? De huidige set wordt vervangen.";
 "dJSet.sameKey"             = "zelfde toonsoort";
 "dJSet.save"                = "Bewaar";
+"dJSet.tags"                = "Tags";
 "dJSet.tagsPlaceholder"     = "optioneel, kommagescheiden (bijv. driving, deep house)";
 "dJSet.tempo"               = "tempo";
 "dJSet.tempoEnergy"         = "Tempo & energie";
@@ -259,8 +290,10 @@
 
 /* discoverInsights */
 "discoverInsights.approved"            = "Goedgekeurd";
+"discoverInsights.emptyDescription"    = "Zodra je aanbevelingen bewaart of overslaat, verschijnen hier de cijfers.";
 "discoverInsights.emptyTitle"          = "Nog geen inzichten";
 "discoverInsights.loading"             = "Inzichten laden…";
+"discoverInsights.noDecisions"         = "Nog geen keuzes gemaakt.";
 "discoverInsights.skipped"             = "Overgeslagen";
 "discoverInsights.sourceEffectiveness" = "Bron-effectiviteit";
 "discoverInsights.title"               = "Ontdek-inzichten";
@@ -268,10 +301,12 @@
 
 /* discoverWeekly */
 "discoverWeekly.busy"          = "Bezig…";
+"discoverWeekly.emptyDescription" = "Je wekelijkse selectie verschijnt zodra er genoeg is om uit te kiezen.";
 "discoverWeekly.emptyTitle"    = "Nog geen wekelijkse ontdek-playlist";
 "discoverWeekly.generateNow"   = "Genereer nu";
 "discoverWeekly.loading"       = "Ontdek Wekelijks laden…";
 "discoverWeekly.navTitle"      = "Ontdek Wekelijks";
+"discoverWeekly.notInLibrary"  = "Niet in bibliotheek";
 "discoverWeekly.refreshA11y"   = "Ververs de wekelijkse selectie";
 "discoverWeekly.refreshHelp"   = "Ververs de wekelijkse selectie nu";
 "discoverWeekly.refreshNow"    = "Ververs nu";
@@ -281,7 +316,10 @@
 /* discovery */
 "discovery.albumOfDay"               = "Album van de dag";
 "discovery.decadeCardTitle"          = "Tracks per decennium";
+"discovery.emptyDescription"         = "Synchroniseer je bibliotheek om hier iets te zien.";
 "discovery.emptyTitle"               = "Geen bibliotheekdata";
+"discovery.labelsSubtitle"           = "Blader door je collectie op label.";
+"discovery.labelsTitle"              = "Platenlabels";
 "discovery.playAll"                  = "Speel alles";
 "discovery.playLocallyHelp"          = "Speel lokaal af op dit apparaat";
 "discovery.playOnThisDevice"         = "Speel op dit apparaat";
@@ -297,6 +335,8 @@
 "discovery.statTracks"               = "Tracks";
 "discovery.title"                    = "Ontdek";
 "discovery.topGenres"                = "Topgenres";
+"discovery.weeklySubtitle"           = "Elke week een verse selectie uit je eigen bibliotheek.";
+"discovery.weeklyTitle"              = "Ontdek Wekelijks";
 
 /* filteredTracks */
 "filteredTracks.emptyTitle" = "Geen tracks";
@@ -308,34 +348,50 @@
 "generate.advExploring"       = "Verkennend";
 "generate.advLightExplore"    = "Lichte verkenning";
 "generate.advMostlyKnown"     = "Vooral bekend";
+"generate.adventurousness"    = "Avontuurlijkheid";
 "generate.allTemplates"       = "Alle sjablonen";
 "generate.arc"                = "Verloop";
+"generate.arcAuto"            = "Automatisch";
 "generate.arcHelp"            = "De energie-vorm waarin de playlist wordt geordend — Auto leidt die af uit je omschrijving";
+"generate.arcPeak"            = "Piek";
+"generate.arcRise"            = "Oplopend";
+"generate.arcSmooth"          = "Vlak";
 "generate.autoAssembled"      = "Automatisch samengesteld — de AI-selectie lukte niet helemaal.";
 "generate.close"              = "Sluit";
 "generate.copyDiagnostics"    = "Kopieer diagnostiek";
+"generate.count"              = "Aantal";
 "generate.diagnostics"        = "Diagnostiek";
+"generate.diagnosticsFooter"  = "Laat zien welke filters de AI koos en hoe groot de kandidatenpool was.";
+"generate.duration"           = "Duur";
 "generate.generatePlaylist"   = "Genereer playlist";
 "generate.generating"         = "Genereren…";
+"generate.idleDescription"    = "Beschrijf een sfeer of kies een sjabloon; RoonSage stelt de playlist samen.";
 "generate.idleTitle"          = "Beschrijf wat je wilt horen";
 "generate.moveDown"           = "Omlaag";
 "generate.moveUp"             = "Omhoog";
 "generate.namePlaceholder"    = "Naam playlist";
 "generate.navTitle"           = "Playlist genereren";
+"generate.noZone"             = "Kies eerst een zone of dit apparaat.";
 "generate.none"               = "Geen";
 "generate.playAll"            = "Speel alles";
 "generate.playNext"           = "Speel hierna";
+"generate.playOn"             = "Speel op";
 "generate.playtime"           = "Speelduur";
 "generate.promptPlaceholder"  = "Beschrijf de sfeer, het genre of de gelegenheid… bijv. “warme jazz voor een regenachtige zondagochtend”";
 "generate.promptSection"      = "Wat voor playlist?";
 "generate.qobuzFailed"        = "Bewaren in Qobuz mislukt — controleer je account in Instellingen.";
 "generate.qobuzHelp"          = "Bewaar deze playlist ook in je Qobuz-account";
 "generate.qobuzSaving"        = "Bewaren in Qobuz…";
+"generate.quickTemplates"     = "Snelle sjablonen";
 "generate.regenerate"         = "Opnieuw genereren";
 "generate.removeFromPlaylist" = "Verwijder uit playlist";
+"generate.result"             = "Resultaat";
 "generate.save"               = "Bewaar";
 "generate.saved"              = "Bewaard!";
+"generate.savedInline"        = "bewaard";
 "generate.sectionSave"        = "Bewaren";
+"generate.seedsFooter"        = "Laat leeg om je hele bibliotheek te gebruiken.";
+"generate.seedsOptional"      = "Zaadjes (optioneel)";
 "generate.size"               = "Omvang";
 "generate.stop"               = "Stop";
 "generate.templatesTitle"     = "Sjablonen";
@@ -347,6 +403,9 @@
 "labelExplorer.labels"        = "Labels";
 "labelExplorer.mergeNavTitle" = "Samenvoegen met…";
 "labelExplorer.mergeWith"     = "Voeg samen met…";
+"labelExplorer.mostAlbums"    = "Meeste albums";
+"labelExplorer.name"          = "Naam";
+"labelExplorer.noLabelsDescription" = "Labels komen uit de bestandstags en de dataset-import; die dekking is nog beperkt.";
 "labelExplorer.noLabelsTitle" = "Nog geen labels";
 "labelExplorer.sort"          = "Sorteer";
 "labelExplorer.undo"          = "Ongedaan maken";
@@ -358,9 +417,11 @@
 "library.chooseZoneFirst"        = "Kies eerst een zone of apparaat";
 "library.clear"                  = "Wis";
 "library.closeSelection"         = "Selectie sluiten";
+"library.connectFirst"           = "Maak eerst verbinding met de server.";
 "library.decades"                = "Decennia";
 "library.discoverWeeklySubtitle" = "Verse ontdekkingen uit je eigen bibliotheek — elke week vernieuwd.";
 "library.discoverWeeklyTitle"    = "Ontdek Wekelijks";
+"library.done"                   = "Klaar";
 "library.favoritesOnly"          = "Alleen favorieten";
 "library.forgottenFavorites"     = "Vergeten favorieten";
 "library.genres"                 = "Genres";
@@ -385,6 +446,7 @@
 "library.searchArtists"          = "Zoek op artiest…";
 "library.searchOverview"         = "Zoek in je bibliotheek…";
 "library.searchTracks"           = "Zoek op titel, artiest of album…";
+"library.select"                 = "Selecteer";
 "library.selectMultiple"         = "Selecteer meerdere";
 "library.selectMultipleAlbums"   = "Selecteer meerdere albums";
 "library.selectMultipleTracks"   = "Selecteer meerdere tracks";
@@ -400,6 +462,8 @@
 "library.sortTracksHelp"         = "Sorteer tracks";
 "library.sortYear"               = "Jaar";
 "library.syncLibrary"            = "Synchroniseer bibliotheek";
+"library.syncThenSearch"         = "Synchroniseer je bibliotheek en zoek opnieuw.";
+"library.syncToFillOverview"     = "Synchroniseer je bibliotheek om dit overzicht te vullen.";
 "library.tracks"                 = "Tracks";
 "library.undiscoveredAlbums"     = "Onontdekte albums";
 "library.yourTopTracks"          = "Jouw toptracks";
@@ -411,20 +475,30 @@
 "libraryDetail.albumRadioHelp"   = "Album-radio — eindeloze radio rond dit album";
 "libraryDetail.info"             = "Info";
 "libraryDetail.markFavorite"     = "Markeer als favoriet";
+"libraryDetail.mostPlayed"       = "Meest gespeeld";
 "libraryDetail.otherVersions"    = "Andere versies in je bibliotheek";
 "libraryDetail.play"             = "Speel";
 "libraryDetail.playAll"          = "Speel alles";
 "libraryDetail.playAllLocalHelp" = "Speel alles lokaal af op dit apparaat";
 "libraryDetail.playOnThisDevice" = "Speel op dit apparaat";
+"libraryDetail.readMore"         = "Lees meer";
 "libraryDetail.removeFavorite"   = "Verwijder uit favorieten";
+"libraryDetail.showLess"         = "Toon minder";
+"libraryDetail.similarInLibrary" = "Vergelijkbaar in je bibliotheek";
 "libraryDetail.sonicallySimilar" = "Sonisch vergelijkbaar";
 
 /* liveDJ */
 "liveDJ.harmonic"       = "Harmonisch";
+"liveDJ.mixesNext"      = "Mixt hierna";
+"liveDJ.noCompatible"   = "Geen harmonisch passende tracks gevonden.";
 "liveDJ.noFeatures"     = "Geen audio-kenmerken voor deze track";
+"liveDJ.noFeaturesDesc" = "Deze track is nog niet geanalyseerd, dus er is geen BPM of toonsoort om op te mixen.";
 "liveDJ.nothingPlaying" = "Niets aan het spelen";
+"liveDJ.nothingPlayingDesc" = "Start een nummer; Live DJ stelt daarna passende overgangen voor.";
+"liveDJ.nowPlaying"     = "Speelt nu";
 "liveDJ.queueNext"      = "Als volgende in wachtrij";
 "liveDJ.sameKey"        = "Zelfde toon";
+"liveDJ.tapOrbit"       = "Tik op een bol om een overgang te kiezen.";
 
 /* localNowPlaying */
 "localNowPlaying.deviceNounDevice"  = "dit apparaat";
@@ -461,24 +535,33 @@
 /* lyrics */
 "lyrics.done"         = "Klaar";
 "lyrics.instrumental" = "Instrumentaal";
+"lyrics.instrumentalDesc" = "Dit nummer is instrumentaal.";
 "lyrics.loading"      = "Songtekst laden…";
 "lyrics.notFound"     = "Geen songtekst gevonden";
+"lyrics.notFoundDesc" = "Geen songtekst gevonden voor dit nummer.";
 "lyrics.title"        = "Songtekst";
 
 /* multitag */
 "multitag.allGenresToggle"  = "Alle genres (kruising)";
 "multitag.decade"           = "Decennium";
+"multitag.decadeAll"        = "Alle";
+"multitag.introHint"        = "Combineer tags om tracks te vinden die op meerdere vlakken passen.";
+"multitag.noCrossoverDesc"  = "Geen tracks die aan alle gekozen tags voldoen. Laat er een vallen.";
 "multitag.noCrossoverTitle" = "Geen kruising gevonden";
 "multitag.play"             = "Speel";
 "multitag.searchTracks"     = "Zoek nummers";
 "multitag.searching"        = "Zoeken…";
 
 /* musicMap */
+"musicMap.analyzerHint"             = "De analyzer moet eerst tracks analyseren; die draait op de Mac mini.";
+"musicMap.colorIsKey"               = "Kleur = toonsoort";
 "musicMap.colorLegendAccessibility" = "Kleur van elk punt staat voor de toonsoort (Camelot 1 tot 12)";
+"musicMap.energyTempoAxes"          = "Assen: energie en tempo";
 "musicMap.mappingLibrary"           = "Je bibliotheek in kaart brengen…";
 "musicMap.noAnalyzedTracks"         = "Nog geen geanalyseerde tracks";
 "musicMap.pickZoneFirst"            = "Kies eerst een zone";
 "musicMap.refresh"                  = "Ververs";
+"musicMap.sonicSimilarity"          = "Sonische gelijkenis";
 "musicMap.startStationHelp"         = "Start een sonisch station vanaf deze plek op de kaart";
 "musicMap.unknownArtist"            = "Onbekend";
 
@@ -549,6 +632,11 @@
 "onboarding.featDnaText"          = "Ontdek je muzikale DNA en navigeer je collectie op klank.";
 "onboarding.featPlaylistsText"    = "Genereer een playlist of stel je bibliotheek een vraag — in gewone taal.";
 "onboarding.featPlaylistsTitle"   = "AI-playlists";
+"onboarding.introBody1"           = "RoonSage leert je bibliotheek kennen en bouwt daarop playlists, radio's en ontdekkingen.";
+"onboarding.introBody2"           = "Je luistert op dit apparaat, of stuurt het door naar een Roon-zone.";
+"onboarding.next"                 = "Volgende";
+"onboarding.serverFootnote"       = "Zonder die server werkt de app niet — daar staan je bibliotheek en je analyses.";
+"onboarding.serverIntro"          = "RoonSage heeft een server nodig: de analyzer-app op je Mac mini.";
 "onboarding.skip"                 = "Overslaan";
 "onboarding.stepConnectSubtitle"  = "Verbind met je Roon Core";
 "onboarding.stepConnectTitle"     = "Aan de slag";
@@ -572,6 +660,7 @@
 "playlists.chooseZoneFirst"       = "Kies eerst een zone";
 "playlists.deleteConfirmTitle"    = "Playlist verwijderen?";
 "playlists.deletePlaylist"        = "Verwijder playlist";
+"playlists.emptyDescription"      = "Bewaarde playlists verschijnen hier.";
 "playlists.emptyTitle"            = "Geen bewaarde playlists";
 "playlists.generatePlaylist"      = "Genereer een playlist";
 "playlists.hideTracks"            = "Verberg tracks";
@@ -607,6 +696,7 @@
 "queue.sonicallySimilar"        = "Sonisch vergelijkbaar";
 
 /* recommend */
+"recommend.albumCount"               = "Aantal albums";
 "recommend.cancel"                   = "Annuleer";
 "recommend.collapse"                 = "Inklappen";
 "recommend.delete"                   = "Verwijderen";
@@ -621,10 +711,12 @@
 "recommend.ideaEnergeticMorning"     = "Energieke albums om de dag mee te beginnen";
 "recommend.ideaJazzyLateNight"       = "Iets jazzy voor laat op de avond";
 "recommend.ideaRainySunday"          = "Albums voor een regenachtige zondagmiddag";
+"recommend.idleDescription"          = "Laat RoonSage albums voorstellen op basis van je smaak.";
 "recommend.noAlbumsError"            = "Geen albums om aan te bevelen — synchroniseer eerst je bibliotheek.";
 "recommend.pickZoneFirst"            = "Kies eerst een zone";
 "recommend.playAlbumHelp"            = "Speel dit album af";
 "recommend.playLocalHelp"            = "Speel dit album lokaal af op dit apparaat";
+"recommend.playOn"                   = "Speel op";
 "recommend.processError"             = "Kon de aanbeveling niet verwerken — probeer opnieuw.";
 "recommend.promptPlaceholder"        = "Beschrijf een sfeer of gelegenheid… bijv. “diepe platen voor een lange avond”";
 "recommend.promptSectionTitle"       = "Waar heb je zin in?";
@@ -661,15 +753,21 @@
 /* similarTracks */
 "similarTracks.done"              = "Gereed";
 "similarTracks.navTitle"          = "Vergelijkbaar";
+"similarTracks.noMatchDescription" = "Geen vergelijkbare tracks gevonden — deze is nog niet geanalyseerd.";
 "similarTracks.noMatchTitle"      = "Geen sonische match";
 "similarTracks.playThisMix"       = "Speel deze mix";
 "similarTracks.sectionSoundsLike" = "Klinkt hierop";
+"similarTracks.similarToLabel"    = "Lijkt op";
 
 /* songAlchemy */
+"songAlchemy.addHint"           = "Voeg minstens één track toe om te beginnen.";
 "songAlchemy.bucketAdd"         = "Optellen";
 "songAlchemy.bucketSubtract"    = "Aftrekken";
+"songAlchemy.empty"             = "Nog niets toegevoegd.";
+"songAlchemy.intro"             = "Tel tracks bij elkaar op en trek andere ervan af; RoonSage zoekt wat ertussenin ligt.";
 "songAlchemy.mix"               = "Mix";
 "songAlchemy.mixing"            = "Mixen…";
+"songAlchemy.noResultDesc"      = "Geen resultaat voor deze combinatie. Probeer één track minder af te trekken.";
 "songAlchemy.noResultTitle"     = "Niets te mixen";
 "songAlchemy.playTop20"         = "Speel top 20";
 "songAlchemy.remix"             = "Remix — zelfde smaak, andere tracks";
@@ -682,6 +780,8 @@
 "songPaths.change"                 = "Wijzig";
 "songPaths.chooseTracks"           = "Kies tracks";
 "songPaths.from"                   = "Van";
+"songPaths.intro"                  = "Kies een begin- en een eindnummer; RoonSage bouwt de route ertussen.";
+"songPaths.noBridgeDescription"    = "Geen pad gevonden tussen deze twee. Kies nummers die dichter bij elkaar liggen.";
 "songPaths.noBridgeTitle"          = "Geen brug gevonden";
 "songPaths.playPath"               = "Speel pad";
 "songPaths.qobuzDescription"       = "Een sonische brug, samengesteld in RoonSage.";
@@ -696,7 +796,10 @@
 "sonicFingerprint.computingTitle" = "Je sonische DNA berekenen…";
 
 /* sonicJourneys */
+"sonicJourneys.albumRadioDesc"   = "Begint bij een album en dwaalt daar geleidelijk vanaf.";
+"sonicJourneys.bridgeDesc"       = "Verbindt twee smaken die je zelden samen hoort.";
 "sonicJourneys.building"         = "Bezig…";
+"sonicJourneys.headerSubtitle"   = "Reizen door je bibliotheek, elk met een ander vertrekpunt.";
 "sonicJourneys.noYearTracks"     = "Geen tracks met een jaartal gevonden — tag of analyseer eerst meer muziek.";
 "sonicJourneys.noYearTracksSync" = "Geen tracks met een jaartal gevonden om te synchroniseren.";
 "sonicJourneys.qobuzDescription" = "Een reis van oud naar nieuw, samengesteld in RoonSage.";
@@ -704,6 +807,7 @@
 "sonicJourneys.startJourney"     = "Start reis";
 "sonicJourneys.syncToQobuz"      = "Sync naar Qobuz";
 "sonicJourneys.syncing"          = "Synchroniseren…";
+"sonicJourneys.timeMachineDesc"  = "Volgt één tijdvak dwars door je collectie.";
 
 /* sonicLab */
 "sonicLab.modeBridge"      = "Brug";
@@ -712,15 +816,20 @@
 "sonicLab.modeSearch"      = "Zoek";
 
 /* sonicRadio */
+"sonicRadio.myRadiosSubtitle" = "Stations die je zelf hebt bewaard.";
+"sonicRadio.myRadiosTitle" = "Mijn radio's";
 "sonicRadio.navTitle"    = "Radio's";
 "sonicRadio.refreshHelp" = "Ververs de radio's van vandaag";
 
 /* sonicSearch */
+"sonicSearch.emptyDescription"  = "Niets gevonden dat hierop lijkt. Probeer een bredere omschrijving.";
 "sonicSearch.emptyTitle"        = "Geen resultaten";
 "sonicSearch.example1"          = "dromerige ambient piano";
 "sonicSearch.example2"          = "energieke funk met blazers";
 "sonicSearch.example3"          = "donkere melancholische synthwave";
 "sonicSearch.example4"          = "warme akoestische zondagochtend";
+"sonicSearch.examplesHeader"    = "Voorbeelden";
+"sonicSearch.introDescription"  = "Beschrijf hoe iets moet klinken; RoonSage zoekt op klank, niet op woorden.";
 "sonicSearch.search"            = "Zoek";
 "sonicSearch.searchPlaceholder" = "bijv. dromerige ambient piano";
 "sonicSearch.searching"         = "Zoeken…";

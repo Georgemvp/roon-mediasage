@@ -43,6 +43,12 @@ jobs:
       # `--lenient` (and optionally add `--strict`) to turn this into a hard gate.
       - name: Lint
         run: swiftlint lint --config .swiftlint.yml --lenient
+      # A missing string key is NOT a compile error — SwiftUI renders the key
+      # itself, so "localNowPlaying.nothingPlaying" ships as visible UI text.
+      # 109 of those were found from a user screenshot on 2026-08-10 and closed
+      # on 2026-08-11; this is a hard gate from the start so the count stays 0.
+      - name: Localization keys
+        run: native/scripts/check-localization.sh --strict
 
   test:
     name: swift test + release build
