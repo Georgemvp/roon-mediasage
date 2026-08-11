@@ -86,6 +86,21 @@ public func LS(_ key: String.LocalizationValue) -> String {
     return String(localized: key, bundle: uiBundle)
 }
 
+/// Localized name for the on-device output ("dit apparaat" / "deze Mac").
+///
+/// Lives here rather than in Core on purpose: `LS` resolves against the
+/// RoonSageUI bundle and Core cannot reach it, which is exactly why
+/// `localOutputLabel` was hardcoded Dutch — and why it escaped the
+/// localization gate. It is not a key, so `check-localization.sh` could not see
+/// it, and an English-language app still said "Dit apparaat".
+public var localOutputLabel: String {
+    #if os(macOS)
+    LS("output.thisMac")
+    #else
+    LS("output.thisDevice")
+    #endif
+}
+
 /// Localized `Text`, resolved against the RoonSageUI bundle. Respects the
 /// `\.locale` environment (pinned at the root by `.appLanguage()`).
 public func LT(_ key: LocalizedStringKey) -> Text {

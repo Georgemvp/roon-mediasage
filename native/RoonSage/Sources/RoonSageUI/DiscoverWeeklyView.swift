@@ -107,7 +107,7 @@ public struct DiscoverWeeklyView: View {
             HStack(spacing: Spacing.sm) {
                 Button {
                     Haptics.tap()
-                    let target = client.selectedZone?.displayName ?? RoonClient.localOutputName
+                    let target = client.selectedZone?.displayName ?? localOutputLabel
                     Task {
                         await client.playToActiveOutput(pl.trackRecords)
                         // Optimistic confirm (a zone's queue loads server-side); a

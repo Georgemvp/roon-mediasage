@@ -10,14 +10,11 @@ extension RoonClient {
     /// Synthetic output id for "this device" in the zone/output picker.
     public static let localOutputID = "roonsage.local.device"
 
-    /// Display name for the on-device output in the output picker.
-    public static var localOutputName: String {
-        #if os(macOS)
-        "Deze Mac"
-        #else
-        "Dit apparaat"
-        #endif
-    }
+    // The display name for this output lives in RoonSageUI (`localOutputLabel`).
+    // It used to be a hardcoded Dutch string here, which meant an English-language
+    // app still read "Dit apparaat" — and being a literal rather than a key, the
+    // localization gate could not catch it. Core owns the identity, the UI owns
+    // the wording.
 
     /// SF Symbol for the on-device output in the output picker.
     public static var localOutputIcon: String {
@@ -139,7 +136,7 @@ extension RoonClient {
         lastLocalPlaybackSummary = summary
         if items.isEmpty {
             lastActionError = ActionError(
-                message: "Geen van deze nummers is lokaal te spelen op deze iPhone (Qobuz/stream of niet op schijf).")
+                message: "Geen van deze nummers is hier af te spelen (Qobuz/stream, of niet op schijf).")
         }
         return LocalPlaybackRequest(base: base, items: items, summary: summary)
     }

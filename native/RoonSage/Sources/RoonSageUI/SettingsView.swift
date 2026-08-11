@@ -533,7 +533,7 @@ public struct SettingsView: View {
 
             // Qobuz local streaming (experimental)
             Section("Qobuz lokaal streamen (experimenteel)") {
-                Toggle("Qobuz-tracks op deze iPhone afspelen", isOn: $qbStreamLocal)
+                Toggle("Qobuz-tracks hier afspelen", isOn: $qbStreamLocal)
                     .onChange(of: qbStreamLocal) { _, v in client.qobuzLocalStreamEnabled = v }
                     .disabled(!client.qobuzConfigured)
                 if qbStreamLocal {
@@ -863,7 +863,7 @@ struct LoudnessSettingsSection: View {
     @AppStorage("local_loudness_preamp_db") private var preampDB = 0.0
 
     var body: some View {
-        Section("Loudness-normalisatie (lokaal afspelen)") {
+        Section("Loudness-normalisatie") {
             Picker("Modus", selection: $modeRaw) {
                 Text("Uit").tag(LocalLoudness.Mode.off.rawValue)
                 Text("Per track").tag(LocalLoudness.Mode.track.rawValue)
@@ -898,7 +898,7 @@ struct TranscodeSettingsSection: View {
     @AppStorage("local_transcode_kbps") private var kbps = 256
 
     var body: some View {
-        Section("Onderweg streamen (lokaal afspelen)") {
+        Section("Onderweg streamen") {
             Picker("Transcodeer naar AAC", selection: $modeRaw) {
                 Text("Nooit").tag(LocalTranscode.Mode.off.rawValue)
                 Text("Alleen mobiele data").tag(LocalTranscode.Mode.cellular.rawValue)

@@ -709,14 +709,14 @@ struct RootView: View {
             Button {
                 client.selectLocalOutput()
             } label: {
-                Label(RoonClient.localOutputName,
+                Label(localOutputLabel,
                       systemImage: localOn ? "checkmark" : RoonClient.localOutputIcon)
             }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: localOn ? RoonClient.localOutputIcon
                           : (active?.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"))
-                Text(localOn ? RoonClient.localOutputName : (active?.displayName ?? LS("root.chooseOutput")))
+                Text(localOn ? localOutputLabel : (active?.displayName ?? LS("root.chooseOutput")))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.semibold))
@@ -724,7 +724,7 @@ struct RootView: View {
             }
             .font(.subheadline.weight(.semibold))
         }
-        .accessibilityLabel(LS("Output: \(localOn ? RoonClient.localOutputName : (active?.displayName ?? LS("root.none")))"))
+        .accessibilityLabel(LS("Output: \(localOn ? localOutputLabel : (active?.displayName ?? LS("root.none")))"))
         .help(LS("root.chooseZoneHelp"))
     }
 }

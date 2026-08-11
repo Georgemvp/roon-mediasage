@@ -148,7 +148,7 @@ public struct PlaylistsView: View {
             .disabled(!client.hasActiveOutput)
             .accessibilityLabel(LS("playlists.playPlaylist"))
             .help(client.hasActiveOutput
-                  ? LS("Speel af in \(client.selectedZone?.displayName ?? RoonClient.localOutputName)")
+                  ? LS("Speel af in \(client.selectedZone?.displayName ?? localOutputLabel)")
                   : LS("playlists.chooseZoneFirst"))
 
             if client.qobuzConfigured {
@@ -214,7 +214,7 @@ public struct PlaylistsView: View {
         if played > 0 {
             statusOK = true
             statusBanner = String(format: LS("playlists.nowPlayingOn"), pl.name,
-                                  client.selectedZone?.displayName ?? RoonClient.localOutputName, played)
+                                  client.selectedZone?.displayName ?? localOutputLabel, played)
             Haptics.success()
         } else {
             statusOK = false

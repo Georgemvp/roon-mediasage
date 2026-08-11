@@ -115,7 +115,7 @@ public struct ZonePicker: View {
                         client.selectLocalOutput()
                         Haptics.tap()
                     } label: {
-                        Label(RoonClient.localOutputName,
+                        Label(localOutputLabel,
                               systemImage: localOn ? "checkmark" : RoonClient.localOutputIcon)
                     }
                 } label: {
@@ -124,7 +124,7 @@ public struct ZonePicker: View {
                         Image(systemName: localOn ? RoonClient.localOutputIcon
                               : (unset ? "exclamationmark.circle.fill"
                               : (client.selectedZone?.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker")))
-                        Text(localOn ? RoonClient.localOutputName : (client.selectedZone?.displayName ?? LS("aIComponents.chooseZone")))
+                        Text(localOn ? localOutputLabel : (client.selectedZone?.displayName ?? LS("aIComponents.chooseZone")))
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
                             .font(.caption2.weight(.semibold))

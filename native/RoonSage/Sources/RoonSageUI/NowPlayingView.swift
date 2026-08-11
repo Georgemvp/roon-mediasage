@@ -205,7 +205,7 @@ struct OutputSelector: View {
             Button {
                 client.selectLocalOutput(); Haptics.tap()
             } label: {
-                Label(RoonClient.localOutputName,
+                Label(localOutputLabel,
                       systemImage: localOn ? "checkmark" : RoonClient.localOutputIcon)
             }
         } label: {
@@ -213,7 +213,7 @@ struct OutputSelector: View {
                 Image(systemName: localOn ? RoonClient.localOutputIcon
                           : (active?.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"))
                     .font(.caption)
-                Text(localOn ? RoonClient.localOutputName : (active?.displayName ?? LS("nowPlaying.chooseOutput")))
+                Text(localOn ? localOutputLabel : (active?.displayName ?? LS("nowPlaying.chooseOutput")))
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
@@ -226,7 +226,7 @@ struct OutputSelector: View {
             .foregroundStyle(.primary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Output: \(localOn ? RoonClient.localOutputName : (active?.displayName ?? LS("nowPlaying.none")))")
+        .accessibilityLabel("Output: \(localOn ? localOutputLabel : (active?.displayName ?? LS("nowPlaying.none")))")
         .accessibilityHint(LS("nowPlaying.chooseOutputHint"))
     }
 }

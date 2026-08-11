@@ -651,7 +651,7 @@
 
 /* playlists */
 "playlists.cancel"                = "Cancel";
-"playlists.chooseZoneFirst"       = "Choose a zone first";
+"playlists.chooseZoneFirst"       = "Pick a zone or this device first";
 "playlists.deleteConfirmTitle"    = "Delete playlist?";
 "playlists.deletePlaylist"        = "Delete playlist";
 "playlists.emptyDescription"      = "Saved playlists show up here.";
@@ -674,7 +674,7 @@
 "queue.localEmptyDescription"   = "Play something on this device; anything you queue up after that shows here.";
 "queue.localEmptyTitle"         = "Nothing queued on this device";
 "queue.noZoneDescription"       = "Pick a Roon zone or this device to see a queue.";
-"queue.noZoneTitle"             = "No zone chosen";
+"queue.noZoneTitle"             = "No output chosen";
 "queue.nowPlaying"              = "Now playing";
 "queue.removeFromQueue"         = "Remove from queue";
 "queue.playFromHereHint"        = "Tap to play from here";
@@ -836,3 +836,7 @@
 /* tasteHub */
 "tasteHub.modeHistory" = "History";
 "tasteHub.modeYear"    = "Year";
+
+/* output */
+"output.thisDevice" = "This device";
+"output.thisMac"    = "This Mac";
