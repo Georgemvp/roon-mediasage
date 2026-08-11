@@ -57,14 +57,14 @@ public struct AskView: View {
                                         .tappable44()
                                 }
                                 .buttonStyle(.borderless)
-                                .disabled(client.selectedZone == nil)
+                                .disabled(!client.hasActiveOutput)
                                 .accessibilityLabel(LS("Zet \(track.title) als volgende in de wachtrij"))
                                 Button { play([track]) } label: {
                                     Image(systemName: "play.fill")
                                         .tappable44()
                                 }
                                 .buttonStyle(.borderless)
-                                .disabled(client.selectedZone == nil)
+                                .disabled(!client.hasActiveOutput)
                                 .accessibilityLabel(LS("Speel \(track.title) nu"))
                             }
                         }
@@ -106,7 +106,7 @@ public struct AskView: View {
                     Label(LS("ask.playAll"), systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(client.selectedZone == nil)
+                .disabled(!client.hasActiveOutput)
 
                 Button {
                     playlistName = "Vraag: \(prompt.prefix(40))"

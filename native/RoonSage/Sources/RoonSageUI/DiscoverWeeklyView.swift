@@ -107,12 +107,12 @@ public struct DiscoverWeeklyView: View {
             HStack(spacing: Spacing.sm) {
                 Button {
                     Haptics.tap()
-                    guard let zone = client.selectedZone else { return }
+                    let target = client.selectedZone?.displayName ?? RoonClient.localOutputName
                     Task {
-                        await client.curateTracks(pl.trackRecords, zoneID: zone.id)
-                        // Optimistic confirm (the queue loads server-side); a real
-                        // failure still surfaces via the global error toast.
-                        if client.lastActionError == nil { showActionMessage("Afspelen gestart op ‘\(zone.displayName)’ — \(pl.tracks.count) tracks.") }
+                        await client.playToActiveOutput(pl.trackRecords)
+                        // Optimistic confirm (a zone's queue loads server-side); a
+                        // real failure still surfaces via the global error toast.
+                        if client.lastActionError == nil { showActionMessage("Afspelen gestart op ‘\(target)’ — \(pl.tracks.count) tracks.") }
                     }
                 } label: {
                     Label(LS("bm.playNow"), systemImage: "play.fill")
@@ -120,7 +120,7 @@ public struct DiscoverWeeklyView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(client.selectedZone == nil)
+                .disabled(!client.hasActiveOutput)
 
                 Button {
                     Task { await refreshNow() }

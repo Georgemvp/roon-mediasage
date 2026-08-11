@@ -501,17 +501,17 @@ public struct GenerateView: View {
                         TrackFeedbackButtons(title: t.title, artist: t.artist, album: t.album)
                         Button { model.playOne(t, client: client) } label: { Image(systemName: "play.fill") }
                             .buttonStyle(.borderless)
-                            .disabled(client.selectedZone == nil)
+                            .disabled(!client.hasActiveOutput)
                             .accessibilityLabel(LS("Speel \(t.title)"))
                     }
                 }
                 .contextMenu {
                     Button { model.playOne(t, client: client) } label: { Label(LS("bm.playNow"), systemImage: "play.fill") }
-                        .disabled(client.selectedZone == nil)
+                        .disabled(!client.hasActiveOutput)
                     Button { model.queueOne(t, next: true, client: client) } label: {
                         Label(LS("generate.playNext"), systemImage: "text.line.first.and.arrowtriangle.forward")
                     }
-                    .disabled(client.selectedZone == nil)
+                    .disabled(!client.hasActiveOutput)
                     Divider()
                     Button { model.move(t, by: -1) } label: { Label(LS("generate.moveUp"), systemImage: "arrow.up") }
                         .disabled(i == 0)

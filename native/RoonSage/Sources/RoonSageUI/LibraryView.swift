@@ -425,7 +425,7 @@ public struct LibraryView: View {
             Button { play(selectedRecords()) } label: { Label(LS("library.play"), systemImage: "play.fill") }
                 .disabled(!client.hasActiveOutput)
             Button { queue(selectedRecords()) } label: { Label(LS("nav.queue"), systemImage: "text.append") }
-                .disabled(client.selectedZone == nil)
+                .disabled(!client.hasActiveOutput)
             Button { showSaveSheet = true } label: { Label(LS("library.save"), systemImage: "plus.rectangle.on.folder") }
             Button { selection.removeAll() } label: { Label(LS("library.clear"), systemImage: "xmark") }
                 .labelStyle(.iconOnly)
@@ -443,9 +443,9 @@ public struct LibraryView: View {
                 .font(.callout).foregroundStyle(.secondary)
             Spacer()
             Button { bulkPlayAlbums() } label: { Label(LS("library.playAll"), systemImage: "play.fill") }
-                .disabled(client.selectedZone == nil)
+                .disabled(!client.hasActiveOutput)
             Button { bulkQueueAlbums() } label: { Label(LS("library.addToQueue"), systemImage: "text.append") }
-                .disabled(client.selectedZone == nil)
+                .disabled(!client.hasActiveOutput)
             Button { albumSelection.removeAll() } label: { Label(LS("library.clear"), systemImage: "xmark") }
                 .labelStyle(.iconOnly)
         }
@@ -537,9 +537,9 @@ public struct LibraryView: View {
     }
 
     private func queue(_ tracks: [TrackRecord], next: Bool = false) {
-        guard let zone = client.selectedZone, !tracks.isEmpty else { return }
+        guard !tracks.isEmpty else { return }
         Haptics.tap()
-        Task { await client.queueTracks(tracks, next: next, zoneID: zone.id) }
+        Task { await client.queueToActiveOutput(tracks, next: next) }
     }
 
     private var tagChips: some View {
