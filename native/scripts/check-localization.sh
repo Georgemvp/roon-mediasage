@@ -68,5 +68,20 @@ if ! diff -q "$tmp/nl" "$tmp/en" >/dev/null; then
     status=1
 fi
 
+# Lowercase \uXXXX escapes. Apple's .strings format does NOT understand them
+# (only \UXXXX with a capital U), so the backslash is eaten and the digits are
+# rendered as text: "Couldn’t" reached the phone as "Couldnu2019t", live on
+# a user's Now Playing screen on 2026-08-11. Nothing in the build or the tests
+# notices — the string is present and non-empty, it just reads as gibberish.
+# This repo's convention is literal UTF-8 characters, so flag any escape at all.
+for lang in nl en; do
+    bad=$(grep -nE '\\u[0-9A-Fa-f]{4}' "$RES/$lang.lproj/Localizable.strings" || true)
+    if [[ -n "$bad" ]]; then
+        echo "── $lang.lproj: \\uXXXX escapes (use the literal character):"
+        printf '%s\n' "$bad" | sed 's/^/     /'
+        status=1
+    fi
+done
+
 if [[ "${1:-}" == "--strict" ]]; then exit $status; fi
 exit 0
