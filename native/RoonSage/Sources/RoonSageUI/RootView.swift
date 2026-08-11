@@ -494,8 +494,12 @@ struct RootView: View {
                     QueueView()
                         .navigationBarTitleDisplayMode(.inline)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .always))
-                .indexViewStyle(.page(backgroundDisplayMode: .always))
+                // No page dots. The index view renders as a capsule pinned to
+                // the bottom centre — right on top of the feedback row — so it
+                // swallowed taps meant for the thumbs and the «…» menu and
+                // paged to the queue instead. A control that blocks the controls
+                // beneath it is worse than an undiscoverable gesture.
+                .tabViewStyle(.page(indexDisplayMode: .never))
                 // Immersive: no toolbar here. The redundant zone picker +
                 // mini-transport (useful on list screens) just compete with
                 // the hero's own zone strip and large transport, so hide the

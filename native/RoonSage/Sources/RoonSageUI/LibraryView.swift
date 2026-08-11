@@ -783,6 +783,14 @@ public struct LibraryView: View {
                     recordShelf(LS("library.forgottenFavorites"), "clock.arrow.circlepath", forgotten).plainCardRow()
                 }
                 browseTiles.plainCardRow()
+                // Downloads lived only in Settings, which is where you go to
+                // configure things — not to find your music. Same navCard shape
+                // as the other destinations, so it costs no extra shelf.
+                if !client.offlineKeys.isEmpty {
+                    navCard(LS("downloads.sectionTitle"),
+                            String(format: LS("downloads.librarySubtitle"), client.offlineKeys.count),
+                            "arrow.down.circle") { DownloadsView() }.plainCardRow()
+                }
                 navCard(LS("library.discoverWeeklyTitle"),
                         LS("library.discoverWeeklySubtitle"),
                         "sparkles") { DiscoverWeeklyView() }.plainCardRow()

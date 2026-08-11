@@ -849,6 +849,7 @@
 "downloads.emptyDescription" = "Pick “Save on this device” on an album or track to take it with you.";
 "downloads.emptyTitle" = "Nothing downloaded yet";
 "downloads.explainer" = "Downloaded tracks play with no server and no signal. They are never pruned automatically — only you remove them.";
+"downloads.librarySubtitle" = "%d tracks available offline";
 "downloads.onDevice" = "On this device";
 "downloads.playAll" = "Play all downloads";
 "downloads.removeAll" = "Remove all downloads";
