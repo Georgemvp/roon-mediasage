@@ -370,7 +370,22 @@ private struct LocalNowPlayingHero: View {
 
     // MARK: Volume — the device's playback level, stacked on the loudness gain.
 
+    /// iOS gets the SYSTEM volume; macOS keeps the player-level slider.
+    ///
+    /// On the phone an app-level slider is a lie: it attenuates on top of the
+    /// device volume, so the hardware buttons and Control Center disagree with
+    /// what the app shows. `MPVolumeView` is the real thing. macOS has no such
+    /// control, so there the engine's own level stays.
+    @ViewBuilder
     private func volumeRow(_ lp: LocalPlaybackController) -> some View {
+        #if os(iOS)
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "speaker.wave.2.fill")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            SystemVolumeSlider()
+        }
+        #else
         HStack(spacing: Spacing.sm) {
             Button {
                 Haptics.tap(); lp.toggleMute()
@@ -394,6 +409,7 @@ private struct LocalNowPlayingHero: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 28, alignment: .trailing)
         }
+        #endif
     }
 
     // MARK: Feedback (like/dislike/lyrics) + up-next — same as the zone hero.

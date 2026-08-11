@@ -46,13 +46,24 @@ public enum SongPaths {
 
         // Precompute prepared features (+ embedding) for the library once. In
         // embedding mode, only vector-bearing candidates are eligible.
-        struct Cand { let track: DatabaseManager.SonicTrack; let prep: SonicSimilarity.Prepared; let vec: [Float]? }
+        // `row`, not a copied vector. Materialising every candidate's embedding
+        // duplicated the WHOLE index — 58k × 512 floats ≈ 113 MB on top of the
+        // 113 MB the index already holds, which is what made this feature kill
+        // the app on an iPhone. The row is an Int; scoring reads the matrix in
+        // place via `index.dot(_:row:)`.
+        struct Cand { let track: DatabaseManager.SonicTrack; let prep: SonicSimilarity.Prepared; let row: Int? }
         var remaining: [Cand] = library
             .filter { !used.contains($0.id) }
             .map { Cand(track: $0,
                         prep: SonicSimilarity.Prepared(SonicSimilarity.Feature($0)),
-                        vec: useEmb ? index?.embedding(forId: $0.id) : nil) }
-        if useEmb { remaining = remaining.filter { $0.vec != nil } }
+                        row: useEmb ? index?.row(forId: $0.id) : nil) }
+        if useEmb { remaining = remaining.filter { $0.row != nil } }
+
+        /// Cosine distance of a vector against a stored row, without copying it.
+        func cosDist(_ v: [Float]?, rowOf cand: Cand) -> Double {
+            guard let v, let r = cand.row, let index else { return 1 }
+            return Double(1 - max(-1, min(1, index.dot(v, row: r))))
+        }
 
         func cosDist(_ a: [Float]?, _ b: [Float]?) -> Double {
             guard let a, let b else { return 1 }
@@ -79,14 +90,16 @@ public enum SongPaths {
                     // Scalar-afstand blijft een lichte tie-break, zodat Camelot/
                     // BPM-botsingen tussen bijna-gelijke kandidaten beslissen.
                     let secondary = secondaryWeight * SonicSimilarity.distance(currentPrep, c.prep, weights: weights)
-                    let score = cosDist(way, c.vec) + secondary
+                    let score = cosDist(way, rowOf: c) + secondary
                     if score < bestScore { bestScore = score; bestIdx = i }
                 }
 
                 let chosen = remaining[bestIdx]
-                path.append(Step(track: chosen.track, similarity: max(0, 1 - cosDist(currentVec, chosen.vec))))
+                path.append(Step(track: chosen.track,
+                                 similarity: max(0, 1 - cosDist(currentVec, rowOf: chosen))))
                 currentPrep = chosen.prep
-                currentVec = chosen.vec
+                // One copy, for the single current track — not per candidate.
+                currentVec = chosen.row.flatMap { r in index.map { Array($0.matrixRow(r)) } }
                 used.insert(chosen.track.id)
                 remaining.remove(at: bestIdx)
             }

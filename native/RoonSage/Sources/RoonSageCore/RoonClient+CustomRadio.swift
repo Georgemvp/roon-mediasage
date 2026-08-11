@@ -311,7 +311,8 @@ extension RoonClient {
             let sts = capped.compactMap { byId[$0.id] }
             if sts.count == capped.count {
                 tracks = RadioSequencer.order(sts, arc: .peak).map {
-                    TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album)
+                    TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album,
+                                       imageKey: $0.imageKey)
                 }
             } else { tracks = capped }
         } else { tracks = capped }

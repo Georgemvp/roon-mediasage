@@ -523,14 +523,16 @@ extension RoonClient {
                 startIds = seedSet
             }
             let ordered = RadioSequencer.order(combined, preferredStartIds: startIds, arc: arc)
-            return ordered.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album) }
+            return ordered.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album,
+                                       imageKey: $0.imageKey) }
         }
 
         var shuffled = dailyShuffled(combined, seed: seed)
         if let leadIdx = shuffled.firstIndex(where: { seedSet.contains($0.id) }), leadIdx != 0 {
             shuffled.swapAt(0, leadIdx)
         }
-        return shuffled.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album) }
+        return shuffled.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album,
+                                       imageKey: $0.imageKey) }
     }
 
     /// The pool member sonically closest to `anchorId` (cosine over CLAP

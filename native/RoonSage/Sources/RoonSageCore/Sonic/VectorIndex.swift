@@ -36,9 +36,33 @@ public struct VectorIndex: Sendable {
 
     public var count: Int { tracks.count }
 
+    /// A COPY of one row. Convenient, but it allocates `dim` floats every call —
+    /// fine for one seed, ruinous per candidate. Use `row(forId:)` + `dot(_:row:)`
+    /// when scoring a whole library.
     public func embedding(forId id: String) -> [Float]? {
         guard let r = idToRow[id] else { return nil }
         return Array(matrix[r * dim..<(r + 1) * dim])
+    }
+
+    /// Where this track's vector lives in `matrix`, so callers can score against
+    /// it in place instead of copying it out.
+    public func row(forId id: String) -> Int? { idToRow[id] }
+
+    /// A slice view of one row — no allocation until the caller materialises it.
+    public func matrixRow(_ r: Int) -> ArraySlice<Float> {
+        guard r >= 0, (r + 1) * dim <= matrix.count else { return [][...] }
+        return matrix[r * dim..<(r + 1) * dim]
+    }
+
+    /// Cosine of `v` against the stored row — both sides are L2-normalised, so
+    /// the dot product IS the cosine. Allocation-free: this is what lets a path
+    /// search walk 58k candidates without duplicating the entire matrix.
+    public func dot(_ v: [Float], row r: Int) -> Float {
+        guard r >= 0, (r + 1) * dim <= matrix.count else { return 0 }
+        var acc: Float = 0
+        let base = r * dim
+        for i in 0..<min(dim, v.count) { acc += v[i] * matrix[base + i] }
+        return acc
     }
 
     public struct Hit: Sendable { public let track: DatabaseManager.SonicTrack; public let score: Float }

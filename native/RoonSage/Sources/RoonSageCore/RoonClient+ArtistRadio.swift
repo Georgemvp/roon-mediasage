@@ -229,7 +229,8 @@ extension RoonClient {
                         ? Set(sts.filter { ($0.artist ?? "").lowercased() == radio.artist.lowercased() }.map(\.id))
                         : []
                     tracks = RadioSequencer.order(sts, preferredStartIds: preferredStart, arc: .peak).map {
-                        TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album)
+                        TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album,
+                                       imageKey: $0.imageKey)
                     }
                 } else { tracks = capped }
             } else { tracks = capped }
@@ -591,7 +592,8 @@ extension RoonClient {
             let key = t.matchKey.isEmpty ? t.id : t.matchKey
             if seen.insert(key).inserted { deduped.append(t) }
         }
-        return deduped.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album) }
+        return deduped.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album,
+                                       imageKey: $0.imageKey) }
     }
 
     // MARK: AI title + description

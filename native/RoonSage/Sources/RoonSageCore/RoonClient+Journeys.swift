@@ -53,7 +53,8 @@ extension RoonClient {
         guard !lib.isEmpty else { return [] }
         let years = (try? await db.yearByMatchKey()) ?? [:]
         return Self.timeMachineOrder(lib, years: years, count: count)
-            .map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album) }
+            .map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album,
+                                       imageKey: $0.imageKey) }
     }
 
     /// Pure + deterministic (testable without a DB): keep only dated tracks, take

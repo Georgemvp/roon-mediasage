@@ -498,6 +498,7 @@
 "localNowPlaying.more" = "Meer";
 "localNowPlaying.nothingPlaying"    = "Niets aan het spelen";
 "localNowPlaying.sonicallySimilar" = "Sonisch vergelijkbaar";
+"localNowPlaying.systemVolume" = "Volume";
 "localNowPlaying.upNext"            = "HIERNA";
 "localNowPlaying.deviceNounMac"     = "deze Mac";
 "localNowPlaying.dislike"           = "Vind ik niet leuk — sla over en leer ervan";

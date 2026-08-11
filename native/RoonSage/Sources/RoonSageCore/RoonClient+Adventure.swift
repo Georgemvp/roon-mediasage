@@ -57,7 +57,8 @@ extension RoonClient {
                 let key = step.track.matchKey.isEmpty ? step.track.id : step.track.matchKey
                 if seen.insert(key).inserted {
                     out.append(TrackRecord(id: step.track.id, title: step.track.title,
-                                           artist: step.track.artist, album: step.track.album))
+                                           artist: step.track.artist, album: step.track.album,
+                                           imageKey: step.track.imageKey))
                 }
             }
             return out
