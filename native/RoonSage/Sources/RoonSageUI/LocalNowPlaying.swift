@@ -218,11 +218,18 @@ private struct LocalNowPlayingHero: View {
 
     @ViewBuilder
     private func scrubber(_ lp: LocalPlaybackController) -> some View {
+        // Read the position UNCONDITIONALLY. Folding it into the ternary below
+        // meant Swift short-circuited it whenever the duration was still 0, so
+        // SwiftUI never registered a dependency on it and the row stopped
+        // redrawing entirely.
+        let pos = lp.positionSec
         let dur = lp.durationSec
         let hasLength = dur > 0
         // While dragging, follow the finger; otherwise the engine's live position.
-        let frac = isSeeking ? seekFraction : (hasLength ? min(max(lp.positionSec / dur, 0), 1) : 0)
-        let shownPos = frac * dur
+        let frac = isSeeking ? seekFraction : (hasLength ? min(max(pos / dur, 0), 1) : 0)
+        // Without a known length the bar can't fill, but the elapsed counter can
+        // still run — better than a frozen 0:00.
+        let shownPos = hasLength ? frac * dur : pos
         VStack(spacing: Spacing.xs) {
             GeometryReader { geo in
                 let w = geo.size.width

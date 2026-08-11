@@ -519,7 +519,8 @@ public struct LibraryView: View {
     // MARK: - Helpers
 
     private func asRecord(_ t: DatabaseManager.LibraryTrackRow) -> TrackRecord {
-        TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album, year: t.year, isLive: t.isLive)
+        TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album,
+                    year: t.year, isLive: t.isLive, imageKey: t.imageKey)
     }
 
     private func selectedRecords() -> [TrackRecord] {

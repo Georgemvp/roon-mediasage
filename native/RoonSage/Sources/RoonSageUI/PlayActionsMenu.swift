@@ -86,6 +86,7 @@ struct PlayActionsMenu: View {
 extension DatabaseManager.LibraryTrackRow {
     /// The play/queue record for this library row.
     var asTrackRecord: TrackRecord {
-        TrackRecord(id: id, title: title, artist: artist, album: album, year: year, isLive: isLive)
+        TrackRecord(id: id, title: title, artist: artist, album: album,
+                    year: year, isLive: isLive, imageKey: imageKey)
     }
 }

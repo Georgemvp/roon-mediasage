@@ -152,7 +152,7 @@ public struct LiveDJView: View {
     // MARK: Data
 
     private func asRecord(_ c: DatabaseManager.DJCandidate) -> TrackRecord {
-        TrackRecord(id: c.id, title: c.title, artist: c.artist, album: c.album)
+        TrackRecord(id: c.id, title: c.title, artist: c.artist, album: c.album, imageKey: c.imageKey)
     }
 
     private func reload(_ np: RoonClient.ActiveTrack) async {

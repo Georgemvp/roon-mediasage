@@ -79,14 +79,27 @@ public final class LocalPlaybackController {
 
     /// Duration of the current track — the player's value once known, else the
     /// metadata hint.
-    public var durationSec: Double {
+    ///
+    /// STORED and observable on purpose. It used to be computed straight from
+    /// `player.currentItem.duration`, which SwiftUI cannot observe: a streamed
+    /// asset reports its length a moment AFTER playback starts, and nothing
+    /// re-rendered when it did. Together with a scrubber that skipped reading
+    /// `positionSec` while the duration was still 0, that froze the whole
+    /// progress row at 0:00 — until an unrelated observable (pausing) forced a
+    /// redraw and the real time appeared.
+    public private(set) var durationSec: Double = 0
+
+    /// Pull the current item's length, falling back to the metadata hint. Called
+    /// on every position tick, so a duration that resolves late still lands.
+    private func refreshDuration() {
+        var next = current?.durationSec ?? 0
         #if canImport(AVFoundation)
         if let item = player.currentItem {
             let d = item.duration.seconds
-            if d.isFinite, d > 0 { return d }
+            if d.isFinite, d > 0 { next = d }
         }
         #endif
-        return current?.durationSec ?? 0
+        if durationSec != next { durationSec = next }
     }
 
     /// Set by the iOS app so it can refresh `MPNowPlayingInfoCenter` and the
@@ -142,6 +155,7 @@ public final class LocalPlaybackController {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.positionSec = time.seconds.isFinite ? max(0, time.seconds) : 0
+                self.refreshDuration()
                 self.onStateChange?()
             }
         }
@@ -413,6 +427,7 @@ public final class LocalPlaybackController {
     private func load(index i: Int, autoPlay: Bool) {
         index = i
         positionSec = 0
+        durationSec = queue.indices.contains(i) ? (queue[i].durationSec ?? 0) : 0
         lastError = nil
         #if canImport(AVFoundation)
         player.removeAllItems()

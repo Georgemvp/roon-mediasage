@@ -174,7 +174,8 @@ struct AlbumDetailView: View {
     }
 
     private func record(_ t: DatabaseManager.LibraryTrackRow) -> TrackRecord {
-        TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album, year: t.year, isLive: t.isLive)
+        TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album,
+                    year: t.year, isLive: t.isLive, imageKey: t.imageKey)
     }
 
     /// Play now on the active output — a Roon zone, or this device.
@@ -371,7 +372,8 @@ struct ArtistDetailView: View {
     }
 
     private func rowRecord(_ t: DatabaseManager.LibraryTrackRow) -> TrackRecord {
-        TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album, year: t.year, isLive: t.isLive)
+        TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album,
+                    year: t.year, isLive: t.isLive, imageKey: t.imageKey)
     }
 
     private func playRows(_ rows: [DatabaseManager.LibraryTrackRow]) {
