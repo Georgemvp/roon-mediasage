@@ -102,7 +102,8 @@ extension RoonClient {
             LocalAudioCache.localFile(forKey: LocalPlayability.matchKey(for: $0), variant: variant) != nil
         }
         guard !base.isEmpty || anyLocal else {
-            lastActionError = ActionError(message: "Geen analyzer-server gevonden om lokaal af te spelen.")
+            lastActionError = ActionError(message: CoreStrings.s(
+                "core.error.noAnalyzerServer", "Geen analyzer-server gevonden om lokaal af te spelen."))
             return nil
         }
         let part = await localPlayabilityPartition(tracks)
@@ -144,7 +145,8 @@ extension RoonClient {
         lastLocalPlaybackSummary = summary
         if items.isEmpty {
             lastActionError = ActionError(
-                message: "Geen van deze nummers is hier af te spelen (Qobuz/stream, of niet op schijf).")
+                message: CoreStrings.s("core.error.noneLocallyPlayable",
+                                       "Geen van deze nummers is hier af te spelen (Qobuz/stream, of niet op schijf)."))
         }
         return LocalPlaybackRequest(base: base, items: items, summary: summary)
     }

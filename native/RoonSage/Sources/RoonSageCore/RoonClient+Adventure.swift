@@ -26,14 +26,16 @@ extension RoonClient {
         let lib = await radioLibrary()
         guard let index = await activeIndex(db) else {
             lastActionError = ActionError(
-                message: "Sonische reis heeft sonische analyse nodig — analyseer eerst je bibliotheek.")
+                message: CoreStrings.s("core.error.journeyNeedsAnalysis",
+                                       "Sonische reis heeft sonische analyse nodig — analyseer eerst je bibliotheek."))
             return
         }
         let disliked = dislikedMatchKeys
         guard let seed = lib.first(where: { $0.matchKey == matchKey }),
               index.embedding(forId: seed.id) != nil else {
             lastActionError = ActionError(
-                message: "Sonische reis kan hier niet starten — deze track is nog niet sonisch geanalyseerd.")
+                message: CoreStrings.s("core.error.journeySeedNotAnalysed",
+                                       "Sonische reis kan hier niet starten — deze track is nog niet sonisch geanalyseerd."))
             return
         }
 
@@ -66,7 +68,8 @@ extension RoonClient {
 
         guard journey.count >= 2 else {
             lastActionError = ActionError(
-                message: "Sonische reis kon geen route vinden — analyseer wat meer muziek.")
+                message: CoreStrings.s("core.error.journeyNoRoute",
+                                       "Sonische reis kon geen route vinden — analyseer wat meer muziek."))
             return
         }
         await deliver(journey, to: zoneID)

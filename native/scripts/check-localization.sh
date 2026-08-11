@@ -11,6 +11,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 UI="$ROOT/native/RoonSage/Sources/RoonSageUI"
+CORE="$ROOT/native/RoonSage/Sources/RoonSageCore"
 RES="$UI/Resources"
 
 tmp=$(mktemp -d)
@@ -20,6 +21,24 @@ trap 'rm -rf "$tmp"' EXIT
 # migration backlog (see the header of Localization.swift), not a rendering bug.
 grep -rhoE '\bL[ST]\("[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z0-9]+)+"\)' --include='*.swift' "$UI" \
   | sed -E 's/^L[ST]\("//; s/"\)$//' | sort -u > "$tmp/used"
+
+# Core cannot call LS (the catalogue is a RoonSageUI resource), so its own error
+# messages go through CoreStrings.s/f with an injected translator. Those keys are
+# just as able to go missing, and the gate was blind to them until now.
+#
+# Python, not grep: the key routinely lands on the line AFTER the call, and a
+# line-oriented match silently found only 15 of 22 keys when this was written —
+# a checker with a blind spot is worse than no checker.
+python3 - "$CORE" >> "$tmp/used" <<'PYEOF'
+import pathlib, re, sys
+keys = set()
+for path in pathlib.Path(sys.argv[1]).rglob("*.swift"):
+    for m in re.finditer(r'CoreStrings\.[sf]\(\s*"([a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9]+)+)"',
+                         path.read_text(encoding="utf-8")):
+        keys.add(m.group(1))
+print("\n".join(sorted(keys)))
+PYEOF
+sort -u -o "$tmp/used" "$tmp/used"
 
 status=0
 for lang in nl en; do

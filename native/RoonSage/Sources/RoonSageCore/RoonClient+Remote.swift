@@ -484,7 +484,8 @@ extension RoonClient {
     /// reflects the result without waiting for the next tick.
     func remote(_ command: RemoteCommand) async {
         guard let base = remoteBaseURL, let url = URL(string: "\(base)/command") else {
-            lastActionError = ActionError(message: "Geen verbinding met de RoonSage-server.")
+            lastActionError = ActionError(message: CoreStrings.s(
+                "core.error.noServer", "Geen verbinding met de RoonSage-server."))
             return
         }
         var req = URLRequest(url: url)
@@ -500,7 +501,8 @@ extension RoonClient {
            (resp as? HTTPURLResponse)?.statusCode == 200 {
             await pollPlaybackOnce()
         } else {
-            lastActionError = ActionError(message: "Commando mislukt — is de RoonSage-server bereikbaar?")
+            lastActionError = ActionError(message: CoreStrings.s(
+                "core.error.commandFailed", "Commando mislukt — is de RoonSage-server bereikbaar?"))
         }
     }
 }

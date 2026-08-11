@@ -9,7 +9,13 @@ public struct ContentView: View {
     @State private var ambient = AmbientTheme()
     @State private var sleepTimer = SleepTimer()
 
-    public init() {}
+    public init() {
+        // Before any view can produce an error: Core's toasts are localised
+        // through an injected translator (it can't reach this target's string
+        // catalogue). Registering here rather than in an `onAppear` means a
+        // failure during the very first connect is already translated.
+        installCoreStringsTranslator()
+    }
 
     public var body: some View {
         Group {

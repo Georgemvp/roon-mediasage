@@ -24,7 +24,8 @@ extension RoonClient {
     public func startAlbumRadio(albumKey: String, title: String, artist: String?,
                                 imageKey: String? = nil, zoneID: String? = nil, djMode: DJMode? = nil) async {
         guard let db = database else {
-            reportError("Album-radio mislukt — geen bibliotheek beschikbaar.")
+            reportError(CoreStrings.s("core.error.albumRadioNoLibrary",
+                                      "Album-radio mislukt — geen bibliotheek beschikbaar."))
             return
         }
         let rows = (try? await db.tracksForAlbum(albumKey)) ?? []
@@ -32,7 +33,8 @@ extension RoonClient {
         let analyzed = Set(lib.map(\.id))
         let seedIds = rows.map(\.id).filter { analyzed.contains($0) }
         guard !seedIds.isEmpty else {
-            reportError("Dit album is nog niet geanalyseerd — album-radio kan nog niet.")
+            reportError(CoreStrings.s("core.error.albumRadioNotAnalysed",
+                                      "Dit album is nog niet geanalyseerd — album-radio kan nog niet."))
             return
         }
         let img = imageKey ?? rows.first(where: { !($0.imageKey ?? "").isEmpty })?.imageKey

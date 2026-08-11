@@ -40,7 +40,8 @@ extension RoonClient {
         // your bundle on the train.
         if NetworkPathMonitor.shared.isExpensive, !LocalAudioCache.downloadOnCellular {
             lastActionError = ActionError(
-                message: "Niet gedownload: je zit op mobiele data. Zet het aan bij Instellingen → Downloads, of wacht op wifi.")
+                message: CoreStrings.s("core.error.downloadOnCellular",
+                                       "Niet gedownload: je zit op mobiele data. Zet het aan bij Instellingen → Downloads, of wacht op wifi."))
             return
         }
         guard let request = await resolveLocalPlayback(tracks), !request.items.isEmpty else { return }
@@ -81,7 +82,9 @@ extension RoonClient {
             await self?.refreshOfflineKeys()
             if failed > 0 {
                 self?.lastActionError = ActionError(
-                    message: "\(failed) van \(pending.count) nummers konden niet worden opgeslagen.")
+                    message: CoreStrings.f("core.error.downloadPartialFail",
+                                           "%d van %d nummers konden niet worden opgeslagen.",
+                                           failed, pending.count))
             }
         }
     }

@@ -73,7 +73,8 @@ extension RoonClient {
     public func curateTracks(_ tracks: [TrackRecord], zoneID: String) async {
         if isRemote { var c = RemoteCommand("curate"); c.zoneID = zoneID; c.tracks = tracks; await remote(c); return }
         guard let browse = browseService else {
-            lastActionError = ActionError(message: "Afspelen mislukt — geen verbinding met Roon.")
+            lastActionError = ActionError(message: CoreStrings.s(
+                "core.error.playNoConnection", "Afspelen mislukt — geen verbinding met Roon."))
             return
         }
         let tracks = await resolveImportKeys(tracks)
@@ -96,8 +97,12 @@ extension RoonClient {
         if failed > 0 {
             lastActionError = ActionError(
                 message: failed == tracks.count
-                    ? "Afspelen mislukt — geen van de \(tracks.count) tracks kon starten."
-                    : "\(failed) van de \(tracks.count) tracks konden niet in de wachtrij.")
+                    ? CoreStrings.f("core.error.playAllFailed",
+                                    "Afspelen mislukt — geen van de %d tracks kon starten.",
+                                    tracks.count)
+                    : CoreStrings.f("core.error.queueSomeFailed",
+                                    "%d van de %d tracks konden niet in de wachtrij.",
+                                    failed, tracks.count))
         }
     }
 

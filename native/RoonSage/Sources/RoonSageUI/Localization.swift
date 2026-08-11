@@ -1,3 +1,4 @@
+import RoonSageCore
 import SwiftUI
 
 // MARK: - Localization (C7 scaffolding)
@@ -84,6 +85,34 @@ public func LS(_ key: String.LocalizationValue) -> String {
         return String(localized: key, bundle: uiBundle, locale: loc)
     }
     return String(localized: key, bundle: uiBundle)
+}
+
+/// Hands Core a way to localise the error toasts it produces.
+///
+/// Core sits below this target and cannot reach the string catalogue, so its
+/// messages were hardcoded Dutch and appeared untranslated in an English UI —
+/// the same class of bug as `localOutputLabel` below, and equally invisible to
+/// `check-localization.sh` until it learned to read `CoreStrings` calls too.
+///
+/// Deliberately NOT `LS`: that takes a compile-time `LocalizationValue` and
+/// returns the key itself when it is missing, which is precisely the "raw key
+/// on screen" failure. A bundle lookup with a sentinel default returns nil for
+/// an unknown key instead, so `CoreStrings` falls back to its Dutch literal.
+///
+/// Register once at launch; the closure re-reads the language preference on
+/// every call, so switching language in Settings takes effect immediately.
+public func installCoreStringsTranslator() {
+    CoreStrings.register { key in
+        let missing = "\u{0}"
+        var bundle = uiBundle
+        if let loc = LocalePreference.current.locale,
+           let path = uiBundle.path(forResource: loc.identifier, ofType: "lproj"),
+           let localised = Bundle(path: path) {
+            bundle = localised
+        }
+        let value = bundle.localizedString(forKey: key, value: missing, table: nil)
+        return value == missing ? nil : value
+    }
 }
 
 /// Localized name for the on-device output ("dit apparaat" / "deze Mac").

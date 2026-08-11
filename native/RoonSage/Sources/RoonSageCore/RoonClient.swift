@@ -227,7 +227,8 @@ public final class RoonClient {
     /// surfacing failures (and the not-connected case) via `lastActionError`.
     func runAction(_ label: String, _ op: (TransportService) async throws -> Void) async {
         guard let ts = transportService else {
-            lastActionError = ActionError(message: "\(label) mislukt — geen verbinding met Roon.")
+            lastActionError = ActionError(message: CoreStrings.f(
+                "core.error.actionNoConnection", "%@ mislukt — geen verbinding met Roon.", label))
             return
         }
         do {
@@ -235,7 +236,8 @@ public final class RoonClient {
             Log.debug("transport-actie '\(label)' verzonden", category: .roon)
         } catch {
             Log.warning("transport-actie '\(label)' mislukt: \(error)", category: .roon)
-            lastActionError = ActionError(message: "\(label) mislukt: \(error.localizedDescription)")
+            lastActionError = ActionError(message: CoreStrings.f(
+                "core.error.actionFailed", "%@ mislukt: %@", label, error.localizedDescription))
         }
     }
     public internal(set) var isSyncing = false

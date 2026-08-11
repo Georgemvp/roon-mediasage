@@ -518,7 +518,7 @@ public final class LocalPlaybackController {
         player.removeAllItems()
         scheduled = []
         guard let item = makeItem(for: queue[i]) else {
-            lastError = "Kon dit nummer niet laden."
+            lastError = CoreStrings.s("core.error.trackLoadFailed", "Kon dit nummer niet laden.")
             isPlaying = false
             onStateChange?()
             return
@@ -629,8 +629,11 @@ public final class LocalPlaybackController {
 
     private func reportLoadFailure(code: Int?) {
         isPlaying = false
-        lastError = code.map { "Kon dit nummer niet afspelen op dit apparaat (\($0))." }
-            ?? "Kon dit nummer niet afspelen op dit apparaat."
+        lastError = code.map {
+            CoreStrings.f("core.error.trackPlayFailedCode",
+                          "Kon dit nummer niet afspelen op dit apparaat (%d).", $0)
+        } ?? CoreStrings.s("core.error.trackPlayFailed",
+                           "Kon dit nummer niet afspelen op dit apparaat.")
         onStateChange?()
     }
     #endif

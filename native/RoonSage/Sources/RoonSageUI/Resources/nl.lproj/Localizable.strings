@@ -867,3 +867,27 @@
 "offline.bannerText" = "Offline — je bibliotheek en downloads werken. Stations, sonisch zoeken en Roon-zones niet.";
 "offline.retry" = "Opnieuw";
 "offline.useOffline" = "Offline gebruiken";
+
+/* Core-laag: foutmeldingen die RoonSageCore zelf maakt (zie CoreStrings.swift) */
+"core.error.actionFailed" = "%@ mislukt: %@";
+"core.error.actionNoConnection" = "%@ mislukt \u2014 geen verbinding met Roon.";
+"core.error.albumRadioNoLibrary" = "Album-radio mislukt \u2014 geen bibliotheek beschikbaar.";
+"core.error.albumRadioNotAnalysed" = "Dit album is nog niet geanalyseerd \u2014 album-radio kan nog niet.";
+"core.error.bookmarkFailed" = "Bewaren mislukt \u2014 probeer het opnieuw.";
+"core.error.commandFailed" = "Commando mislukt \u2014 is de RoonSage-server bereikbaar?";
+"core.error.downloadOnCellular" = "Niet gedownload: je zit op mobiele data. Zet het aan bij Instellingen \u2192 Downloads, of wacht op wifi.";
+"core.error.downloadPartialFail" = "%1$d van %2$d nummers konden niet worden opgeslagen.";
+"core.error.journeyNeedsAnalysis" = "Sonische reis heeft sonische analyse nodig \u2014 analyseer eerst je bibliotheek.";
+"core.error.journeyNoRoute" = "Sonische reis kon geen route vinden \u2014 analyseer wat meer muziek.";
+"core.error.journeySeedNotAnalysed" = "Sonische reis kan hier niet starten \u2014 deze track is nog niet sonisch geanalyseerd.";
+"core.error.noAnalyzerServer" = "Geen analyzer-server gevonden om lokaal af te spelen.";
+"core.error.noServer" = "Geen verbinding met de RoonSage-server.";
+"core.error.noneLocallyPlayable" = "Geen van deze nummers is hier af te spelen (Qobuz/stream, of niet op schijf).";
+"core.error.playAllFailed" = "Afspelen mislukt \u2014 geen van de %d tracks kon starten.";
+"core.error.playNoConnection" = "Afspelen mislukt \u2014 geen verbinding met Roon.";
+"core.error.queueAllFailed" = "Wachtrij mislukt \u2014 geen van de %d tracks kon worden toegevoegd.";
+"core.error.queueNoConnection" = "Wachtrij mislukt \u2014 geen verbinding met Roon.";
+"core.error.queueSomeFailed" = "%1$d van de %2$d tracks konden niet in de wachtrij.";
+"core.error.trackLoadFailed" = "Kon dit nummer niet laden.";
+"core.error.trackPlayFailed" = "Kon dit nummer niet afspelen op dit apparaat.";
+"core.error.trackPlayFailedCode" = "Kon dit nummer niet afspelen op dit apparaat (%d).";

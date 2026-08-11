@@ -96,7 +96,7 @@ extension RoonClient {
             }
         } catch {
             Log.warning("Bookmark opslaan mislukt: \(error)", category: .roon)
-            reportError("Bewaren mislukt — probeer het opnieuw.")
+            reportError(CoreStrings.s("core.error.bookmarkFailed", "Bewaren mislukt — probeer het opnieuw."))
         }
     }
 

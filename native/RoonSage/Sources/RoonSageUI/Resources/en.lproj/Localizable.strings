@@ -867,3 +867,27 @@
 "offline.bannerText" = "Offline — your library and downloads work. Stations, sonic search and Roon zones don't.";
 "offline.retry" = "Retry";
 "offline.useOffline" = "Use offline";
+
+/* Core-laag: foutmeldingen die RoonSageCore zelf maakt (zie CoreStrings.swift) */
+"core.error.actionFailed" = "%@ failed: %@";
+"core.error.actionNoConnection" = "%@ failed \u2014 not connected to Roon.";
+"core.error.albumRadioNoLibrary" = "Album radio failed \u2014 no library available.";
+"core.error.albumRadioNotAnalysed" = "This album hasn\u2019t been analysed yet \u2014 album radio isn\u2019t available.";
+"core.error.bookmarkFailed" = "Couldn\u2019t save \u2014 please try again.";
+"core.error.commandFailed" = "Command failed \u2014 is the RoonSage server reachable?";
+"core.error.downloadOnCellular" = "Not downloaded: you\u2019re on mobile data. Enable it in Settings \u2192 Downloads, or wait for Wi-Fi.";
+"core.error.downloadPartialFail" = "%1$d of %2$d tracks couldn\u2019t be saved.";
+"core.error.journeyNeedsAnalysis" = "A sonic journey needs sonic analysis \u2014 analyse your library first.";
+"core.error.journeyNoRoute" = "The sonic journey couldn\u2019t find a route \u2014 analyse a bit more music.";
+"core.error.journeySeedNotAnalysed" = "A sonic journey can\u2019t start here \u2014 this track hasn\u2019t been sonically analysed.";
+"core.error.noAnalyzerServer" = "No analyzer server found for local playback.";
+"core.error.noServer" = "No connection to the RoonSage server.";
+"core.error.noneLocallyPlayable" = "None of these tracks can play here (Qobuz/stream, or not on disk).";
+"core.error.playAllFailed" = "Playback failed \u2014 none of the %d tracks could start.";
+"core.error.playNoConnection" = "Playback failed \u2014 not connected to Roon.";
+"core.error.queueAllFailed" = "Queue failed \u2014 none of the %d tracks could be added.";
+"core.error.queueNoConnection" = "Queue failed \u2014 not connected to Roon.";
+"core.error.queueSomeFailed" = "%1$d of %2$d tracks couldn\u2019t be queued.";
+"core.error.trackLoadFailed" = "Couldn\u2019t load this track.";
+"core.error.trackPlayFailed" = "Couldn\u2019t play this track on this device.";
+"core.error.trackPlayFailedCode" = "Couldn\u2019t play this track on this device (%d).";
