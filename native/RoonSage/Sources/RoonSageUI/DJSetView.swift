@@ -203,12 +203,15 @@ public struct DJSetView: View {
                 .help(LS("dJSet.exportHelp"))
 
                 Button {
-                    guard let z = selectedZoneID else { return }
                     Haptics.tap()
-                    Task { await client.playDJSet(set, zoneID: z) }
+                    // nil zone = the active output (this device, or whatever the
+                    // output picker points at); the section's picker only narrows
+                    // it to a specific Roon zone.
+                    Task { await client.playDJSet(set, zoneID: selectedZoneID) }
                 } label: { Label(LS("dJSet.play"), systemImage: "play.fill").frame(maxWidth: .infinity) }
-                .buttonStyle(.borderedProminent).tint(Color.roonGold).disabled(selectedZoneID == nil)
-                .help(selectedZoneID == nil ? LS("dJSet.chooseZoneFirst") : LS("dJSet.playSetHelp"))
+                .buttonStyle(.borderedProminent).tint(Color.roonGold)
+                .disabled(selectedZoneID == nil && !client.hasActiveOutput)
+                .help(LS("dJSet.playSetHelp"))
             }
         }
 

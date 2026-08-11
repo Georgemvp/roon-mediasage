@@ -270,12 +270,12 @@ public struct SonicFingerprintView: View {
             Button {
                 let t = scored.track
                 Haptics.tap()
-                play { await client.playTrack(id: t.id, title: t.title, artist: t.artist, zoneID: $0) }
+                Task { await client.playTrack(id: t.id, title: t.title, artist: t.artist) }
             } label: {
                 Image(systemName: "play.fill")
             }
             .buttonStyle(.borderless)
-            .disabled(client.selectedZone == nil)
+            .disabled(!client.hasActiveOutput)
             .accessibilityLabel("Speel nu")
             .help("Speel nu")
         }

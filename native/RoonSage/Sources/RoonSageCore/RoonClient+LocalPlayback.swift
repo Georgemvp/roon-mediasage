@@ -192,24 +192,12 @@ extension RoonClient {
                     year: t.year, isLive: t.isLive)
     }
 
-    /// Fetch an album's tracks and play them on this device.
-    @discardableResult
-    public func playAlbumLocally(albumKey: String) async -> LocalPlaybackSummary? {
-        let rows = await tracksForAlbum(albumKey)
-        return await playLocally(rows.map(record))
-    }
-
-    /// Fetch all of an artist's tracks (across their albums) and play them on
-    /// this device, in album order.
-    @discardableResult
-    public func playArtistLocally(name: String) async -> LocalPlaybackSummary? {
-        let albums = await albumsByArtist(name)
-        var recs: [TrackRecord] = []
-        for album in albums {
-            recs.append(contentsOf: (await tracksForAlbum(album.albumKey)).map(record))
-        }
-        return await playLocally(recs)
-    }
+    // `playAlbumLocally` / `playArtistLocally` used to live here as the on-device
+    // half of a pair, next to `playAlbum(zoneID:)` / `playArtist(zoneID:)`. They
+    // are gone: those verbs now take an optional zone and route through
+    // `deliver`, so there is one path per action instead of two. Removed once the
+    // last caller was converted (2026-08-11) — the sweep found no other
+    // references, in code or as strings.
 
     /// Make this device the active output. Future "play" actions route here (see
     /// `playToActiveOutput`) and the Now Playing screen shows the local player —
@@ -232,6 +220,24 @@ extension RoonClient {
         } else if let zone = selectedZone {
             await curateTracks(tracks, zoneID: zone.id)
         }
+    }
+
+    /// Deliver an assembled track list: to a named Roon zone when the caller
+    /// specifies one, otherwise to whatever output is active.
+    ///
+    /// This is what lets every "play these tracks" verb take `zoneID: String? =
+    /// nil`. The UI omits it and follows the output picker; callers that
+    /// genuinely address a zone by name — the MCP server, where an agent says
+    /// "play this in the kitchen" — keep passing one and are unaffected.
+    func deliver(_ tracks: [TrackRecord], to zoneID: String?) async {
+        if let zoneID { await curateTracks(tracks, zoneID: zoneID) }
+        else { await playToActiveOutput(tracks) }
+    }
+
+    /// `deliver`, for the append-to-queue verbs.
+    func deliverToQueue(_ tracks: [TrackRecord], to zoneID: String?, next: Bool = false) async {
+        if let zoneID { await queueTracks(tracks, next: next, zoneID: zoneID) }
+        else { await queueToActiveOutput(tracks, next: next) }
     }
 
     /// Route a "queue" request to whichever output is active. The local engine

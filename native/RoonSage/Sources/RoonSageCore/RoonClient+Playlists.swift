@@ -117,7 +117,7 @@ extension RoonClient {
     /// fall back to a Roon global search — which covers Qobuz — so a playlist of
     /// non-library tracks is still fully playable. Returns the track count queued.
     @discardableResult
-    public func playPlaylist(id: Int64, zoneID: String) async -> Int {
+    public func playPlaylist(id: Int64, zoneID: String? = nil) async -> Int {
         let saved = await playlistTracks(id: id)
         guard !saved.isEmpty else { return 0 }
         let aligned = (try? await database?.resolveCurrentTracksAligned(saved)) ?? []
@@ -133,7 +133,7 @@ extension RoonClient {
                 toPlay.append(TrackRecord(id: key, title: s.title, artist: s.artist, album: s.album))
             }
         }
-        await curateTracks(toPlay, zoneID: zoneID)
+        await deliver(toPlay, to: zoneID)
         return toPlay.count
     }
 

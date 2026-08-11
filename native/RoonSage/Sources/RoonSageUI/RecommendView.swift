@@ -202,26 +202,15 @@ public struct RecommendView: View {
                         imageKey: album.imageKey) {
                 HStack(spacing: Spacing.xs) {
                     Button {
-                        guard let zone = client.selectedZone?.id else { return }
                         Haptics.tap()
-                        Task { await client.playAlbum(albumKey: album.albumKey, zoneID: zone) }
+                        Task { await client.playAlbum(albumKey: album.albumKey) }
                     } label: {
                         Image(systemName: "play.fill")
                     }
                     .buttonStyle(.bordered)
-                    .disabled(client.selectedZone == nil)
+                    .disabled(!client.hasActiveOutput)
                     .accessibilityLabel(LS("Speel \(album.album) af"))
-                    .help(client.selectedZone == nil ? LS("recommend.pickZoneFirst") : LS("recommend.playAlbumHelp"))
-
-                    Button {
-                        Haptics.tap()
-                        Task { await client.playAlbumLocally(albumKey: album.albumKey) }
-                    } label: {
-                        Image(systemName: "iphone")
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityLabel(LS("Speel \(album.album) op dit apparaat"))
-                    .help(LS("recommend.playLocalHelp"))
+                    .help(client.hasActiveOutput ? LS("recommend.playAlbumHelp") : LS("recommend.pickZoneFirst"))
                 }
             }
         }

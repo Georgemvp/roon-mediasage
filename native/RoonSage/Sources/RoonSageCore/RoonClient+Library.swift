@@ -386,9 +386,9 @@ extension RoonClient {
         return (try? await db.topTags(limit: limit)) ?? []
     }
 
-    /// Play a single library track by id to a zone (first plays now).
-    public func playTrack(id: String, title: String, artist: String?, zoneID: String) async {
-        await curateTracks([TrackRecord(id: id, title: title, artist: artist)], zoneID: zoneID)
+    /// Play a single library track by id on the active output (first plays now).
+    public func playTrack(id: String, title: String, artist: String?, zoneID: String? = nil) async {
+        await deliver([TrackRecord(id: id, title: title, artist: artist)], to: zoneID)
     }
 
     /// Add tracks to the queue without interrupting playback. `next: true` uses

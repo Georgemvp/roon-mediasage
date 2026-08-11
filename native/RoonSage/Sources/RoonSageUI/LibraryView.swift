@@ -476,18 +476,16 @@ public struct LibraryView: View {
     }
 
     private func bulkPlayAlbums() {
-        guard let zone = client.selectedZone else { return }
         Haptics.tap()
         let keys = albumSelection
-        Task { await client.playAlbums(albumKeys: keys, zoneID: zone.id) }
+        Task { await client.playAlbums(albumKeys: keys) }
         exitAlbumSelection()
     }
 
     private func bulkQueueAlbums() {
-        guard let zone = client.selectedZone else { return }
         Haptics.tap()
         let keys = albumSelection
-        Task { await client.queueAlbums(albumKeys: keys, zoneID: zone.id) }
+        Task { await client.queueAlbums(albumKeys: keys) }
         exitAlbumSelection()
     }
 
@@ -844,43 +842,36 @@ public struct LibraryView: View {
     private func trackShelf(_ title: String, _ icon: String,
                             _ rows: [DatabaseManager.LibraryTrackRow]) -> some View {
         shelf(title, icon, covers: rows.map(trackCover),
-              zoneAvailable: client.selectedZone != nil) { EmptyView() }
+              zoneAvailable: client.hasActiveOutput) { EmptyView() }
     }
 
     private func recordShelf(_ title: String, _ icon: String, _ recs: [TrackRecord]) -> some View {
         shelf(title, icon, covers: recs.map(recordCover),
-              zoneAvailable: client.selectedZone != nil) { EmptyView() }
+              zoneAvailable: client.hasActiveOutput) { EmptyView() }
     }
 
     private func albumShelf(_ title: String, _ icon: String,
                             _ albums: [DatabaseManager.AlbumResult]) -> some View {
         shelf(title, icon, covers: albums.map(albumCover),
-              zoneAvailable: client.selectedZone != nil) { EmptyView() }
+              zoneAvailable: client.hasActiveOutput) { EmptyView() }
     }
 
     private func trackCover(_ t: DatabaseManager.LibraryTrackRow) -> Cover {
         let rec = asRecord(t)
         return Cover(id: t.id, title: t.title, subtitle: t.artist, imageKey: t.imageKey) {
             Task { await client.playToActiveOutput([rec]) }
-        } playLocal: {
-            Task { _ = await client.playLocally([rec]) }
         }
     }
 
     private func recordCover(_ t: TrackRecord) -> Cover {
         Cover(id: t.id, title: t.title, subtitle: t.artist, imageKey: t.imageKey) {
             Task { await client.playToActiveOutput([t]) }
-        } playLocal: {
-            Task { _ = await client.playLocally([t]) }
         }
     }
 
     private func albumCover(_ a: DatabaseManager.AlbumResult) -> Cover {
         Cover(id: a.albumKey, title: a.album, subtitle: a.artist, imageKey: a.imageKey) {
-            guard let zone = client.selectedZone else { return }
-            Task { await client.playAlbum(albumKey: a.albumKey, zoneID: zone.id) }
-        } playLocal: {
-            Task { _ = await client.playAlbumLocally(albumKey: a.albumKey) }
+            Task { await client.playAlbum(albumKey: a.albumKey) }
         }
     }
 

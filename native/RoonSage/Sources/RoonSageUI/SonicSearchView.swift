@@ -116,13 +116,12 @@ public struct SonicSearchView: View {
                         }
                     }
                     Spacer()
-                    if let zone = client.selectedZone {
-                        Button {
-                            Task { await client.playTrack(id: scored.track.id, title: scored.track.title,
-                                                          artist: scored.track.artist, zoneID: zone.id) }
-                        } label: { Image(systemName: "play.fill") }
-                        .buttonStyle(.borderless)
-                    }
+                    Button {
+                        Task { await client.playTrack(id: scored.track.id, title: scored.track.title,
+                                                      artist: scored.track.artist) }
+                    } label: { Image(systemName: "play.fill") }
+                    .buttonStyle(.borderless)
+                    .disabled(!client.hasActiveOutput)
                 }
                 .padding(.vertical, Spacing.xs)
             }

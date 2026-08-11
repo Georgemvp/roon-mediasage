@@ -225,11 +225,7 @@ struct ArtistDetailView: View {
                     Spacer()
                     Button { playArtist() } label: { Label(LS("libraryDetail.playAll"), systemImage: "play.fill") }
                         .buttonStyle(.borderedProminent).tint(Color.roonGold)
-                        .disabled(client.selectedZone == nil)
-                    Button { playArtistLocal() } label: { Image(systemName: "iphone") }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel(LS("libraryDetail.playOnThisDevice"))
-                        .help(LS("libraryDetail.playAllLocalHelp"))
+                        .disabled(!client.hasActiveOutput)
                     FavoriteStarButton(isOn: client.isFavoriteArtist(artist.name)) {
                         Task { await client.toggleFavoriteArtist(artist.name) }
                     }
@@ -386,15 +382,10 @@ struct ArtistDetailView: View {
         Task { await client.playToActiveOutput(rows.map(rowRecord)) }
     }
 
+    /// Play this artist on the active output — a Roon zone, or this device.
     private func playArtist() {
-        guard let zone = client.selectedZone else { return }
         Haptics.tap()
-        Task { await client.playArtist(name: artist.name, zoneID: zone.id) }
-    }
-
-    private func playArtistLocal() {
-        Haptics.tap()
-        Task { await client.playArtistLocally(name: artist.name) }
+        Task { await client.playArtist(name: artist.name) }
     }
 }
 

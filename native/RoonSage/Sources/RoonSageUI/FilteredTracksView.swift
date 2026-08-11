@@ -113,13 +113,12 @@ public struct FilteredTracksView: View {
                 .disabled(!client.hasActiveOutput || tracks.isEmpty)
 
             Button {
-                guard let zone = client.selectedZone else { return }
                 Haptics.tap()
-                Task { await client.playShuffledMix(options: filter.options, count: 40, zoneID: zone.id) }
+                Task { await client.playShuffledMix(options: filter.options, count: 40) }
             } label: { Label(LS("filteredTracks.shuffle"), systemImage: "shuffle").lineLimit(1) }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(client.selectedZone == nil)
+                .disabled(!client.hasActiveOutput)
 
             Spacer(minLength: Spacing.sm)
             Text(reachedEnd ? "\(tracks.count)" : "\(tracks.count)+")

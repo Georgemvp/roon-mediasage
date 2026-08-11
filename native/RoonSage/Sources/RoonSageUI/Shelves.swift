@@ -6,7 +6,8 @@ import SwiftUI
 /// `DiscoveryView` so the Ontdek dashboard and the Bibliotheek overview render from
 /// one canonical set instead of drifting copies.
 ///
-/// These are stateless on purpose — zone availability is passed in as `zoneAvailable`
+/// These are stateless on purpose — output availability is passed in as `zoneAvailable`
+/// (any output: a Roon zone or this device — `play` routes itself)
 /// rather than read from `@Environment`, so a tile can be previewed and reused from
 /// any view without inheriting that view's playback plumbing.
 
@@ -18,16 +19,14 @@ public struct Cover: Identifiable {
     public let subtitle: String?
     public let imageKey: String?
     public let play: () -> Void
-    public let playLocal: () -> Void
 
     public init(id: String, title: String, subtitle: String?, imageKey: String?,
-                play: @escaping () -> Void, playLocal: @escaping () -> Void) {
+                play: @escaping () -> Void) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.imageKey = imageKey
         self.play = play
-        self.playLocal = playLocal
     }
 }
 
@@ -98,7 +97,6 @@ public func coverTile(_ c: Cover, zoneAvailable: Bool) -> some View {
     .contextMenu {
         Button(LS("bm.playNow"), systemImage: "play.fill") { Haptics.tap(); c.play() }
             .disabled(!zoneAvailable)
-        Button(LS("shelves.playOnThisDevice"), systemImage: "iphone") { c.playLocal() }
     }
 }
 

@@ -145,18 +145,11 @@ public struct PlaylistsView: View {
                 Image(systemName: "play.fill")
             }
             .buttonStyle(.borderedProminent)
-            .disabled(client.selectedZone == nil)
+            .disabled(!client.hasActiveOutput)
             .accessibilityLabel(LS("playlists.playPlaylist"))
-            .help(client.selectedZone == nil ? LS("playlists.chooseZoneFirst") : LS("Speel af in \(client.selectedZone?.displayName ?? "")"))
-
-            // Listen on the phone itself (local files only — Qobuz/stream tracks
-            // are skipped and reported).
-            Button { Task { await playLocal(pl) } } label: {
-                Image(systemName: "iphone")
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel(LS("playlists.playOnThisIPhone"))
-            .help(LS("playlists.playLocallyThisIPhone"))
+            .help(client.hasActiveOutput
+                  ? LS("Speel af in \(client.selectedZone?.displayName ?? RoonClient.localOutputName)")
+                  : LS("playlists.chooseZoneFirst"))
 
             if client.qobuzConfigured {
                 Button { saveToQobuz(pl) } label: { Image(systemName: "cloud") }
@@ -214,14 +207,14 @@ public struct PlaylistsView: View {
     }
 
     private func play(_ pl: DatabaseManager.PlaylistSummary) async {
-        guard let zone = client.selectedZone else { return }
         Haptics.tap()
         statusOK = nil
         statusBanner = LS("“\(pl.name)” starten…")
-        let played = await client.playPlaylist(id: pl.id, zoneID: zone.id)
+        let played = await client.playPlaylist(id: pl.id)
         if played > 0 {
             statusOK = true
-            statusBanner = "“\(pl.name)” speelt af in \(zone.displayName) — \(played) nummers."
+            statusBanner = String(format: LS("playlists.nowPlayingOn"), pl.name,
+                                  client.selectedZone?.displayName ?? RoonClient.localOutputName, played)
             Haptics.success()
         } else {
             statusOK = false
@@ -230,27 +223,6 @@ public struct PlaylistsView: View {
         }
     }
 
-    /// Play a saved playlist on this device. Streaming-only tracks (Qobuz) have
-    /// no on-disk file and are filtered out; the banner reports what was skipped.
-    private func playLocal(_ pl: DatabaseManager.PlaylistSummary) async {
-        Haptics.tap()
-        let tracks = await client.playlistTracks(id: pl.id)
-        guard !tracks.isEmpty else { return }
-        statusOK = nil
-        statusBanner = LS("“\(pl.name)” lokaal starten…")
-        let summary = await client.playLocally(tracks)
-        if let s = summary, s.playable > 0 {
-            statusOK = true
-            statusBanner = s.blocked > 0
-                ? "“\(pl.name)” speelt op deze iPhone — \(s.playable)/\(s.requested) speelbaar, \(s.blocked) Qobuz/stream overgeslagen."
-                : "“\(pl.name)” speelt op deze iPhone — \(s.playable) nummers."
-            Haptics.success()
-        } else {
-            statusOK = false
-            statusBanner = LS("playlists.nothingLocalToPlay")
-            Haptics.error()
-        }
-    }
 
     private func delete(_ pl: DatabaseManager.PlaylistSummary) {
         client.deletePlaylist(id: pl.id)

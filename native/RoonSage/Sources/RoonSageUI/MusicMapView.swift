@@ -157,13 +157,12 @@ public struct MusicMapView: View {
             .accessibilityLabel(LS("Start station vanaf \(t.title)"))
             .help(client.selectedZone == nil ? LS("musicMap.pickZoneFirst") : LS("musicMap.startStationHelp"))
             Button {
-                guard let zone = client.selectedZone else { return }
-                Task { await client.playTrack(id: t.id, title: t.title, artist: t.artist, zoneID: zone.id) }
+                Task { await client.playTrack(id: t.id, title: t.title, artist: t.artist) }
             } label: { Image(systemName: "play.fill").tappable44() }
             .buttonStyle(.borderless)
-            .disabled(client.selectedZone == nil)
+            .disabled(!client.hasActiveOutput)
             .accessibilityLabel(LS("Speel \(t.title)"))
-            .help(client.selectedZone == nil ? LS("musicMap.pickZoneFirst") : LS("bm.playNow"))
+            .help(client.hasActiveOutput ? LS("bm.playNow") : LS("musicMap.pickZoneFirst"))
         }
         .frame(width: 240)
         .padding(Spacing.sm)

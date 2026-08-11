@@ -403,9 +403,9 @@ extension RoonClient {
         }.value
     }
 
-    public func playDJSet(_ set: [DatabaseManager.DJCandidate], zoneID: String) async {
+    public func playDJSet(_ set: [DatabaseManager.DJCandidate], zoneID: String? = nil) async {
         let tracks = set.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album) }
-        await curateTracks(tracks, zoneID: zoneID)
+        await deliver(tracks, to: zoneID)
     }
 
     public func saveDJSet(name: String, set: [DatabaseManager.DJCandidate]) {
@@ -483,52 +483,52 @@ extension RoonClient {
     }
 
     /// Filter by `options`, shuffle, and play a random `count`-track mix.
-    public func playShuffledMix(options: DatabaseManager.FilterOptions, count: Int, zoneID: String) async {
+    public func playShuffledMix(options: DatabaseManager.FilterOptions, count: Int, zoneID: String? = nil) async {
         var opts = options
         opts.limit = max(opts.limit, 500)
         var pool = await filterTracks(options: opts)
         pool.shuffle()
         let pick = Array(pool.prefix(count))
         guard !pick.isEmpty else { return }
-        await curateTracks(pick, zoneID: zoneID)
+        await deliver(pick, to: zoneID)
     }
 
     /// Play every track of an album by its album_key (first plays, rest queue).
-    public func playAlbum(albumKey: String, zoneID: String) async {
+    public func playAlbum(albumKey: String, zoneID: String? = nil) async {
         var opts = DatabaseManager.FilterOptions()
         opts.albumKey = albumKey
         opts.excludeLive = false
         opts.limit = 200
         let tracks = await filterTracks(options: opts)
         guard !tracks.isEmpty else { return }
-        await curateTracks(tracks, zoneID: zoneID)
+        await deliver(tracks, to: zoneID)
     }
 
-    /// Play an artist's library tracks to a zone (first plays, rest queue).
-    public func playArtist(name: String, zoneID: String) async {
+    /// Play an artist's library tracks on the active output (first plays, rest queue).
+    public func playArtist(name: String, zoneID: String? = nil) async {
         var opts = DatabaseManager.FilterOptions()
         opts.artists = [name]
         opts.limit = 200
         let tracks = await filterTracks(options: opts)
         guard !tracks.isEmpty else { return }
-        await curateTracks(tracks, zoneID: zoneID)
+        await deliver(tracks, to: zoneID)
     }
 
     /// Play several albums as one queue, in the given selection order: the first
     /// album's tracks play now, everything after is queued (one Roon load). The
     /// existing `RemoteCommand.tracks` proxy path carries the assembled list, so no
     /// new server command is needed.
-    public func playAlbums(albumKeys: [String], zoneID: String) async {
+    public func playAlbums(albumKeys: [String], zoneID: String? = nil) async {
         let tracks = await tracksForAlbums(albumKeys)
         guard !tracks.isEmpty else { return }
-        await curateTracks(tracks, zoneID: zoneID)
+        await deliver(tracks, to: zoneID)
     }
 
     /// Queue several albums (append, no interrupt) in the given selection order.
-    public func queueAlbums(albumKeys: [String], zoneID: String) async {
+    public func queueAlbums(albumKeys: [String], zoneID: String? = nil) async {
         let tracks = await tracksForAlbums(albumKeys)
         guard !tracks.isEmpty else { return }
-        await queueTracks(tracks, zoneID: zoneID)
+        await deliverToQueue(tracks, to: zoneID)
     }
 
     /// Concatenate every album's library tracks, preserving the input album order

@@ -219,7 +219,6 @@
 "dJSet.buildSet"            = "Bouw DJ-set";
 "dJSet.cancel"              = "Annuleer";
 "dJSet.chooseZone"          = "Kies zone…";
-"dJSet.chooseZoneFirst"     = "Kies eerst een zone";
 "dJSet.curve"               = "Curve";
 "dJSet.energy"              = "energie";
 "dJSet.equalTempo"          = "gelijk tempo";
@@ -321,8 +320,6 @@
 "discovery.labelsSubtitle"           = "Blader door je collectie op label.";
 "discovery.labelsTitle"              = "Platenlabels";
 "discovery.playAll"                  = "Speel alles";
-"discovery.playLocallyHelp"          = "Speel lokaal af op dit apparaat";
-"discovery.playOnThisDevice"         = "Speel op dit apparaat";
 "discovery.rediscover"               = "Herontdek";
 "discovery.refresh"                  = "Ververs";
 "discovery.refreshHint"              = "Ververs ontdek-overzicht";
@@ -479,8 +476,6 @@
 "libraryDetail.otherVersions"    = "Andere versies in je bibliotheek";
 "libraryDetail.play"             = "Speel";
 "libraryDetail.playAll"          = "Speel alles";
-"libraryDetail.playAllLocalHelp" = "Speel alles lokaal af op dit apparaat";
-"libraryDetail.playOnThisDevice" = "Speel op dit apparaat";
 "libraryDetail.readMore"         = "Lees meer";
 "libraryDetail.removeFavorite"   = "Verwijder uit favorieten";
 "libraryDetail.showLess"         = "Toon minder";
@@ -663,9 +658,7 @@
 "playlists.emptyTitle"            = "Geen bewaarde playlists";
 "playlists.generatePlaylist"      = "Genereer een playlist";
 "playlists.hideTracks"            = "Verberg tracks";
-"playlists.nothingLocalToPlay"    = "Niets om lokaal af te spelen — deze tracks staan niet op schijf (Qobuz/stream).";
-"playlists.playLocallyThisIPhone" = "Speel lokaal af op deze iPhone";
-"playlists.playOnThisIPhone"      = "Speel op deze iPhone";
+"playlists.nowPlayingOn"          = "“%@” speelt af op %@ — %d nummers.";
 "playlists.playPlaylist"          = "Speel playlist";
 "playlists.refresh"               = "Ververs";
 "playlists.saveToQobuz"           = "Bewaar in Qobuz";
@@ -714,7 +707,6 @@
 "recommend.noAlbumsError"            = "Geen albums om aan te bevelen — synchroniseer eerst je bibliotheek.";
 "recommend.pickZoneFirst"            = "Kies eerst een zone";
 "recommend.playAlbumHelp"            = "Speel dit album af";
-"recommend.playLocalHelp"            = "Speel dit album lokaal af op dit apparaat";
 "recommend.playOn"                   = "Speel op";
 "recommend.processError"             = "Kon de aanbeveling niet verwerken — probeer opnieuw.";
 "recommend.promptPlaceholder"        = "Beschrijf een sfeer of gelegenheid… bijv. “diepe platen voor een lange avond”";
@@ -747,7 +739,6 @@
 "shareCard.shareAsImage" = "Deel als afbeelding";
 
 /* shelves */
-"shelves.playOnThisDevice" = "Speel op dit apparaat";
 
 /* similarTracks */
 "similarTracks.done"              = "Gereed";

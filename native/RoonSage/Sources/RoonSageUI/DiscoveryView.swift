@@ -40,7 +40,7 @@ public struct DiscoveryView: View {
                 if !undiscovered.isEmpty {
                     shelf(LS("discovery.shelfNeverHeard"), "sparkles",
                           covers: undiscovered.map(albumCover),
-                          zoneAvailable: client.selectedZone != nil) {
+                          zoneAvailable: client.hasActiveOutput) {
                         Button { Task {
                             undiscovered = await client.neverPlayedAlbums()
                                 .filter { !weeklyAlbums.contains($0.album.lowercased()) }
@@ -55,7 +55,7 @@ public struct DiscoveryView: View {
                 if !dormant.isEmpty {
                     shelf(LS("discovery.shelfPlayAgain"), "clock.arrow.circlepath",
                           covers: dormant.map(albumCover),
-                          zoneAvailable: client.selectedZone != nil) {
+                          zoneAvailable: client.hasActiveOutput) {
                         Button { Task {
                             dormant = await client.forgottenAlbums()
                                 .filter { !weeklyAlbums.contains($0.album.lowercased()) }
@@ -70,7 +70,7 @@ public struct DiscoveryView: View {
                 if !topTracks.isEmpty {
                     shelf(LS("discovery.shelfTopTracks"), "star.fill",
                           covers: topTracks.map(trackCover),
-                          zoneAvailable: client.selectedZone != nil) {
+                          zoneAvailable: client.hasActiveOutput) {
                         playAllButton(topTracks)
                     }
                     .plainCardRow()
@@ -78,7 +78,7 @@ public struct DiscoveryView: View {
                 if forgotten.count > 1 {
                     shelf(LS("discovery.shelfForgottenFavorites"), "clock.arrow.circlepath",
                           covers: forgotten.dropFirst().map(trackCover),
-                          zoneAvailable: client.selectedZone != nil) {
+                          zoneAvailable: client.hasActiveOutput) {
                         playAllButton(Array(forgotten))
                     }
                     .plainCardRow()
@@ -175,22 +175,17 @@ public struct DiscoveryView: View {
         let subtitle: String?
         let imageKey: String?
         let play: () -> Void
-        let playLocal: () -> Void
     }
 
     private var heroItem: HeroItem? {
         if let t = forgotten.first {
             return HeroItem(title: t.title, subtitle: t.artist, imageKey: t.imageKey) {
-                play { await client.curateTracks([t], zoneID: $0) }
-            } playLocal: {
-                Haptics.tap(); Task { await client.playLocally([t]) }
+                Haptics.tap(); Task { await client.playToActiveOutput([t]) }
             }
         }
         if let a = dormant.first ?? undiscovered.first {
             return HeroItem(title: a.album, subtitle: a.artist, imageKey: a.imageKey) {
-                play { await client.playAlbum(albumKey: a.albumKey, zoneID: $0) }
-            } playLocal: {
-                Haptics.tap(); Task { await client.playAlbumLocally(albumKey: a.albumKey) }
+                Haptics.tap(); Task { await client.playAlbum(albumKey: a.albumKey) }
             }
         }
         return nil
@@ -220,11 +215,7 @@ public struct DiscoveryView: View {
                             .fixedSize(horizontal: true, vertical: false)
                     }
                         .buttonStyle(.borderedProminent)
-                        .disabled(client.selectedZone == nil)
-                    Button { item.playLocal() } label: { Image(systemName: "iphone") }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel(LS("discovery.playOnThisDevice"))
-                        .help(LS("discovery.playLocallyHelp"))
+                        .disabled(!client.hasActiveOutput)
                 }
             }
             Spacer(minLength: 0)
@@ -257,20 +248,14 @@ public struct DiscoveryView: View {
                 HStack(spacing: Spacing.sm) {
                     Button {
                         Haptics.tap()
-                        play { await client.playAlbum(albumKey: a.albumKey, zoneID: $0) }
+                        Task { await client.playAlbum(albumKey: a.albumKey) }
                     } label: {
                         Label(LS("bm.playNow"), systemImage: "play.fill")
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
                         .buttonStyle(.borderedProminent)
-                        .disabled(client.selectedZone == nil)
-                    Button {
-                        Haptics.tap(); Task { await client.playAlbumLocally(albumKey: a.albumKey) }
-                    } label: { Image(systemName: "iphone") }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel(LS("discovery.playOnThisDevice"))
-                        .help(LS("discovery.playLocallyHelp"))
+                        .disabled(!client.hasActiveOutput)
                 }
             }
             Spacer(minLength: 0)
@@ -286,17 +271,13 @@ public struct DiscoveryView: View {
 
     private func albumCover(_ a: DatabaseManager.AlbumResult) -> Cover {
         Cover(id: a.albumKey, title: a.album, subtitle: a.artist, imageKey: a.imageKey) {
-            play { await client.playAlbum(albumKey: a.albumKey, zoneID: $0) }
-        } playLocal: {
-            Haptics.tap(); Task { await client.playAlbumLocally(albumKey: a.albumKey) }
+            Haptics.tap(); Task { await client.playAlbum(albumKey: a.albumKey) }
         }
     }
 
     private func trackCover(_ t: TrackRecord) -> Cover {
         Cover(id: t.id, title: t.title, subtitle: t.artist, imageKey: t.imageKey) {
-            play { await client.curateTracks([t], zoneID: $0) }
-        } playLocal: {
-            Haptics.tap(); Task { await client.playLocally([t]) }
+            Haptics.tap(); Task { await client.playToActiveOutput([t]) }
         }
     }
 
@@ -391,11 +372,11 @@ public struct DiscoveryView: View {
                                 Haptics.tap()
                                 var opts = DatabaseManager.FilterOptions()
                                 opts.decades = [start]
-                                play { await client.playShuffledMix(options: opts, count: 25, zoneID: $0) }
+                                Task { await client.playShuffledMix(options: opts, count: 25) }
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.regular)
-                            .disabled(client.selectedZone == nil)
+                            .disabled(!client.hasActiveOutput)
                         }
                     }
                 }
@@ -431,11 +412,11 @@ public struct DiscoveryView: View {
                             Haptics.tap()
                             var opts = DatabaseManager.FilterOptions()
                             opts.genres = [item.genre]
-                            play { await client.playShuffledMix(options: opts, count: 25, zoneID: $0) }
+                            Task { await client.playShuffledMix(options: opts, count: 25) }
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.regular)
-                        .disabled(client.selectedZone == nil)
+                        .disabled(!client.hasActiveOutput)
                     }
                 }
             }

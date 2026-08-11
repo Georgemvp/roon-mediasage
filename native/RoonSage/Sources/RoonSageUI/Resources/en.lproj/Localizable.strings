@@ -219,7 +219,6 @@
 "dJSet.buildSet"            = "Build DJ Set";
 "dJSet.cancel"              = "Cancel";
 "dJSet.chooseZone"          = "Choose zone…";
-"dJSet.chooseZoneFirst"     = "Choose a zone first";
 "dJSet.curve"               = "Curve";
 "dJSet.energy"              = "energy";
 "dJSet.equalTempo"          = "equal tempo";
@@ -321,8 +320,6 @@
 "discovery.labelsSubtitle"           = "Browse your collection by label.";
 "discovery.labelsTitle"              = "Record labels";
 "discovery.playAll"                  = "Play all";
-"discovery.playLocallyHelp"          = "Play locally on this device";
-"discovery.playOnThisDevice"         = "Play on this device";
 "discovery.rediscover"               = "Rediscover";
 "discovery.refresh"                  = "Refresh";
 "discovery.refreshHint"              = "Refresh discovery overview";
@@ -479,8 +476,6 @@
 "libraryDetail.otherVersions"    = "Other versions in your library";
 "libraryDetail.play"             = "Play";
 "libraryDetail.playAll"          = "Play all";
-"libraryDetail.playAllLocalHelp" = "Play everything locally on this device";
-"libraryDetail.playOnThisDevice" = "Play on this device";
 "libraryDetail.readMore"         = "Read more";
 "libraryDetail.removeFavorite"   = "Remove from favourites";
 "libraryDetail.showLess"         = "Show less";
@@ -663,9 +658,7 @@
 "playlists.emptyTitle"            = "No saved playlists";
 "playlists.generatePlaylist"      = "Generate a playlist";
 "playlists.hideTracks"            = "Hide tracks";
-"playlists.nothingLocalToPlay"    = "Nothing to play locally — these tracks are not on disk (Qobuz/stream).";
-"playlists.playLocallyThisIPhone" = "Play locally on this iPhone";
-"playlists.playOnThisIPhone"      = "Play on this iPhone";
+"playlists.nowPlayingOn"          = "“%@” is playing on %@ — %d tracks.";
 "playlists.playPlaylist"          = "Play playlist";
 "playlists.refresh"               = "Refresh";
 "playlists.saveToQobuz"           = "Save to Qobuz";
@@ -714,7 +707,6 @@
 "recommend.noAlbumsError"            = "No albums to recommend — sync your library first.";
 "recommend.pickZoneFirst"            = "Choose a zone first";
 "recommend.playAlbumHelp"            = "Play this album";
-"recommend.playLocalHelp"            = "Play this album locally on this device";
 "recommend.playOn"                   = "Play on";
 "recommend.processError"             = "Couldn't process the recommendation — please try again.";
 "recommend.promptPlaceholder"        = "Describe a mood or occasion… e.g. “deep records for a long evening”";
@@ -747,7 +739,6 @@
 "shareCard.shareAsImage" = "Share as image";
 
 /* shelves */
-"shelves.playOnThisDevice" = "Play on this device";
 
 /* similarTracks */
 "similarTracks.done"              = "Done";
