@@ -844,6 +844,7 @@
 "output.thisMac"    = "This Mac";
 
 /* downloads */
+"downloads.allowOnCellular" = "Download on mobile data";
 "downloads.availableOffline" = "Available offline";
 "downloads.cancel" = "Stop downloading";
 "downloads.emptyDescription" = "Pick “Save on this device” on an album or track to take it with you.";

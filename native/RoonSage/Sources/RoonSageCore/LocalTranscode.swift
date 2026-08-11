@@ -14,8 +14,16 @@ public enum LocalTranscode {
     static let modeKey = "local_transcode_mode"
     static let bitrateKey = "local_transcode_kbps"
 
+    /// Default `.cellular`: on a phone, streaming full FLAC over mobile data is
+    /// the single biggest way to burn a bundle, and nobody opts in to a setting
+    /// they don't know exists. At home nothing changes — the policy only fires on
+    /// an expensive path. An explicit choice is always honoured; only "never set"
+    /// gets the default.
     public static var mode: Mode {
-        get { Mode(rawValue: UserDefaults.standard.string(forKey: modeKey) ?? "") ?? .off }
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: modeKey) else { return .cellular }
+            return Mode(rawValue: raw) ?? .cellular
+        }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: modeKey) }
     }
 

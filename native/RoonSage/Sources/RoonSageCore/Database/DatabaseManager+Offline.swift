@@ -59,6 +59,17 @@ extension DatabaseManager {
         }
     }
 
+    /// Which variant is actually stored for this track — the delete path must
+    /// remove the file that EXISTS, not the one the current transcode policy
+    /// would ask for. Download on Wi-Fi ("orig"), remove on cellular (AAC), and
+    /// a variant-guessing delete silently leaves the file behind.
+    public func offlineVariant(matchKey: String) async -> String? {
+        try? await pool.read { db in
+            try String.fetchOne(db, sql: "SELECT variant FROM offline_tracks WHERE match_key = ?",
+                                arguments: [matchKey])
+        }
+    }
+
     public func deleteOfflineTrack(matchKey: String) async {
         try? await pool.write { db in
             try db.execute(sql: "DELETE FROM offline_tracks WHERE match_key = ?", arguments: [matchKey])

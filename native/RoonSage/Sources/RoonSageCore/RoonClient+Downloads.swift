@@ -34,6 +34,15 @@ extension RoonClient {
     /// exactly like playing them does — one definition of "can this play here".
     public func downloadForOffline(_ tracks: [TrackRecord]) async {
         guard downloadTask == nil else { return }   // one run at a time
+        // The largest transfer this app makes. Refuse it on an expensive path
+        // unless the user deliberately allowed it — taking music with you is
+        // something you do before you leave, not something that quietly empties
+        // your bundle on the train.
+        if NetworkPathMonitor.shared.isExpensive, !LocalAudioCache.downloadOnCellular {
+            lastActionError = ActionError(
+                message: "Niet gedownload: je zit op mobiele data. Zet het aan bij Instellingen → Downloads, of wacht op wifi.")
+            return
+        }
         guard let request = await resolveLocalPlayback(tracks), !request.items.isEmpty else { return }
 
         let variant = LocalAudioCache.variant(for: LocalTranscode.queryItems())
@@ -104,7 +113,9 @@ extension RoonClient {
 
     /// Remove one track's download (file + bookkeeping).
     public func removeOfflineTrack(matchKey: String) async {
-        let variant = LocalAudioCache.variant(for: LocalTranscode.queryItems())
+        // The stored variant, not the current policy's — see `offlineVariant`.
+        let variant = await database?.offlineVariant(matchKey: matchKey)
+            ?? LocalAudioCache.variant(for: LocalTranscode.queryItems())
         LocalAudioCache.removeDownload(forKey: matchKey, variant: variant)
         await database?.deleteOfflineTrack(matchKey: matchKey)
         await refreshOfflineKeys()

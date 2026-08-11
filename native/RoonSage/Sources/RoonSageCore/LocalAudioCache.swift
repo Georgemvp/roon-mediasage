@@ -19,6 +19,15 @@ public enum LocalAudioCache {
     /// Public so the settings screen can bind `@AppStorage` to the same key this
     /// type reads, instead of repeating the string literal.
     public static let enabledKey = "local_audio_cache_enabled"
+    public static let downloadOnCellularKey = "downloads_on_cellular"
+
+    /// Whether a download may run on an expensive path. Off by default: a
+    /// download is the largest transfer this app makes, and the whole point of
+    /// taking music with you is that you did it before you left.
+    public static var downloadOnCellular: Bool {
+        get { UserDefaults.standard.bool(forKey: downloadOnCellularKey) }
+        set { UserDefaults.standard.set(newValue, forKey: downloadOnCellularKey) }
+    }
     public static let limitKey = "local_audio_cache_limit_mb"
 
     /// Whether to keep a copy of what we stream. On by default: the common case
@@ -150,7 +159,13 @@ public enum LocalAudioCache {
     /// The local file for this track: a pinned download first, then the LRU
     /// cache. Callers don't need to know which tier answered.
     public static func localFile(forKey key: String, variant: String) -> URL? {
-        downloadedFile(forKey: key, variant: variant) ?? cachedFile(forKey: key, variant: variant)
+        if let f = downloadedFile(forKey: key, variant: variant) { return f }
+        // A download taken on Wi-Fi is stored as "orig". On mobile data the
+        // player asks for the AAC variant and would otherwise miss its OWN
+        // download and stream instead — burning data at the exact moment the
+        // download existed to prevent it. Any pinned copy beats the network.
+        if variant != "orig", let f = downloadedFile(forKey: key, variant: "orig") { return f }
+        return cachedFile(forKey: key, variant: variant)
     }
 
     /// The cached file for this track, or nil on a miss. Touches the modification
