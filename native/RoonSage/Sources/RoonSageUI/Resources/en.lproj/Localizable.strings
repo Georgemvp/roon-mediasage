@@ -503,7 +503,7 @@
 /* localNowPlaying */
 "localNowPlaying.deviceNounDevice"  = "this device";
 "localNowPlaying.nothingPlaying"    = "Nothing playing";
-"localNowPlaying.stopOnDevice"      = "Stop playing on %@";
+"localNowPlaying.stopAndClear"      = "Stop and clear queue";
 "localNowPlaying.upNext"            = "UP NEXT";
 "localNowPlaying.deviceNounMac"     = "this Mac";
 "localNowPlaying.dislike"           = "Dislike — skip it and learn from it";
@@ -517,7 +517,6 @@
 "localNowPlaying.play"              = "Play";
 "localNowPlaying.playbackPosition"  = "Playback position";
 "localNowPlaying.previousTrack"     = "Previous track";
-"localNowPlaying.stopLocalPlayback" = "Stop local playback";
 "localNowPlaying.tapToContinue"     = "Tap to keep playing";
 "localNowPlaying.unmute"            = "Unmute";
 

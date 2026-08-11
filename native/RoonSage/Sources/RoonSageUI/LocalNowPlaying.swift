@@ -500,23 +500,27 @@ private struct LocalNowPlayingHero: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            Button(role: .destructive) {
-                Haptics.tap()
-                client.stopLocalPlayback()
-            } label: {
-                // Built with String(format:) rather than interpolated into the LS
-                // key: interpolation makes the *lookup key* "Stop afspelen op %@",
-                // a hardcoded-Dutch key that is in neither catalogue — so it fell
-                // back to the literal and rendered "Stop afspelen op this device"
-                // in an English UI.
-                Label(String(format: LS("localNowPlaying.stopOnDevice"),
-                             LocalNowPlayingScreen.deviceNoun),
-                      systemImage: "stop.circle")
-                    .font(.callout.weight(.medium))
+            // Only when there's actually a session to end. A music player has no
+            // business offering "stop" over an empty screen — and "stop playing
+            // on this device" was language from the old model, where listening
+            // here was the exception you switched back out of. This device is the
+            // default output now; stopping is just stopping.
+            //
+            // The label names the real consequence: the engine's stop() empties
+            // the queue (queue + baseQueue), so "Stop" alone would quietly throw
+            // away what you lined up.
+            if lp.isEngaged {
+                Button(role: .destructive) {
+                    Haptics.tap()
+                    client.stopLocalPlayback()
+                } label: {
+                    Label(LS("localNowPlaying.stopAndClear"), systemImage: "stop.circle")
+                        .font(.callout.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .tint(.secondary)
+                .accessibilityLabel(LS("localNowPlaying.stopAndClear"))
             }
-            .buttonStyle(.bordered)
-            .tint(.secondary)
-            .accessibilityLabel(LS("localNowPlaying.stopLocalPlayback"))
         }
     }
 

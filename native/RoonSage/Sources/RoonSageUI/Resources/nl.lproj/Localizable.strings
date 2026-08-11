@@ -503,7 +503,7 @@
 /* localNowPlaying */
 "localNowPlaying.deviceNounDevice"  = "dit apparaat";
 "localNowPlaying.nothingPlaying"    = "Niets aan het spelen";
-"localNowPlaying.stopOnDevice"      = "Stop afspelen op %@";
+"localNowPlaying.stopAndClear"      = "Stop en wis wachtrij";
 "localNowPlaying.upNext"            = "HIERNA";
 "localNowPlaying.deviceNounMac"     = "deze Mac";
 "localNowPlaying.dislike"           = "Vind ik niet leuk — sla over en leer ervan";
@@ -517,7 +517,6 @@
 "localNowPlaying.play"              = "Speel af";
 "localNowPlaying.playbackPosition"  = "Afspeelpositie";
 "localNowPlaying.previousTrack"     = "Vorige track";
-"localNowPlaying.stopLocalPlayback" = "Stop lokaal afspelen";
 "localNowPlaying.tapToContinue"     = "Tik om door te spelen";
 "localNowPlaying.unmute"            = "Dempen opheffen";
 

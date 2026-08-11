@@ -245,10 +245,17 @@ extension RoonClient {
         }
     }
 
-    /// Stop on-device playback and clear the "listen here" choice.
+    /// Stop on-device playback. Ends the session and clears the queue — but does
+    /// NOT change where you listen.
+    ///
+    /// It used to also set `localOutputSelected = false`, from the era when
+    /// listening here was a temporary detour you switched back out of. Now that
+    /// this device is the default output, that made stopping a track silently
+    /// hand your output back to a Roon zone — which is how the mini-player ended
+    /// up advertising a zone's music. Changing output is the output picker's job
+    /// (`selectZone` / `selectLocalOutput`), and only the user's.
     public func stopLocalPlayback() {
         localPlayback.stop()
-        localOutputSelected = false
     }
 
     /// Sleep-timer action: pause whatever is playing on this device — the local
