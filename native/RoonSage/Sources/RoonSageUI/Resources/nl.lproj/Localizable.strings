@@ -841,3 +841,11 @@
 "output.airplay" = "AirPlay-uitvoer kiezen";
 "output.thisDevice" = "Dit apparaat";
 "output.thisMac"    = "Deze Mac";
+
+/* downloads */
+"downloads.cancel" = "Stop met downloaden";
+"downloads.explainer" = "Gedownloade nummers spelen zonder server en zonder bereik. Ze worden nooit automatisch opgeruimd — alleen jij haalt ze weg.";
+"downloads.onDevice" = "Op dit apparaat";
+"downloads.removeAll" = "Alle downloads verwijderen";
+"downloads.saveOnDevice" = "Bewaar op dit apparaat";
+"downloads.sectionTitle" = "Downloads";

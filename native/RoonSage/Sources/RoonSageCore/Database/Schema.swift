@@ -753,6 +753,22 @@ enum Schema {
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tracks_lower_artist ON tracks(LOWER(artist))")
         }
 
+        // What the user pinned to this device. The FILE is the source of truth
+        // for playback; this table is the bookkeeping that lets a Downloads
+        // screen show titles and sizes without opening every audio file.
+        migrator.registerMigration("v48_offline_tracks") { db in
+            try db.create(table: "offline_tracks", ifNotExists: true) { t in
+                t.primaryKey("match_key", .text)
+                t.column("variant",   .text).notNull()
+                t.column("title",     .text).notNull()
+                t.column("artist",    .text)
+                t.column("album",     .text)
+                t.column("image_key", .text)
+                t.column("bytes",     .integer).notNull().defaults(to: 0)
+                t.column("added_at",  .text).notNull()
+            }
+        }
+
         try migrator.migrate(db)
     }
 }

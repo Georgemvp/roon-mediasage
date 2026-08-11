@@ -57,6 +57,20 @@ struct PlayActionsMenu: View {
                 }
             }.disabled(!hasOutput)
         }
+        // "Take this with me" — the one verb that turns a streamer into a
+        // portable player. Sits with the play verbs because that is where you
+        // already are when you decide you want something.
+        Divider()
+        Button(LS("downloads.saveOnDevice"), systemImage: "arrow.down.circle") {
+            Haptics.tap()
+            Task {
+                let records = await fetch()
+                guard !records.isEmpty else { return }
+                await client.downloadForOffline(records)
+            }
+        }
+        .disabled(client.downloadProgress != nil)
+
         if includeLocal {
             Divider()
             Button(LS("playActionsMenu.playOnThisDevice"), systemImage: "iphone") {

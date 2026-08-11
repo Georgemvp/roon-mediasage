@@ -90,7 +90,7 @@ extension RoonClient {
     /// Returns nil when there was nothing to try (empty input, no server); an
     /// empty `items` means everything was filtered out. Both paths have already
     /// set `lastActionError` / `lastLocalPlaybackSummary` for the UI.
-    private func resolveLocalPlayback(_ tracks: [TrackRecord]) async -> LocalPlaybackRequest? {
+    func resolveLocalPlayback(_ tracks: [TrackRecord]) async -> LocalPlaybackRequest? {
         guard !tracks.isEmpty else { return nil }
         let base = localStreamBase()
         guard !base.isEmpty else {

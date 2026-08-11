@@ -42,6 +42,77 @@ public enum LocalAudioCache {
     /// fine, it re-streams). Overridable in tests.
     nonisolated(unsafe) static var directoryOverride: URL?
 
+    // MARK: - Pinned downloads
+    //
+    // Two tiers, one key scheme. The cache above is opportunistic and LRU-pruned;
+    // a DOWNLOAD is something you asked for and must survive both pruning and the
+    // OS reclaiming Caches/. So pinned files live in Application Support, and
+    // `prune()` never looks there.
+
+    nonisolated(unsafe) static var pinnedDirectoryOverride: URL?
+
+    private static let defaultPinnedDir: URL? = {
+        let fm = FileManager.default
+        guard let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        else { return nil }
+        let d = base.appendingPathComponent("RoonSageDownloads", isDirectory: true)
+        try? fm.createDirectory(at: d, withIntermediateDirectories: true)
+        // Downloads are the user's copy of their own music: never hand them to
+        // iCloud backup, and never let the OS purge them to reclaim space.
+        var url = d
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? url.setResourceValues(values)
+        return d
+    }()
+
+    static func pinnedDirectory() -> URL? {
+        if let pinnedDirectoryOverride {
+            try? FileManager.default.createDirectory(
+                at: pinnedDirectoryOverride, withIntermediateDirectories: true)
+            return pinnedDirectoryOverride
+        }
+        return defaultPinnedDir
+    }
+
+    private static func pinnedURL(forKey key: String, variant: String) -> URL? {
+        pinnedDirectory()?.appendingPathComponent(filename(forKey: key, variant: variant))
+    }
+
+    /// The downloaded file for this track, or nil. Unlike the cache this does NOT
+    /// touch the modification date — nothing ages downloads out.
+    public static func downloadedFile(forKey key: String, variant: String) -> URL? {
+        guard !key.isEmpty, let f = pinnedURL(forKey: key, variant: variant),
+              FileManager.default.fileExists(atPath: f.path) else { return nil }
+        return f
+    }
+
+    public static func storeDownload(_ data: Data, forKey key: String, variant: String) -> Bool {
+        guard !data.isEmpty, !key.isEmpty,
+              let f = pinnedURL(forKey: key, variant: variant) else { return false }
+        do { try data.write(to: f, options: .atomic); return true } catch { return false }
+    }
+
+    @discardableResult
+    public static func removeDownload(forKey key: String, variant: String) -> Bool {
+        guard let f = pinnedURL(forKey: key, variant: variant) else { return false }
+        return (try? FileManager.default.removeItem(at: f)) != nil
+    }
+
+    public static func downloadsSizeBytes() -> Int {
+        guard let dir = pinnedDirectory(),
+              let files = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
+        return files.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0) }
+    }
+
+    public static func clearDownloads() {
+        guard let dir = pinnedDirectory(),
+              let files = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: nil) else { return }
+        for f in files { try? FileManager.default.removeItem(at: f) }
+    }
+
     private static let defaultDir: URL? = {
         let fm = FileManager.default
         guard let base = fm.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
@@ -76,7 +147,13 @@ public enum LocalAudioCache {
         directory()?.appendingPathComponent(filename(forKey: key, variant: variant))
     }
 
-    /// The local file for this track, or nil on a miss. Touches the modification
+    /// The local file for this track: a pinned download first, then the LRU
+    /// cache. Callers don't need to know which tier answered.
+    public static func localFile(forKey key: String, variant: String) -> URL? {
+        downloadedFile(forKey: key, variant: variant) ?? cachedFile(forKey: key, variant: variant)
+    }
+
+    /// The cached file for this track, or nil on a miss. Touches the modification
     /// date on a hit so pruning keeps what you actually listen to (LRU-ish).
     public static func cachedFile(forKey key: String, variant: String) -> URL? {
         guard !key.isEmpty, let f = fileURL(forKey: key, variant: variant),

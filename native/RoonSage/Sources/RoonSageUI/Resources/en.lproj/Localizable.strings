@@ -841,3 +841,11 @@
 "output.airplay" = "Choose AirPlay output";
 "output.thisDevice" = "This device";
 "output.thisMac"    = "This Mac";
+
+/* downloads */
+"downloads.cancel" = "Stop downloading";
+"downloads.explainer" = "Downloaded tracks play with no server and no signal. They are never pruned automatically — only you remove them.";
+"downloads.onDevice" = "On this device";
+"downloads.removeAll" = "Remove all downloads";
+"downloads.saveOnDevice" = "Save on this device";
+"downloads.sectionTitle" = "Downloads";

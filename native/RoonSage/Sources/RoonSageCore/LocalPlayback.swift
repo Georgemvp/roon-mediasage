@@ -661,8 +661,10 @@ public final class LocalPlaybackController {
         // Already on disk from an earlier play: skip the network entirely. This
         // is what makes stepping back, repeating and replaying instant — and it
         // works with no server at all.
-        if let cached = LocalAudioCache.cachedFile(forKey: track.id, variant: variant) {
-            return AVPlayerItem(url: cached)
+        // A pinned download wins over the opportunistic cache; both skip the
+        // network entirely, which is what makes offline playback work at all.
+        if let local = LocalAudioCache.localFile(forKey: track.id, variant: variant) {
+            return AVPlayerItem(url: local)
         }
         var comps = URLComponents(string: "\(streamBase)/audio")
         // AVPlayer can't attach a custom auth header without private API, so the

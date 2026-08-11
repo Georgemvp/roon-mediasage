@@ -555,6 +555,8 @@ public struct SettingsView: View {
 
             AudioCacheSettingsSection()
 
+            OfflineDownloadsSection()
+
             // Audio analyzer
             Section("Audio-analyzer (BPM / toonsoort / tags)") {
                 LabeledContent("Analyzer-URL") {
@@ -810,6 +812,55 @@ public struct SettingsView: View {
         if !models.isEmpty, !models.contains(llmModel) {
             llmModel = models.first ?? llmModel
         }
+    }
+}
+
+/// Music pinned to this device: what you asked to take with you.
+///
+/// Distinct from the cache below it — that fills itself with whatever you played
+/// and is pruned; this is explicit, lives outside Caches/, and only you remove it.
+struct OfflineDownloadsSection: View {
+    @Environment(RoonClient.self) private var client
+    @State private var sizeBytes = 0
+    @State private var count = 0
+
+    private static let sizeFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useMB, .useGB]
+        f.countStyle = .file
+        return f
+    }()
+
+    var body: some View {
+        Section(LS("downloads.sectionTitle")) {
+            if let p = client.downloadProgress, !p.isFinished {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    ProgressView(value: p.fraction)
+                    HStack {
+                        Text(p.currentTitle ?? "").font(.caption).lineLimit(1)
+                        Spacer()
+                        Text("\(p.completed + p.failed)/\(p.total)")
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+                Button(LS("downloads.cancel"), role: .cancel) { client.cancelDownloads() }
+            }
+            LabeledContent(LS("downloads.onDevice"),
+                           value: "\(count) · \(Self.sizeFormatter.string(fromByteCount: Int64(sizeBytes)))")
+            Button(LS("downloads.removeAll"), role: .destructive) {
+                Task { await client.removeAllOfflineTracks(); await refresh() }
+            }
+            .disabled(count == 0)
+            Text(LS("downloads.explainer"))
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .task { await refresh() }
+        .task(id: client.downloadProgress?.isFinished) { await refresh() }
+    }
+
+    private func refresh() async {
+        sizeBytes = LocalAudioCache.downloadsSizeBytes()
+        count = client.offlineKeys.count
     }
 }
 

@@ -328,6 +328,13 @@ public final class RoonClient {
     let sonicCache = SonicLibraryCache()
     /// Gated, serialised listen-logging + LB/Last.fm scrobbling.
     let scrobbler = ScrobbleCoordinator()
+    /// Live progress of a running offline download, or nil when idle.
+    public internal(set) var downloadProgress: DownloadProgress?
+    /// Match keys that are pinned to this device — read per row to show a mark,
+    /// so the UI never stats the filesystem in a list.
+    public internal(set) var offlineKeys: Set<String> = []
+    @ObservationIgnored var downloadTask: Task<Void, Never>?
+
     /// Watches for system memory pressure so the sonic caches can be dropped.
     /// See `startMemoryPressureRelief()`.
     @ObservationIgnored var memoryPressureSource: (any DispatchSourceMemoryPressure)?
@@ -388,6 +395,7 @@ public final class RoonClient {
         startLocalScrobbleBridge()
         // Give the ~113 MB sonic vector index back when the system asks for it.
         startMemoryPressureRelief()
+        Task { await refreshOfflineKeys() }
         #if os(macOS)
         // Sharing defaults to on so the iPhone can pull library + settings
         // without the user flipping a toggle first; an explicit opt-out (key
