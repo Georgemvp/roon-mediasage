@@ -562,36 +562,18 @@ private struct LocalNowPlayingHero: View {
             .frame(maxWidth: .infinity)
     }
 
+    /// Just the "what got skipped" note. There is deliberately no stop button
+    /// here: a music player's marquee screen offers play/pause, not a destructive
+    /// stop-and-wipe. It was a leftover from when listening on this device was
+    /// the exception you switched out of. Stopping is still reachable from the
+    /// mini-player, and the queue screen can clear what's upcoming.
     @ViewBuilder
     private func statusFooter(_ lp: LocalPlaybackController) -> some View {
-        VStack(spacing: Spacing.xs) {
-            if let summary = client.lastLocalPlaybackSummary, summary.blocked > 0 {
-                Text("\(summary.playable) van \(summary.requested) speelbaar hier · \(summary.blocked) Qobuz/stream overgeslagen")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            // Only when there's actually a session to end. A music player has no
-            // business offering "stop" over an empty screen — and "stop playing
-            // on this device" was language from the old model, where listening
-            // here was the exception you switched back out of. This device is the
-            // default output now; stopping is just stopping.
-            //
-            // The label names the real consequence: the engine's stop() empties
-            // the queue (queue + baseQueue), so "Stop" alone would quietly throw
-            // away what you lined up.
-            if lp.isEngaged {
-                Button(role: .destructive) {
-                    Haptics.tap()
-                    client.stopLocalPlayback()
-                } label: {
-                    Label(LS("localNowPlaying.stopAndClear"), systemImage: "stop.circle")
-                        .font(.callout.weight(.medium))
-                }
-                .buttonStyle(.bordered)
-                .tint(.secondary)
-                .accessibilityLabel(LS("localNowPlaying.stopAndClear"))
-            }
+        if let summary = client.lastLocalPlaybackSummary, summary.blocked > 0 {
+            Text("\(summary.playable) van \(summary.requested) speelbaar hier · \(summary.blocked) Qobuz/stream overgeslagen")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 
