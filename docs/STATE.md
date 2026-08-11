@@ -49,6 +49,21 @@ NU (2026-08-10): **LOKAAL AFSPELEN IS EEN VOLWAARDIGE UITVOER** (user: "Local pl
 
 **CI-les:** v1.10.228's DMG-job faalde op `hdiutil: create failed - Resource busy` in stap 5 (build, signing en notarisatie wél geslaagd). Re-run van dezelfde commit slaagde → timing, geen inhoud. `build-release.sh` probeert nu 3× met backoff + detach van een blijven hangen volume. **Let op het onderscheid:** de eerdere DMG-mislukkingen (v1.10.223/.224/.201/.202) waren compileerfouten omdat CI strenger is dan een lokale debug-build — daarvoor is `swift build -c release -Xswiftc -swift-version -Xswiftc 6` de poort, en die is deze keer wél gedraaid.
 
+**LOCAL-FIRST-PROGRAMMA AFGEROND 2026-08-11 (user: "Doe alles") — t/m v1.10.234 / ios-v1.7.199, gepusht, alle workflows groen.**
+
+Aanleiding: twee user-meldingen met screenshots (mini-speler prees een zone aan; een stopknop zette de uitvoer weg) bleken hetzelfde patroon. `native/docs/LOCAL_FIRST_AUDIT.md` maakte er 6 gaten en 4 batches van; alle vier geshipt.
+
+- **Batch 1 (L2)** v1.10.232 — zes verbs kregen `zoneID: String? = nil` en lopen door één router (`deliver` / `deliverToQueue`). Optioneel i.p.v. geschrapt, want `RoonSageMCP/main.swift:508` adresseert terecht een zone bij naam. `Cover`/`HeroItem` hun aparte `playLocal`-closure kwijt; `playAlbumLocally`/`playArtistLocally` verwijderd.
+- **Batch 2 (L3)** v1.10.232 — resterende play/queue-gates op `hasActiveOutput`.
+- **Batch 3 (L1)** v1.10.233 — **de stations spelen nu ook op dit apparaat.** `RadioStatus`/`RadioRunState` dragen een optionele zoneID (nil = dit apparaat); `topUpRadioIfNeeded` leest de wachtrij die het station daadwerkelijk voedt. Let op het verschil: een zone-queue krimpt terwijl hij speelt (count = resterende diepte), de lokale houdt alles vast en verschuift een index (count − index − 1). Die off-by-one zit in `LocalQueue.upcomingCount` met 3 randgeval-tests.
+- **Batch 4 (L4–L6)** v1.10.234 — `localOutputName` van Core naar de UI (`localOutputLabel` + `output.thisDevice/thisMac`); Core hield hardgecodeerd Nederlands dat aan de localisatie-poort ontsnapte omdat het geen sleutel is. Plus zone-veronderstellende teksten en de "(lokaal afspelen)"-haakjes in Instellingen.
+
+**Zone-gates: 62 → 15.** De rest is bewust: QueueView's Roon-tak, de zone-hero, de zonekiezers, `maybeAutoplayGuestDJ`, en de transport-verbs.
+
+**NIET GEVERIFIEERD — dit wacht op Casper:** (1) of gapless hóórbaar gaploos is, ook met scherm uit; (2) of een station op dit apparaat werkelijk blijft doorspelen als de wachtrij leegloopt; (3) de klik op de overgang (loudness-gain hangt aan `player.volume`, verschuift pas ná de wissel — fix = per-item `AVAudioMix`).
+
+**Ook open:** `LocalPlayback.swift` produceert nog twee Nederlandse foutteksten in Core (error-plumbing moet dan mee). JELLYFIN_AUDIT batch 2+ (AirPlay-kiezer, fades, één zoekingang, downloads) is nog niet begonnen.
+
 EERDER (2026-08-08, ochtend): **BENCHMARK-PROGRAMMA LIDARR + DROPPEDNEEDLE — user: "Doe alles"**. Vraag was een plan hoe Lidarr (GPL-3.0) en DroppedNeedle (AGPL-3.0) RoonSage kunnen verbeteren op snelheid/functionaliteit/design/theme/veiligheid; plan staat in `docs/BENCHMARK-LIDARR-DROPPEDNEEDLE.md` (25 items, 4 fasen, 8 batches). **LICENTIE-HEK: geen regel code overgenomen — beide bronnen zijn copyleft, deze repo MIT; alleen mechanismen zelfstandig herbouwd** (zelfde regel als bij de discovery-batch hieronder). User gaf expliciet push+tag-toestemming per batch ("Ja, push + tag per batch") en koos reikwijdte "Alles, batch voor batch".
 
 **GESHIPT: batch 1/8** (beveiliging V1–V4+V6) = v1.10.217 / ios-v1.7.182 / analyzer-v1.1.187 · **batch 2/8** (S4 TaskScheduler) = v1.10.218 / ios-v1.7.183 / analyzer-v1.1.188 · **batch 3/8** (S2 ETag+gzip) = v1.10.219 / ios-v1.7.184 / analyzer-v1.1.189 · **batch 4/8** (S1 SSE-push + S3 keep-alive) = v1.10.220 / ios-v1.7.185 / analyzer-v1.1.190 · **batch 5/8** (V5 inkomende rate-limiting) = v1.10.221 / ios-v1.7.186 / analyzer-v1.1.191. Zie ## Done per batch.
