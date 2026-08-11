@@ -101,7 +101,32 @@ public actor AudioTranscoder {
 
     // MARK: - Encoding (AVAssetReader → AVAssetWriter, PCM → AAC)
 
+    /// Below this, HE-AAC beats plain AAC-LC by a wide margin; above it, LC is
+    /// the better encoder and SBR just costs you.
+    static let heAACCeiling = 112
+
+    /// The AAC flavour to ask for at this bitrate.
+    ///
+    /// AAC-LC falls apart under ~112 kbps; HE-AAC (LC + spectral band
+    /// replication) stays usable down to ~64. Opus would be better still, but
+    /// `AVPlayer` cannot decode it — so the codec is fixed and the flavour is
+    /// the only lever we actually have.
+    static func aacFormat(forKbps kbps: Int) -> AudioFormatID {
+        kbps < heAACCeiling ? kAudioFormatMPEG4AAC_HE : kAudioFormatMPEG4AAC
+    }
+
     static func encode(source: URL, dest: URL, kbps: Int) async -> Bool {
+        // HE-AAC is the better encoder low down, but AVAssetWriter is picky about
+        // it (sample-rate and channel constraints vary by platform). Try it, and
+        // fall back to LC rather than serving nothing.
+        if aacFormat(forKbps: kbps) == kAudioFormatMPEG4AAC_HE,
+           await encode(source: source, dest: dest, kbps: kbps, format: kAudioFormatMPEG4AAC_HE) {
+            return true
+        }
+        return await encode(source: source, dest: dest, kbps: kbps, format: kAudioFormatMPEG4AAC)
+    }
+
+    private static func encode(source: URL, dest: URL, kbps: Int, format: AudioFormatID) async -> Bool {
         let asset = AVURLAsset(url: source)
         guard let srcTrack = try? await asset.loadTracks(withMediaType: .audio).first,
               let reader = try? AVAssetReader(asset: asset) else { return false }
@@ -115,10 +140,10 @@ public actor AudioTranscoder {
         reader.add(readerOutput)
 
         let aac: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVFormatIDKey: format,
             AVNumberOfChannelsKey: 2,
             AVSampleRateKey: 44_100,
-            AVEncoderBitRateKey: max(64, min(320, kbps)) * 1000,
+            AVEncoderBitRateKey: max(32, min(320, kbps)) * 1000,
         ]
         let writerInput = AVAssetWriterInput(mediaType: .audio, outputSettings: aac)
         writerInput.expectsMediaDataInRealTime = false

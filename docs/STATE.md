@@ -42,6 +42,18 @@ NU (2026-08-10): **LOKAAL AFSPELEN IS EEN VOLWAARDIGE UITVOER** (user: "Local pl
 - **Afspeel-cache J1** (v1.10.229): `LocalAudioCache`, gekeyd op match key + transcode-profiel, niet op de URL (die draagt een roterend token en wisselt van host tussen LAN en ZeroTier). Vulling is een tweede fetch, overgeslagen op een expensive path. Standaard 2 GB, instelbaar.
 - **`native/docs/JELLYFIN_AUDIT.md`**: 9 gaten, 6 batches. Batch 1 (J1 + J9) hiermee klaar.
 
+**MOBIELE DATA — HE-AAC EN DE DODE TAK (2026-08-11, v1.10.254 / ios-v1.7.219).** User: "Ik ga nu heel snel door mobiele data heen" en daarna "Aac vs opus?". **Antwoord op die vraag: Opus wint onder ~128 kbps, maar `AVPlayer` kan het niet decoderen** — overstappen betekent de hele AVQueuePlayer-engine opgeven (gapless, AirPlay, lockscreen, route-picker). De codec ligt dus vast; de enige echte hefboom binnen deze engine is de AAC-*smaak*. `AudioTranscoder.aacFormat(forKbps:)` kiest nu HE-AAC onder 112 kbps, met terugval op LC als `AVAssetWriter` weigert (die is kieskeurig over samplerate/kanalen).
+
+**EMPIRISCH GEMETEN, niet aangenomen:** een 6 s 44,1 kHz stereo bron door beide takken en daarna `ffprobe` erop — `profile=HE-AAC`, 16K tegen 24K voor dezelfde 64 kbps in LC. De terugval trad hier dus *niet* op; op deze toolchain werkt HE echt.
+
+**DE EIGENLIJKE VONDST: de HE-tak was onbereikbaar.** `LocalTranscode.bitrateKbps` stond standaard op **256** en de laagste optie in de bitrate-picker was **128** — allebei boven de drempel van 112, dus de nieuwe tak was dood hout op het moment dat ik hem schreef. Standaard nu 96 kbps (~43 MB/uur, tegen ~115 op 256 en ~400 voor FLAC); picker uitgebreid met 64 en 96. **128 bewust blijven staan** als optie: wie die ooit expliciet koos, houdt anders een selectie zonder tag en ziet een lege picker.
+
+**EN EEN LIEGEND INSTELLINGENSCHERM, ook van mij.** `TranscodeSettingsSection` bond `@AppStorage` met default `.off` terwijl `LocalTranscode.mode` al `.cellular` teruggaf — het scherm toonde "Nooit" terwijl de app op mobiele data wél transcodeerde. Ontstaan doordat ik de engine-default veranderde en de UI-literal liet staan. Nu komen beide uit `LocalTranscode.defaultMode` / `.defaultBitrateKbps`, dus **drift is per constructie onmogelijk** in plaats van door een test bewaakt.
+
+**De les die groter is dan deze fix:** een unittest die alleen de *eenheid* toetst (`aacFormat(forKbps: 64)` → HE) blijft groen terwijl de feature in de app nooit aan gaat, omdat niets 64 aanvraagt. De test die telt is die op de *bedrading*: `defaultBitrateKbps < heAACCeiling`. Rood-groen bewezen door de default even op 256 te zetten.
+
+**Verified: 895 tests, 0 failures (was 893) · `swift build -c release --product RoonSage` exit 0 · iOS simulator BUILD SUCCEEDED · `check-localization.sh --strict` 0 missing / 0 orphans.** **NIET geverifieerd: hoe 96 kbps HE-AAC daadwerkelijk klinkt op de iPhone** — dat is een luistertest, geen build.
+
 **DRIE OPENSTAANDE ZAKEN, in volgorde van belang:**
 1. **109 ontbrekende tekstsleutels.** Gevonden via een user-screenshot waarin letterlijk `localNowPlaying.nothingPlaying` stond. Een ontbrekende sleutel is géén compileerfout — SwiftUI rendert dan de sleutel zelf. Nieuw: `native/scripts/check-localization.sh` (missende + weeskeys + catalogus-drift). 7 gefixt, **109 blijven staan**, verspreid over Generate, CustomRadio, Discovery, Onboarding, LiveDJ e.a. Zodra de lijst leeg is: `--strict` als CI-poort. Nu een poort maken zou CI meteen rood zetten.
 2. **De app draait in het Engels terwijl er hardgecodeerde Nederlandse literals in staan** (`RoonClient.localOutputName` geeft "Dit apparaat"; Core kan geen `LS` gebruiken). Vandaar mengvormen als "Stop afspelen op this device". Aparte klus van punt 1.

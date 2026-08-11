@@ -952,8 +952,11 @@ struct LoudnessSettingsSection: View {
 /// AAC-transcoding for on-device playback over the network (LMS-style
 /// bandwidth setting): stream the original at home, a lean AAC on the road.
 struct TranscodeSettingsSection: View {
-    @AppStorage("local_transcode_mode") private var modeRaw = LocalTranscode.Mode.off.rawValue
-    @AppStorage("local_transcode_kbps") private var kbps = 256
+    // Defaults come from LocalTranscode, never repeated here: @AppStorage binds
+    // to the same keys the policy reads, so a literal would silently drift and
+    // this screen would show a setting the app isn't using.
+    @AppStorage("local_transcode_mode") private var modeRaw = LocalTranscode.defaultMode.rawValue
+    @AppStorage("local_transcode_kbps") private var kbps = LocalTranscode.defaultBitrateKbps
 
     var body: some View {
         Section("Onderweg streamen") {
@@ -964,12 +967,14 @@ struct TranscodeSettingsSection: View {
             }
             if modeRaw != LocalTranscode.Mode.off.rawValue {
                 Picker("Bitrate", selection: $kbps) {
-                    Text("128 kbps").tag(128)
+                    Text("64 kbps — zuinigst").tag(64)
+                    Text("96 kbps — aanbevolen").tag(96)
+                    Text("128 kbps").tag(128)   // blijft staan: wie dit ooit koos, houdt een geldige selectie
                     Text("192 kbps").tag(192)
-                    Text("256 kbps").tag(256)
+                    Text("256 kbps — beste kwaliteit").tag(256)
                 }
             }
-            Text("Laat de server FLAC/lossless omzetten naar AAC vóór het streamen — veel lichter over ZeroTier op mobiele data. Bronnen die al zuiniger zijn dan de gekozen bitrate worden ongemoeid gelaten. Geldt vanaf de volgende track.")
+            Text("Laat de server FLAC/lossless omzetten naar AAC vóór het streamen — veel lichter over ZeroTier op mobiele data. Onder 128 kbps gebruikt de server HE-AAC, dat op die bitrates veel beter klinkt dan gewone AAC. 96 kbps kost ongeveer 43 MB per uur, 256 kbps ongeveer 115 MB, FLAC ongeveer 400 MB. Bronnen die al zuiniger zijn dan de gekozen bitrate worden ongemoeid gelaten. Geldt vanaf de volgende track.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

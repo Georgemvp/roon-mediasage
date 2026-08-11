@@ -14,6 +14,19 @@ public enum LocalTranscode {
     static let modeKey = "local_transcode_mode"
     static let bitrateKey = "local_transcode_kbps"
 
+    /// The defaults as constants, because the settings screen binds `@AppStorage`
+    /// to the SAME keys this type reads. When the two disagree the screen lies
+    /// about what the app is doing — and it did: the picker defaulted to "Nooit"
+    /// while the policy was already transcoding on cellular. One source, no drift.
+    public static let defaultMode: Mode = .cellular
+
+    /// 96 kbps, which is below `AudioTranscoder.heAACCeiling` — so the default
+    /// cellular stream is HE-AAC, not LC. HE holds together at a bitrate where
+    /// LC audibly falls apart, and this is the whole point of the setting:
+    /// ~43 MB/hour instead of ~400 MB/hour of FLAC. Picking 192 or 256 opts back
+    /// into LC at a quality the higher bitrate can carry.
+    public static let defaultBitrateKbps = 96
+
     /// Default `.cellular`: on a phone, streaming full FLAC over mobile data is
     /// the single biggest way to burn a bundle, and nobody opts in to a setting
     /// they don't know exists. At home nothing changes — the policy only fires on
@@ -21,17 +34,17 @@ public enum LocalTranscode {
     /// gets the default.
     public static var mode: Mode {
         get {
-            guard let raw = UserDefaults.standard.string(forKey: modeKey) else { return .cellular }
-            return Mode(rawValue: raw) ?? .cellular
+            guard let raw = UserDefaults.standard.string(forKey: modeKey) else { return defaultMode }
+            return Mode(rawValue: raw) ?? defaultMode
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: modeKey) }
     }
 
-    /// Requested AAC bitrate in kbps (default 256).
+    /// Requested AAC bitrate in kbps.
     public static var bitrateKbps: Int {
         get {
             let v = UserDefaults.standard.integer(forKey: bitrateKey)
-            return v > 0 ? v : 256
+            return v > 0 ? v : defaultBitrateKbps
         }
         set { UserDefaults.standard.set(newValue, forKey: bitrateKey) }
     }
