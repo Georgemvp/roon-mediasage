@@ -576,17 +576,10 @@
 "nowPlaying.shareCard" = "Deel als kaart";
 "nowPlaying.startPlaybackHint" = "Start iets in Roon, of kies dit apparaat als uitvoer.";
 "nowPlaying.upNext"           = "HIERNA";
-"nowPlaying.journeyHelp"      = "Een sonische reis die vanaf deze track wegdrijft naar een heel ander klankgebied";
 "nowPlaying.keepPlayingHint"  = "Tik om door te spelen";
 "nowPlaying.like"             = "Vind ik leuk";
 "nowPlaying.lyrics"           = "Songtekst";
 "nowPlaying.makePlaylist"     = "Maak een playlist";
-"nowPlaying.moodAcoustic"     = "Akoestisch";
-"nowPlaying.moodDanceable"    = "Dansbaar";
-"nowPlaying.moodElectronic"   = "Elektronisch";
-"nowPlaying.moodHappy"        = "Vrolijk";
-"nowPlaying.moodInstrumental" = "Instrumentaal";
-"nowPlaying.moodMelancholic"  = "Melancholisch";
 "nowPlaying.mute"             = "Dempen";
 "nowPlaying.nextTrack"        = "Volgende track";
 "nowPlaying.noActiveZones"    = "Geen actieve zones";
@@ -601,12 +594,9 @@
 "nowPlaying.repeatOff"        = "Herhalen uit";
 "nowPlaying.repeatOne"        = "Herhaal deze track";
 "nowPlaying.scrubHint"        = "Veeg omhoog of omlaag om te spoelen";
-"nowPlaying.sonicRadioHelp"   = "Speel een station met tracks die hier sonisch op lijken";
 "nowPlaying.sonicallySimilar" = "Sonisch vergelijkbaar";
-"nowPlaying.startJourney"     = "Start een sonische reis";
 "nowPlaying.unmute"           = "Dempen opheffen";
 "nowPlaying.wallDisplay"      = "Wanddisplay";
-"nowPlaying.wallDisplayHelp"  = "Volledig scherm — wanddisplay";
 
 /* nowPlayingBar */
 "nowPlayingBar.nextTrack"  = "Volgende track";

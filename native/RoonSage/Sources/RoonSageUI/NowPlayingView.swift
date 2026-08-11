@@ -103,25 +103,12 @@ enum NowPlayingHeroOptions {
         }
     }
 
-    /// Compact Dutch labels for the strong attribute axes (max 2) — the eyeball
-    /// UI shared by the zone hero and the local (on-device) hero.
-    static func attributeBadges(_ attrs: [String: Float]) -> [String] {
-        guard !attrs.isEmpty else { return [] }
-        let rules: [(key: String, high: String, low: String)] = [
-            ("valence", LS("nowPlaying.moodHappy"), LS("nowPlaying.moodMelancholic")),
-            ("danceability", LS("nowPlaying.moodDanceable"), ""),
-            ("acousticness", LS("nowPlaying.moodAcoustic"), LS("nowPlaying.moodElectronic")),
-            ("instrumentalness", LS("nowPlaying.moodInstrumental"), ""),
-        ]
-        var out: [String] = []
-        for r in rules {
-            guard let v = attrs[r.key] else { continue }
-            if v >= 0.62, !r.high.isEmpty { out.append(r.high) }
-            else if v <= 0.38, !r.low.isEmpty { out.append(r.low) }
-            if out.count >= 2 { break }
-        }
-        return out
-    }
+    // `attributeBadges` lived here: compact mood labels derived from the CLAP
+    // attribute axes. Removed with its last call site when the zone badge row was
+    // trimmed to BPM + key (the local player dropped it earlier for the same
+    // reason). The mood axes are still shown in Sonic DNA, which reads them from
+    // `attributesFor` directly. Recoverable with
+    // `git show v1.10.259 -- native/RoonSage/Sources/RoonSageUI/NowPlayingView.swift`.
 }
 
 // MARK: - Backdrop (blurred art + scrim)
@@ -307,7 +294,6 @@ private struct NowPlayingHero: View {
             visualizer
             scrubber
             transport
-            optionsRow
             volumeRow
             footerRow
         }
@@ -423,65 +409,22 @@ private struct NowPlayingHero: View {
             )
     }
 
-    // MARK: Audio features + Sonic Radio
+    // MARK: Audio features — the same two badges as the local player.
+    //
+    // This row used to carry BPM, key, two mood tags, every CLAP attribute badge
+    // AND the Sonic Radio + Journey buttons, all in one `lineLimit(1)` HStack.
+    // On a phone that truncated into a row of stubs — "83…", "romanti…", "Mela…",
+    // "Dan…", "S(", "J(" — six unreadable fragments on the busiest strip of the
+    // screen. Both actions moved into the «…» menu (where the local player
+    // already keeps them); the tags and attributes live on in Sonic DNA, which is
+    // where you go to look at them.
 
     @ViewBuilder
     private var featureRow: some View {
-        if let np = zone.nowPlaying {
+        if zone.nowPlaying != nil, let f = feat {
             HStack(spacing: Spacing.sm) {
-                if let f = feat {
-                    if f.bpm > 0 { Badge("\(Int(f.bpm)) BPM", tint: .roonGold) }
-                    if !f.camelot.isEmpty { Badge(f.camelot, tint: .roonGold) }
-                    if !f.tags.isEmpty {
-                        Text(f.tags.prefix(2).joined(separator: " · "))
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                    }
-                }
-                // CLAP attribute axes (when analyzed) — the "meer meta" the engine
-                // can use; shown here so you can eyeball the values per track.
-                ForEach(NowPlayingHeroOptions.attributeBadges(attrs), id: \.self) { label in
-                    Badge(label, tint: .secondary)
-                }
-                Button {
-                    startingRadio = true
-                    Task {
-                        await client.playSonicRadio(title: np.title, artist: np.artist, album: np.album, zoneID: zone.id)
-                        startingRadio = false
-                    }
-                } label: {
-                    if startingRadio {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label("Sonic Radio", systemImage: "dot.radiowaves.left.and.right")
-                            .font(.caption)
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(startingRadio)
-                .accessibilityLabel("Start Sonic Radio")
-                .help(LS("nowPlaying.sonicRadioHelp"))
-
-                Button {
-                    startingAdventure = true
-                    Task {
-                        await client.playSonicAdventure(title: np.title, artist: np.artist, album: np.album, zoneID: zone.id)
-                        startingAdventure = false
-                    }
-                } label: {
-                    if startingAdventure {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label(LS("nowPlaying.journey"), systemImage: "map").font(.caption)
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(startingAdventure)
-                .accessibilityLabel(LS("nowPlaying.startJourney"))
-                .help(LS("nowPlaying.journeyHelp"))
+                if f.bpm > 0 { Badge("\(Int(f.bpm)) BPM", tint: .roonGold) }
+                if !f.camelot.isEmpty { Badge(f.camelot, tint: .roonGold) }
             }
             .lineLimit(1)
         }
@@ -578,8 +521,28 @@ private struct NowPlayingHero: View {
 
     // MARK: Transport
 
+    /// Shuffle and repeat flank the transport instead of living on their own
+    /// row — they ARE playback controls, and folding them in removes a whole
+    /// strip of icons. Mirrors `LocalNowPlaying.transport` exactly, so the two
+    /// players don't teach different muscle memory.
     private var transport: some View {
-        HStack(spacing: Spacing.xxl) {
+        let shuffleOn = zone.shuffle ?? false
+        let loop = zone.loopMode ?? "disabled"
+        return HStack(spacing: Spacing.xl) {
+            Button {
+                Haptics.tap()
+                Task { await client.setShuffle(zoneID: zone.id, enabled: !shuffleOn) }
+            } label: {
+                Image(systemName: "shuffle")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(shuffleOn ? Color.roonGold : .secondary)
+                    .tappable44()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Shuffle")
+            .accessibilityValue(shuffleOn ? LS("nowPlaying.on") : LS("nowPlaying.off"))
+            .accessibilityAddTraits(shuffleOn ? .isSelected : [])
+
             Button {
                 Task { await client.previous(zoneID: zone.id) }
             } label: {
@@ -608,33 +571,6 @@ private struct NowPlayingHero: View {
             .buttonStyle(.plain)
             .frame(minWidth: 44, minHeight: 44)
             .accessibilityLabel(LS("nowPlaying.nextTrack"))
-        }
-    }
-
-    // MARK: Shuffle / repeat
-    //
-    // Roon exposes these via zone.settings; the state reflects the live snapshot
-    // so the icons stay in sync when changed from Roon itself or another remote.
-    // (setShuffle/setRepeat already existed in Core but were never wired to any
-    // SwiftUI view — only the remote/MCP command path.)
-
-    private var optionsRow: some View {
-        let shuffleOn = zone.shuffle ?? false
-        let loop = zone.loopMode ?? "disabled"
-        return HStack(spacing: Spacing.xxl) {
-            Button {
-                Haptics.tap()
-                Task { await client.setShuffle(zoneID: zone.id, enabled: !shuffleOn) }
-            } label: {
-                Image(systemName: "shuffle")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(shuffleOn ? Color.roonGold : .secondary)
-                    .tappable44()
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Shuffle")
-            .accessibilityValue(shuffleOn ? LS("nowPlaying.on") : LS("nowPlaying.off"))
-            .accessibilityAddTraits(shuffleOn ? .isSelected : [])
 
             Button {
                 Haptics.tap()
@@ -648,23 +584,6 @@ private struct NowPlayingHero: View {
             .buttonStyle(.plain)
             .accessibilityLabel(NowPlayingHeroOptions.loopLabel(loop))
             .accessibilityAddTraits(loop == "disabled" ? [] : .isSelected)
-
-            if let np = zone.nowPlaying {
-                ShareCardButton(title: np.title.displayTitle, artist: np.artist, imageKey: np.imageKey)
-
-                Button {
-                    Haptics.tap()
-                    showWall = true
-                } label: {
-                    Image(systemName: "play.tv")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .tappable44()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(LS("nowPlaying.wallDisplay"))
-                .help(LS("nowPlaying.wallDisplayHelp"))
-            }
         }
     }
 
@@ -756,18 +675,53 @@ private struct NowPlayingHero: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(LS("nowPlaying.lyrics"))
 
-                Button {
-                    Haptics.tap()
-                    similarSeed = SonicSeed(title: np.title, artist: np.artist,
-                                            album: np.album, imageKey: np.imageKey)
+                // Everything you might want but rarely mid-song, behind one
+                // glyph — the same menu the local player has, with the same
+                // items in the same order. Sonic Radio and Journey came off the
+                // badge row; share and wall display came off the options strip.
+                Menu {
+                    Button {
+                        startingRadio = true
+                        Task {
+                            await client.playSonicRadio(title: np.title, artist: np.artist,
+                                                        album: np.album, zoneID: zone.id)
+                            startingRadio = false
+                        }
+                    } label: {
+                        Label("Sonic Radio", systemImage: "dot.radiowaves.left.and.right")
+                    }
+                    .disabled(startingRadio)
+
+                    Button {
+                        startingAdventure = true
+                        Task {
+                            await client.playSonicAdventure(title: np.title, artist: np.artist,
+                                                            album: np.album, zoneID: zone.id)
+                            startingAdventure = false
+                        }
+                    } label: { Label(LS("nowPlaying.journey"), systemImage: "map") }
+                        .disabled(startingAdventure)
+
+                    Button {
+                        similarSeed = SonicSeed(title: np.title, artist: np.artist,
+                                                album: np.album, imageKey: np.imageKey)
+                    } label: {
+                        Label(LS("nowPlaying.sonicallySimilar"), systemImage: "waveform.path.ecg")
+                    }
+
+                    Button {
+                        showWall = true
+                    } label: { Label(LS("nowPlaying.wallDisplay"), systemImage: "play.tv") }
+
+                    ShareCardButton(title: np.title.displayTitle, artist: np.artist,
+                                    imageKey: np.imageKey, inMenu: true)
                 } label: {
-                    Image(systemName: "waveform.path.ecg")
+                    Image(systemName: "ellipsis.circle")
                         .font(.title3)
                         .foregroundStyle(.primary)
                         .frame(minWidth: 44, minHeight: 44)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(LS("nowPlaying.sonicallySimilar"))
+                .accessibilityLabel(LS("localNowPlaying.more"))
 
                 if let next = nextUpItem {
                     Spacer(minLength: Spacing.sm)

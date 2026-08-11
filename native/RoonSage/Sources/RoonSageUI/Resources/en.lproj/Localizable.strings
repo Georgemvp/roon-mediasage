@@ -576,17 +576,10 @@
 "nowPlaying.shareCard" = "Share as card";
 "nowPlaying.startPlaybackHint" = "Start something in Roon, or choose this device as the output.";
 "nowPlaying.upNext"           = "UP NEXT";
-"nowPlaying.journeyHelp"      = "A sonic journey drifting from this track into an entirely different soundscape";
 "nowPlaying.keepPlayingHint"  = "Tap to keep playing";
 "nowPlaying.like"             = "Like";
 "nowPlaying.lyrics"           = "Lyrics";
 "nowPlaying.makePlaylist"     = "Make a playlist";
-"nowPlaying.moodAcoustic"     = "Acoustic";
-"nowPlaying.moodDanceable"    = "Danceable";
-"nowPlaying.moodElectronic"   = "Electronic";
-"nowPlaying.moodHappy"        = "Happy";
-"nowPlaying.moodInstrumental" = "Instrumental";
-"nowPlaying.moodMelancholic"  = "Melancholic";
 "nowPlaying.mute"             = "Mute";
 "nowPlaying.nextTrack"        = "Next track";
 "nowPlaying.noActiveZones"    = "No active zones";
@@ -601,12 +594,9 @@
 "nowPlaying.repeatOff"        = "Repeat off";
 "nowPlaying.repeatOne"        = "Repeat this track";
 "nowPlaying.scrubHint"        = "Swipe up or down to scrub";
-"nowPlaying.sonicRadioHelp"   = "Play a station of tracks that sound like this one";
 "nowPlaying.sonicallySimilar" = "Sonically similar";
-"nowPlaying.startJourney"     = "Start a sonic journey";
 "nowPlaying.unmute"           = "Unmute";
 "nowPlaying.wallDisplay"      = "Wall display";
-"nowPlaying.wallDisplayHelp"  = "Full screen — wall display";
 
 /* nowPlayingBar */
 "nowPlayingBar.nextTrack"  = "Next track";

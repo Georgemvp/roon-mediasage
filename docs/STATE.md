@@ -42,6 +42,16 @@ NU (2026-08-10): **LOKAAL AFSPELEN IS EEN VOLWAARDIGE UITVOER** (user: "Local pl
 - **Afspeel-cache J1** (v1.10.229): `LocalAudioCache`, gekeyd op match key + transcode-profiel, niet op de URL (die draagt een roterend token en wisselt van host tussen LAN en ZeroTier). Vulling is een tweede fetch, overgeslagen op een expensive path. Standaard 2 GB, instelbaar.
 - **`native/docs/JELLYFIN_AUDIT.md`**: 9 gaten, 6 batches. Batch 1 (J1 + J9) hiermee klaar.
 
+**ZONE-VIEW GELIJKGETROKKEN MET DE LOKALE SPELER (2026-08-11, v1.10.260 / ios-v1.7.225).** User: "Zone view heeft nog oude design met veel extra dingen etc… Dat moet natuurlijk gelijk zijn aan local player." Terecht: de kalmeringsronde van 10-08 raakte alleen `LocalNowPlaying`, dus de zone-hero stond nog in de oude indeling — en dat leert twee verschillende spiergeheugens aan voor hetzelfde scherm.
+
+**Wat er mis was, op de screenshot te zien:** `featureRow` propte BPM, toonsoort, twee mood-tags, álle CLAP-attribuutbadges én de knoppen Sonic Radio en Journey in één `HStack` met `lineLimit(1)`. Op een telefoon knipt dat af tot zes onleesbare stompjes: `83…`, `11A`, `romanti…`, `Mela…`, `Dan…`, `((•)) S…`, `🗺 J…`.
+
+**Nu identiek aan lokaal:** badge-rij alleen BPM + toonsoort · shuffle en repeat in de transportrij gevouwen (waren een eigen strip) · `optionsRow` helemaal weg · «…»-menu in de voetrij met Sonic Radio, Journey, sonisch vergelijkbaar, wanddisplay en delen — dezelfde items in dezelfde volgorde als `LocalNowPlaying`.
+
+**C14-sweep leverde echt dood hout op:** `NowPlayingHeroOptions.attributeBadges` verloor zijn laatste aanroeper (de lokale speler was hem al kwijt) — verwijderd, met de git-referentie in een comment. **En de localisatiepoort verdiende zich meteen terug:** hij meldde 10 weessleutels (`nowPlaying.mood*`, `journeyHelp`, `sonicRadioHelp`, `startJourney`, `wallDisplayHelp`) die niemand handmatig zou hebben gevonden. Catalogus 871 → 861.
+
+**Verified: 915 tests 0 failures · release-build exit 0 · iOS simulator BUILD SUCCEEDED · localisatiepoort 0 missend / 0 wees.** **NIET geverifieerd: hoe de zone-view er nu uitziet op het toestel.**
+
 **INSTELLINGEN LUISTERDE NIET NAAR DE TAALKNOP (2026-08-11, v1.10.258 / ios-v1.7.223).** Zelfde screenshots als hieronder: **Language stond op English, de tabbalk ("Now Playing", "Library", "Create") ook — en de hele inhoud van Instellingen bleef Nederlands.** Dus de taalknop wérkt; dit scherm deed er alleen niet aan mee. **OORZAAK:** ~100 kale Nederlandse literals (`Section("Verschijning")`, `LabeledContent("Versie")`), het "bare-literal migration backlog" uit de kop van `Localization.swift`. Gemeten: **182 kale literals in de hele UI, waarvan 100 in `SettingsView` alleen** — vandaar dat juist dit scherm er volledig Nederlands uitzag terwijl de rest (889 gesleutelde teksten) wél omschakelde.
 
 95 sleutels toegevoegd (`settings.*`), catalogus 776 → 871. **Bewust NIET omgezet, 21 stuks:** woorden die in het Engels identiek zijn (Status, Host, Server, Provider, Base URL, Model, Discogs, Last.fm, Qobuz, `app_secret`, Protocol, Platform, Pre-amp, Bitrate, "192 kbps") — een sleutel met twee identieke waarden is alleen ruis.
