@@ -409,6 +409,7 @@
 
 /* library */
 "library.addToQueue"             = "In wachtrij";
+"library.analysedSuffix" = "geanalyseerd";
 "library.browseBy"               = "Blader door";
 "library.cancel"                 = "Annuleer";
 "library.chooseZoneFirst"        = "Kies eerst een zone of apparaat";
@@ -432,7 +433,6 @@
 "library.play"                   = "Speel";
 "library.playAll"                = "Speel alle";
 "library.playlistName"           = "Naam playlist";
-"library.radioStations"          = "Radiostations";
 "library.recentlyAdded"          = "Recent toegevoegd";
 "library.recentlyPlayedShelf"    = "Onlangs gespeeld";
 "library.recommendSubtitle"      = "Beschrijf een vibe → albums uit je bibliotheek.";
@@ -462,8 +462,6 @@
 "library.syncThenSearch"         = "Synchroniseer je bibliotheek en zoek opnieuw.";
 "library.syncToFillOverview"     = "Synchroniseer je bibliotheek om dit overzicht te vullen.";
 "library.tracks"                 = "Tracks";
-"library.undiscoveredAlbums"     = "Onontdekte albums";
-"library.yourTopTracks"          = "Jouw toptracks";
 
 /* libraryDetail */
 "libraryDetail.aboutAlbum"       = "Over dit album";
@@ -497,6 +495,7 @@
 
 /* localNowPlaying */
 "localNowPlaying.deviceNounDevice"  = "dit apparaat";
+"localNowPlaying.more" = "Meer";
 "localNowPlaying.nothingPlaying"    = "Niets aan het spelen";
 "localNowPlaying.sonicallySimilar" = "Sonisch vergelijkbaar";
 "localNowPlaying.upNext"            = "HIERNA";
@@ -569,6 +568,7 @@
 "nowPlaying.journey"          = "Reis";
 "nowPlaying.nothingPlaying"   = "Niets aan het spelen";
 "nowPlaying.selectZoneHint"   = "Kies waar je wilt luisteren.";
+"nowPlaying.shareCard" = "Deel als kaart";
 "nowPlaying.startPlaybackHint" = "Start iets in Roon, of kies dit apparaat als uitvoer.";
 "nowPlaying.upNext"           = "HIERNA";
 "nowPlaying.journeyHelp"      = "Een sonische reis die vanaf deze track wegdrijft naar een heel ander klankgebied";

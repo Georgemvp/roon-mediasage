@@ -37,10 +37,7 @@ public struct LibraryView: View {
     @State private var librarySeconds: Double = 0
     @State private var recentlyAdded: [DatabaseManager.LibraryTrackRow] = []
     @State private var recentPlayed: [DatabaseManager.LibraryTrackRow] = []
-    @State private var undiscovered: [DatabaseManager.AlbumResult] = []
-    @State private var topTracks: [TrackRecord] = []
     @State private var forgotten: [TrackRecord] = []
-    @State private var stations: [RoonClient.SonicRadio] = []
     @State private var facets: RoonClient.RadioFacetOptions?
     @State private var overviewLoaded = false
 
@@ -782,17 +779,8 @@ public struct LibraryView: View {
                 if !recentPlayed.isEmpty {
                     trackShelf(LS("library.recentlyPlayedShelf"), "play.circle", recentPlayed).plainCardRow()
                 }
-                if !topTracks.isEmpty {
-                    recordShelf(LS("library.yourTopTracks"), "star.fill", topTracks).plainCardRow()
-                }
-                if !undiscovered.isEmpty {
-                    albumShelf(LS("library.undiscoveredAlbums"), "sparkles", undiscovered).plainCardRow()
-                }
                 if forgotten.count > 1 {
                     recordShelf(LS("library.forgottenFavorites"), "clock.arrow.circlepath", forgotten).plainCardRow()
-                }
-                if !stations.isEmpty {
-                    stationShelf.plainCardRow()
                 }
                 browseTiles.plainCardRow()
                 navCard(LS("library.discoverWeeklyTitle"),
@@ -815,28 +803,23 @@ public struct LibraryView: View {
     // MARK: Overview — hero + shelves
 
     @ViewBuilder
+    /// One quiet line instead of six dashboard pieces.
+    ///
+    /// This used to be three large number cards plus three chips (top genre,
+    /// hours of music, % analysed) — a dashboard standing between you and your
+    /// music, on the screen you open to find something to play. The numbers are
+    /// still true, they just don't need to be the first thing you see.
     private func statsHero(_ stats: DatabaseManager.LibraryStats) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            HStack(spacing: Spacing.md) {
-                StatCard(label: LS("library.tracks"), value: stats.totalTracks.formatted())
-                StatCard(label: LS("bm.section.artists"), value: stats.totalArtists.formatted())
-                StatCard(label: LS("bm.section.albums"), value: stats.totalAlbums.formatted())
-            }
-            // Flow layout so the three chips wrap to a second line on a narrow
-            // phone instead of each truncating ("3.536 uur m…", "79% geanal…").
-            FlowLayout(spacing: Spacing.md, lineSpacing: Spacing.sm) {
-                if let top = stats.topGenres.first {
-                    Label(top.genre.capitalized, systemImage: "guitars.fill")
-                }
-                if librarySeconds > 0 {
-                    Label(LS("\(Int(librarySeconds / 3600).formatted()) uur muziek"), systemImage: "clock")
-                }
-                if analyzedTotal > 0 {
-                    Label("\(analyzedMatched * 100 / analyzedTotal)% geanalyseerd", systemImage: "waveform")
-                }
-            }
-            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        var parts = ["\(stats.totalTracks.formatted()) \(LS("library.tracks").lowercased())",
+                     "\(stats.totalAlbums.formatted()) \(LS("bm.section.albums").lowercased())"]
+        if analyzedTotal > 0 {
+            parts.append("\(analyzedMatched * 100 / analyzedTotal)% \(LS("library.analysedSuffix"))")
         }
+        return Text(parts.joined(separator: " · "))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func trackShelf(_ title: String, _ icon: String,
@@ -875,41 +858,6 @@ public struct LibraryView: View {
         }
     }
 
-    // MARK: Overview — sonic radio stations
-
-    private var stationShelf: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            sectionHeader(LS("library.radioStations"), "dot.radiowaves.left.and.right") { EmptyView() }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: Spacing.md) {
-                    ForEach(stations) { stationTile($0) }
-                }
-                .padding(.horizontal, 2)
-            }
-        }
-    }
-
-    private func stationTile(_ radio: RoonClient.SonicRadio) -> some View {
-        Button {
-            Haptics.tap()
-            Task { await client.startRadio(radio) }
-        } label: {
-            VStack(spacing: Spacing.xs) {
-                AlbumArtView(imageKey: radio.imageKey, size: 110, cornerRadius: 55)
-                    .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: "dot.radiowaves.left.and.right")
-                            .font(.caption).foregroundStyle(.white)
-                            .padding(6).background(Color.roonGold, in: Circle()).padding(4)
-                    }
-                Text(radio.artist).font(.caption.weight(.medium)).lineLimit(1)
-                Text("Radio").font(.caption2).foregroundStyle(.secondary)
-            }
-            .frame(width: 110)
-        }
-        .buttonStyle(.plain)
-        .disabled(!client.hasActiveOutput)
-        .accessibilityLabel(LS("Start radio op \(radio.artist)"))
-    }
 
     // MARK: Overview — browse by genre / sfeer / decade
 
@@ -1021,10 +969,7 @@ public struct LibraryView: View {
         async let durationV = client.libraryDurationSeconds()
         async let addedV = client.browseTracks(query: "", tag: nil, order: .recentlyAdded)
         async let playedV = recentPlayedRows()
-        async let undiscV = client.undiscoveredAlbums()
-        async let topV = client.topTracks()
         async let forgottenV = client.forgottenFavorites()
-        async let stationsV = client.dailyRadios()
         async let facetsV = client.radioFacetOptions()
 
         stats = await statsV
@@ -1034,10 +979,7 @@ public struct LibraryView: View {
         librarySeconds = await durationV
         recentlyAdded = Array(await addedV.prefix(15))
         recentPlayed = await playedV
-        undiscovered = await undiscV
-        topTracks = await topV
         forgotten = await forgottenV
-        stations = await stationsV
         facets = await facetsV
     }
 

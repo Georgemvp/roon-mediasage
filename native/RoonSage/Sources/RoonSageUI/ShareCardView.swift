@@ -68,6 +68,9 @@ struct ShareCardButton: View {
     let title: String
     let artist: String?
     let imageKey: String?
+    /// Render as a titled row instead of a bare glyph — for use inside a Menu,
+    /// where an unlabelled icon reads as nothing.
+    var inMenu: Bool = false
 
     @State private var shareImage: Image?
 
@@ -75,7 +78,11 @@ struct ShareCardButton: View {
         Group {
             if let shareImage {
                 ShareLink(item: shareImage, preview: SharePreview(title, image: shareImage)) {
-                    icon
+                    if inMenu {
+                        Label(LS("nowPlaying.shareCard"), systemImage: "square.and.arrow.up")
+                    } else {
+                        icon
+                    }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(LS("shareCard.shareAsImage"))

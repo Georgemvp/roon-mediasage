@@ -409,6 +409,7 @@
 
 /* library */
 "library.addToQueue"             = "Add to queue";
+"library.analysedSuffix" = "analysed";
 "library.browseBy"               = "Browse by";
 "library.cancel"                 = "Cancel";
 "library.chooseZoneFirst"        = "Choose a zone or device first";
@@ -432,7 +433,6 @@
 "library.play"                   = "Play";
 "library.playAll"                = "Play all";
 "library.playlistName"           = "Playlist name";
-"library.radioStations"          = "Radio stations";
 "library.recentlyAdded"          = "Recently added";
 "library.recentlyPlayedShelf"    = "Recently played";
 "library.recommendSubtitle"      = "Describe a vibe → albums from your library.";
@@ -462,8 +462,6 @@
 "library.syncThenSearch"         = "Sync your library and search again.";
 "library.syncToFillOverview"     = "Sync your library to fill this overview.";
 "library.tracks"                 = "Tracks";
-"library.undiscoveredAlbums"     = "Undiscovered albums";
-"library.yourTopTracks"          = "Your top tracks";
 
 /* libraryDetail */
 "libraryDetail.aboutAlbum"       = "About this album";
@@ -497,6 +495,7 @@
 
 /* localNowPlaying */
 "localNowPlaying.deviceNounDevice"  = "this device";
+"localNowPlaying.more" = "More";
 "localNowPlaying.nothingPlaying"    = "Nothing playing";
 "localNowPlaying.sonicallySimilar" = "Sonically similar";
 "localNowPlaying.upNext"            = "UP NEXT";
@@ -569,6 +568,7 @@
 "nowPlaying.journey"          = "Journey";
 "nowPlaying.nothingPlaying"   = "Nothing playing";
 "nowPlaying.selectZoneHint"   = "Pick where you want to listen.";
+"nowPlaying.shareCard" = "Share as card";
 "nowPlaying.startPlaybackHint" = "Start something in Roon, or choose this device as the output.";
 "nowPlaying.upNext"           = "UP NEXT";
 "nowPlaying.journeyHelp"      = "A sonic journey drifting from this track into an entirely different soundscape";

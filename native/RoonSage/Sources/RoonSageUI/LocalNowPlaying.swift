@@ -129,7 +129,6 @@ private struct LocalNowPlayingHero: View {
             visualizer(lp)
             scrubber(lp)
             transport(lp)
-            optionsRow(lp)
             volumeRow(lp)
             feedbackRow(lp)
             if let err = lp.lastError { errorLine(err) }
@@ -275,8 +274,22 @@ private struct LocalNowPlayingHero: View {
 
     // MARK: Transport
 
+    /// Shuffle and repeat flank the transport instead of living on their own
+    /// row: they ARE playback controls, and folding them in removes a whole
+    /// strip of icons from the screen.
     private func transport(_ lp: LocalPlaybackController) -> some View {
-        HStack(spacing: Spacing.xxl) {
+        HStack(spacing: Spacing.xl) {
+            Button { Haptics.tap(); lp.setShuffle(!lp.shuffle) } label: {
+                Image(systemName: "shuffle")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(lp.shuffle ? Color.roonGold : .secondary)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Shuffle")
+            .accessibilityValue(lp.shuffle ? LS("localNowPlaying.on") : LS("localNowPlaying.off"))
+            .accessibilityAddTraits(lp.shuffle ? .isSelected : [])
+
             Button { Haptics.tap(); lp.previous() } label: {
                 Image(systemName: "backward.fill").font(.title)
             }
@@ -299,6 +312,16 @@ private struct LocalNowPlayingHero: View {
             .buttonStyle(.plain)
             .frame(minWidth: 44, minHeight: 44)
             .accessibilityLabel(LS("localNowPlaying.nextTrack"))
+
+            Button { Haptics.tap(); lp.setLoop(NowPlayingHeroOptions.nextLoop(lp.loopMode)) } label: {
+                Image(systemName: lp.loopMode == "loop_one" ? "repeat.1" : "repeat")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(lp.loopMode == "disabled" ? .secondary : Color.roonGold)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(NowPlayingHeroOptions.loopLabel(lp.loopMode))
+            .accessibilityAddTraits(lp.loopMode == "disabled" ? [] : .isSelected)
         }
     }
 
@@ -308,17 +331,14 @@ private struct LocalNowPlayingHero: View {
     @ViewBuilder
     private func featureRow(_ lp: LocalPlaybackController) -> some View {
         if lp.current != nil, feat != nil || !attrs.isEmpty {
+            // Only the two that read at a glance and are act-on-able while
+            // listening. The genre text and the mood badges were three more
+            // things competing for attention on the busiest strip of the screen;
+            // they live on in Sonic DNA, where you go to look at them.
             HStack(spacing: Spacing.sm) {
                 if let f = feat {
                     if f.bpm > 0 { Badge("\(Int(f.bpm)) BPM", tint: .roonGold) }
                     if !f.camelot.isEmpty { Badge(f.camelot, tint: .roonGold) }
-                    if !f.tags.isEmpty {
-                        Text(f.tags.prefix(2).joined(separator: " · "))
-                            .font(.caption).foregroundStyle(.tertiary).lineLimit(1)
-                    }
-                }
-                ForEach(NowPlayingHeroOptions.attributeBadges(attrs), id: \.self) { label in
-                    Badge(label, tint: .secondary)
                 }
             }
             .lineLimit(1)
@@ -344,94 +364,6 @@ private struct LocalNowPlayingHero: View {
     }
 
     // MARK: Shuffle / repeat — bound to the local engine's own queue state.
-
-    private func optionsRow(_ lp: LocalPlaybackController) -> some View {
-        HStack(spacing: Spacing.xxl) {
-            Button {
-                Haptics.tap(); lp.setShuffle(!lp.shuffle)
-            } label: {
-                Image(systemName: "shuffle")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(lp.shuffle ? Color.roonGold : .secondary)
-                    .tappable44()
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Shuffle")
-            .accessibilityValue(lp.shuffle ? LS("localNowPlaying.on") : LS("localNowPlaying.off"))
-            .accessibilityAddTraits(lp.shuffle ? .isSelected : [])
-
-            Button {
-                Haptics.tap(); lp.setLoop(NowPlayingHeroOptions.nextLoop(lp.loopMode))
-            } label: {
-                Image(systemName: lp.loopMode == "loop_one" ? "repeat.1" : "repeat")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(lp.loopMode == "disabled" ? .secondary : Color.roonGold)
-                    .tappable44()
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(NowPlayingHeroOptions.loopLabel(lp.loopMode))
-            .accessibilityAddTraits(lp.loopMode == "disabled" ? [] : .isSelected)
-
-            // Parity with the zone hero. These three used to exist only there,
-            // which made the on-device screen quietly poorer than the zone one —
-            // on the output that is now the default.
-            Button {
-                startingAdventure = true
-                Task {
-                    if let t = lp.current {
-                        await client.playSonicAdventure(title: t.title, artist: t.artist, album: t.album)
-                    }
-                    startingAdventure = false
-                }
-            } label: {
-                if startingAdventure {
-                    ProgressView().controlSize(.small).tappable44()
-                } else {
-                    Image(systemName: "map")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .tappable44()
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(startingAdventure || lp.current == nil)
-            .accessibilityLabel(LS("nowPlaying.journey"))
-
-            Button {
-                Haptics.tap()
-                if let t = lp.current {
-                    similarSeed = SonicSeed(title: t.title, artist: t.artist,
-                                            album: t.album, imageKey: t.imageKey)
-                }
-            } label: {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .tappable44()
-            }
-            .buttonStyle(.plain)
-            .disabled(lp.current == nil)
-            .accessibilityLabel(LS("localNowPlaying.sonicallySimilar"))
-
-            if let t = lp.current {
-                ShareCardButton(title: t.title.displayTitle,
-                                artist: t.artist.isEmpty ? nil : t.artist,
-                                imageKey: t.imageKey)
-            }
-
-            Button {
-                Haptics.tap(); showWall = true
-            } label: {
-                Image(systemName: "play.tv")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .tappable44()
-            }
-            .buttonStyle(.plain)
-            .disabled(lp.current == nil)
-            .accessibilityLabel(LS("nowPlaying.wallDisplay"))
-        }
-    }
 
     // MARK: Volume — the device's playback level, stacked on the loudness gain.
 
@@ -506,6 +438,46 @@ private struct LocalNowPlayingHero: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(LS("localNowPlaying.lyrics"))
+
+                // Everything you might want but rarely mid-song, behind one
+                // glyph. Four icons on the screen became one; nothing was lost.
+                Menu {
+                    Button {
+                        startingAdventure = true
+                        Task {
+                            if let t = lp.current {
+                                await client.playSonicAdventure(title: t.title, artist: t.artist, album: t.album)
+                            }
+                            startingAdventure = false
+                        }
+                    } label: { Label(LS("nowPlaying.journey"), systemImage: "map") }
+                        .disabled(startingAdventure || lp.current == nil)
+
+                    Button {
+                        if let t = lp.current {
+                            similarSeed = SonicSeed(title: t.title, artist: t.artist,
+                                                    album: t.album, imageKey: t.imageKey)
+                        }
+                    } label: { Label(LS("localNowPlaying.sonicallySimilar"), systemImage: "waveform.path.ecg") }
+                        .disabled(lp.current == nil)
+
+                    Button {
+                        showWall = true
+                    } label: { Label(LS("nowPlaying.wallDisplay"), systemImage: "play.tv") }
+                        .disabled(lp.current == nil)
+
+                    if let t = lp.current {
+                        ShareCardButton(title: t.title.displayTitle,
+                                        artist: t.artist.isEmpty ? nil : t.artist,
+                                        imageKey: t.imageKey, inMenu: true)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(.primary)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel(LS("localNowPlaying.more"))
 
                 if let next = nextLocalItem(lp) {
                     Spacer(minLength: Spacing.sm)
