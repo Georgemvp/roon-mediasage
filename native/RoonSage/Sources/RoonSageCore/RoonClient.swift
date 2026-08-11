@@ -328,6 +328,9 @@ public final class RoonClient {
     let sonicCache = SonicLibraryCache()
     /// Gated, serialised listen-logging + LB/Last.fm scrobbling.
     let scrobbler = ScrobbleCoordinator()
+    /// Watches for system memory pressure so the sonic caches can be dropped.
+    /// See `startMemoryPressureRelief()`.
+    @ObservationIgnored var memoryPressureSource: (any DispatchSourceMemoryPressure)?
     /// HTTP server other devices import the library from (Settings toggle).
     var shareServer: LibraryShareServer?
     /// Cached signature of the analyzer's feature/embedding state (set by the
@@ -383,6 +386,8 @@ public final class RoonClient {
         refreshGenreCount()
         // On-device plays scrobble and land in listening_history like zone plays.
         startLocalScrobbleBridge()
+        // Give the ~113 MB sonic vector index back when the system asks for it.
+        startMemoryPressureRelief()
         #if os(macOS)
         // Sharing defaults to on so the iPhone can pull library + settings
         // without the user flipping a toggle first; an explicit opt-out (key

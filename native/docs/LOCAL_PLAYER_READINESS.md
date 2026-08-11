@@ -163,7 +163,11 @@ sneuvelen tijdens gebruik, en het is een paar uur werk.
 
 ## 6. Status
 
-- [ ] Batch 1 — P2/P3
+- [x] Batch 1 — P2/P3 · v1.10.239 / ios-v1.7.204
+      P3 gemeten: 27,0 ms → 2,5 ms per query (10× warm in één proces), 2,55 MB index.
+      Twee tests bewaken het nu, rood-groen bewezen door de migratie tijdelijk uit te zetten.
+      P2 is compile-geverifieerd en de DispatchSource-API empirisch bevestigd; dat de
+      handler onder echte druk vuurt is niet te forceren op deze machine.
 - [ ] Batch 2 — P5/P6
 - [ ] Batch 3 — P4
 - [ ] Batch 4 — P1

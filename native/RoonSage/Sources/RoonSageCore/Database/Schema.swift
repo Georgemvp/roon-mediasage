@@ -744,6 +744,15 @@ enum Schema {
             }
         }
 
+        // The artist grid was the only hot browse query without an index: a full
+        // table SCAN plus a temp B-tree for the GROUP BY. Measured on the real
+        // 87.820-track library (10 warm iterations in one sqlite3 process):
+        // 27,0 ms → 2,5 ms per query, for 2,55 MB of index. Mirrors the existing
+        // idx_tracks_lower_title_artist, which already does this for titles.
+        migrator.registerMigration("v47_artist_index") { db in
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tracks_lower_artist ON tracks(LOWER(artist))")
+        }
+
         try migrator.migrate(db)
     }
 }

@@ -964,4 +964,29 @@ extension RoonClient {
         await sonicCache.invalidate()
     }
 
+    /// Release the sonic caches when the system reports memory pressure.
+    ///
+    /// `VectorIndex` holds a `tracks.count × 512` float matrix resident — on this
+    /// library 58.069 × 512 × 4 B ≈ 113 MB — and it is built CLIENT-side the
+    /// moment you touch Similar, Music Map, Song Paths, Alchemy or a station.
+    /// Nothing ever released it: `invalidate()` only ran on a feature/library
+    /// sync or a manual reload. The image cache already yields under pressure
+    /// (`NSCache` does that by itself); this was the one large allocation that
+    /// did not, which on an iPhone risks being killed mid-listen.
+    ///
+    /// `DispatchSource` rather than `UIApplication.didReceiveMemoryWarning`: it
+    /// works on both platforms and keeps Core free of UIKit. Idempotent.
+    func startMemoryPressureRelief() {
+        guard memoryPressureSource == nil else { return }
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            Log.info("Geheugendruk — sonische caches vrijgegeven", category: .app)
+            Task { await self.invalidateSonicCache() }
+        }
+        source.activate()
+        memoryPressureSource = source
+    }
+
 }
