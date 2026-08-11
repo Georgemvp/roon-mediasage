@@ -531,7 +531,12 @@ public struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Qobuz local streaming (experimental)
+            } // end role == .server
+
+            // Also device-local: `qobuz_local_stream_enabled` is UserDefaults on
+            // THIS device, so behind the server gate a phone could never turn it
+            // on — Qobuz tracks stayed silently skipped there with no way to
+            // change it. The credentials it needs arrive via settings sync.
             Section("Qobuz lokaal streamen (experimenteel)") {
                 Toggle("Qobuz-tracks hier afspelen", isOn: $qbStreamLocal)
                     .onChange(of: qbStreamLocal) { _, v in client.qobuzLocalStreamEnabled = v }
@@ -549,15 +554,9 @@ public struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            LoudnessSettingsSection()
-
-            TranscodeSettingsSection()
-
-            AudioCacheSettingsSection()
-
-            OfflineDownloadsSection()
-
-            // Audio analyzer
+            if role == .server {
+            // Audio analyzer — configures the analyzer host itself, so it stays
+            // server-only; a client receives the results through settings sync.
             Section("Audio-analyzer (BPM / toonsoort / tags)") {
                 LabeledContent("Analyzer-URL") {
                     TextField("http://10.94.184.22:5766", text: $analyzerURL)
@@ -588,6 +587,21 @@ public struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             } // end role == .server
+
+            // Playback on THIS device — deliberately outside the server gate.
+            //
+            // These four sat inside `role == .server`, so on a phone (always
+            // `.client`) they were invisible: loudness levelling, the cellular
+            // AAC transcode, the audio cache and offline downloads were all
+            // hidden on the one device they exist for. Nothing here configures
+            // the server; every setting is about how audio plays right here.
+            LoudnessSettingsSection()
+
+            TranscodeSettingsSection()
+
+            AudioCacheSettingsSection()
+
+            OfflineDownloadsSection()
 
             // About
             Section("Over") {

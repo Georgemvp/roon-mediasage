@@ -42,6 +42,16 @@ NU (2026-08-10): **LOKAAL AFSPELEN IS EEN VOLWAARDIGE UITVOER** (user: "Local pl
 - **Afspeel-cache J1** (v1.10.229): `LocalAudioCache`, gekeyd op match key + transcode-profiel, niet op de URL (die draagt een roterend token en wisselt van host tussen LAN en ZeroTier). Vulling is een tweede fetch, overgeslagen op een expensive path. Standaard 2 GB, instelbaar.
 - **`native/docs/JELLYFIN_AUDIT.md`**: 9 gaten, 6 batches. Batch 1 (J1 + J9) hiermee klaar.
 
+**DE AFSPEELINSTELLINGEN WAREN ONZICHTBAAR OP DE TELEFOON (2026-08-11, v1.10.257 / ios-v1.7.222).** User stuurde drie screenshots van Instellingen op ios-v1.7.221 met de vraag "Dit is wat ik zie qua instellingen?" — en de sectie "Onderweg streamen" die ik hem een uur eerder had beschreven, stond er niet. **OORZAAK:** `SettingsView` heeft één groot blok `if role == .server { … }` (regel 280–590), en `SettingsView()` gebruikt standaard `.client`. Op de telefoon viel dat blok dus volledig weg — **inclusief `LoudnessSettingsSection`, `TranscodeSettingsSection`, `AudioCacheSettingsSection` en `OfflineDownloadsSection`**. Vier secties die uitsluitend over afspelen op *dit apparaat* gaan, verborgen op het enige apparaat waar ze toe doen. Het HE-AAC-werk van diezelfde dag was daarmee onbereikbaar voor de gebruiker.
+
+Alle vier staan nu buiten de poort, plus **"Qobuz lokaal streamen"** — die schrijft naar `qobuz_local_stream_enabled`, device-lokale UserDefaults, dus op de telefoon kon je hem nooit aanzetten en werden Qobuz-tracks daar stilzwijgend overgeslagen. De analyzer-sectie blijft bewust server-only (die configureert de analyzer-host zelf).
+
+**Gecontroleerd op de voor de hand liggende vervolgfout:** `SyncableSettings` bevat géén van deze sleutels, dus een settings-sync vanaf de Mac overschrijft de keuze op de telefoon niet.
+
+**LES:** een rolpoort van 300 regels is te grof. Het onderscheid dat telt is niet "server of client" maar "configureert dit de server, of hoe het hier klinkt" — en die twee lopen dwars door elkaar heen in dit scherm.
+
+**Verified: 915 tests 0 failures · release-build exit 0 · iOS simulator BUILD SUCCEEDED · localisatiepoort schoon.** **NIET geverifieerd: of de secties nu daadwerkelijk op het toestel verschijnen** — dat vraagt de TestFlight-build.
+
 **CORE PRAAT NU DE TAAL VAN DE APP (2026-08-11, v1.10.256 / ios-v1.7.221).** Punt 2 van de drie openstaande zaken hieronder. Core kan `LS` niet aanroepen — de catalogus is een resource van `RoonSageUI` en Core ligt eronder — dus stonden er hardgecodeerde Nederlandse zinnen in, die een Engelstalige app gewoon in het Nederlands toonde. En de lokalisatiepoort zag er niets van, want het zijn geen sleutels.
 
 **Mechanisme:** `CoreStrings` met een geïnjecteerde vertaler (`register` vanuit `ContentView.init`, vóór de eerste view die een fout kan maken). **Elke aanroep draagt zijn Nederlandse tekst als fallback**, dus een gemiste registratie degradeert naar het huidige gedrag in plaats van naar ruwe sleutels op het scherm — precies de fout die de screenshot van 10-08 liet zien. 22 sleutels, 16 `ActionError`-plekken plus de spelerfouten. **Bewust NIET omgezet:** logregels (`LibraryShareServer`, `QobuzClient`), de deel-teksten ("Op deze dag" gaat naar andere mensen), en de Last.fm-*statusregels* — dat is een statuslabel, geen fouttoast, en er zitten meerdere interpolaties in.
