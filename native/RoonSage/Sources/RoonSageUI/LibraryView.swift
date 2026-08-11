@@ -1018,9 +1018,21 @@ struct SyncProgressBanner: View {
 // MARK: - Track row (with audio features)
 
 struct LibraryTrackRow: View {
+    @Environment(RoonClient.self) private var client
     let track: DatabaseManager.LibraryTrackRow
     let canPlay: Bool
     let onPlay: () -> Void
+
+    /// Downloaded rows carry a small mark. Read from the in-memory key set, not
+    /// the filesystem — a list must never stat per row.
+    private var isDownloaded: Bool {
+        client.offlineKeys.contains(LocalPlayability.matchKey(for: asRecordStatic(track)))
+    }
+
+    private func asRecordStatic(_ t: DatabaseManager.LibraryTrackRow) -> TrackRecord {
+        TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album,
+                    year: t.year, isLive: t.isLive, imageKey: t.imageKey)
+    }
 
     public var body: some View {
         HStack(spacing: 10) {
@@ -1034,6 +1046,12 @@ struct LibraryTrackRow: View {
                     }
                     if let y = track.year {
                         Text(String(y)).font(.caption).foregroundStyle(.tertiary)
+                    }
+                    if isDownloaded {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(Color.roonGold)
+                            .accessibilityLabel(LS("downloads.availableOffline"))
                     }
                 }
                 HStack(spacing: 6) {

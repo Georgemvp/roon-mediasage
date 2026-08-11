@@ -846,8 +846,12 @@ struct OfflineDownloadsSection: View {
                 }
                 Button(LS("downloads.cancel"), role: .cancel) { client.cancelDownloads() }
             }
-            LabeledContent(LS("downloads.onDevice"),
-                           value: "\(count) · \(Self.sizeFormatter.string(fromByteCount: Int64(sizeBytes)))")
+            NavigationLink {
+                DownloadsView()
+            } label: {
+                LabeledContent(LS("downloads.onDevice"),
+                               value: "\(count) · \(Self.sizeFormatter.string(fromByteCount: Int64(sizeBytes)))")
+            }
             Button(LS("downloads.removeAll"), role: .destructive) {
                 Task { await client.removeAllOfflineTracks(); await refresh() }
             }

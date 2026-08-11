@@ -843,9 +843,15 @@
 "output.thisMac"    = "Deze Mac";
 
 /* downloads */
+"downloads.availableOffline" = "Offline beschikbaar";
 "downloads.cancel" = "Stop met downloaden";
+"downloads.emptyDescription" = "Kies “Bewaar op dit apparaat” bij een album of nummer om het mee te nemen.";
+"downloads.emptyTitle" = "Nog niets gedownload";
 "downloads.explainer" = "Gedownloade nummers spelen zonder server en zonder bereik. Ze worden nooit automatisch opgeruimd — alleen jij haalt ze weg.";
 "downloads.onDevice" = "Op dit apparaat";
+"downloads.playAll" = "Speel alle downloads";
 "downloads.removeAll" = "Alle downloads verwijderen";
 "downloads.saveOnDevice" = "Bewaar op dit apparaat";
 "downloads.sectionTitle" = "Downloads";
+"downloads.trackPlural" = "nummers";
+"downloads.trackSingular" = "nummer";
