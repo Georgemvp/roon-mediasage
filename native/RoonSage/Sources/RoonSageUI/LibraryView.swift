@@ -1017,6 +1017,13 @@ struct SyncProgressBanner: View {
 
 // MARK: - Track row (with audio features)
 
+/// `@MainActor` is explicit here, not inferred: `isDownloaded` below is a plain
+/// computed property, not `body`, so it does not get the isolation SwiftUI gives
+/// `body` by protocol. Without the annotation it reads main-actor state from a
+/// nonisolated context — which my local Swift (6.3.2) accepts and the CI runner's
+/// older toolchain rejects. Annotate any view that touches client state outside
+/// `body`; local builds cannot be trusted to catch it.
+@MainActor
 struct LibraryTrackRow: View {
     @Environment(RoonClient.self) private var client
     let track: DatabaseManager.LibraryTrackRow

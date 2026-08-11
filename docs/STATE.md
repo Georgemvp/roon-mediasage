@@ -49,6 +49,12 @@ NU (2026-08-10): **LOKAAL AFSPELEN IS EEN VOLWAARDIGE UITVOER** (user: "Local pl
 
 **CI-les:** v1.10.228's DMG-job faalde op `hdiutil: create failed - Resource busy` in stap 5 (build, signing en notarisatie wél geslaagd). Re-run van dezelfde commit slaagde → timing, geen inhoud. `build-release.sh` probeert nu 3× met backoff + detach van een blijven hangen volume. **Let op het onderscheid:** de eerdere DMG-mislukkingen (v1.10.223/.224/.201/.202) waren compileerfouten omdat CI strenger is dan een lokale debug-build — daarvoor is `swift build -c release -Xswiftc -swift-version -Xswiftc 6` de poort, en die is deze keer wél gedraaid.
 
+**CI-LES 2026-08-11 (twee keer op deze rake gelopen).** Een SwiftUI-view die client-state leest BUITEN `body` — een gewone computed property, niet `body` zelf — krijgt geen main-actor-isolatie van het View-protocol. Lokaal (Swift 6.3.2) wordt dat geaccepteerd, de CI-runner heeft een oudere toolchain en weigert het: *"main actor-isolated property … can not be referenced from a non-isolated context"*.
+
+**Belangrijk: `swift build -c release -Xswiftc -swift-version -Xswiftc 6` vangt dit NIET.** Gemeten: noch de gewone release-build, noch de Swift 6-poort geeft lokaal een fout op code die op CI breekt. Die poort is nuttig voor andere concurrency-klassen, maar niet voor deze. Lokaal reproduceren lukt hier dus niet.
+
+**Regel in plaats van poort:** zet expliciet `@MainActor` op elke nieuwe view die client-state buiten `body` aanraakt. Views die `client.…` alleen in `body` lezen zijn wél veilig — daar geeft het protocol de isolatie. Van de negen views in RoonSageUI zonder annotatie was er precies één stuk (`LibraryTrackRow`, na het toevoegen van een `isDownloaded`-property); de rest lezen alleen in `body` en compileren al maanden.
+
 **LOCAL-FIRST-PROGRAMMA AFGEROND 2026-08-11 (user: "Doe alles") — t/m v1.10.234 / ios-v1.7.199, gepusht, alle workflows groen.**
 
 Aanleiding: twee user-meldingen met screenshots (mini-speler prees een zone aan; een stopknop zette de uitvoer weg) bleken hetzelfde patroon. `native/docs/LOCAL_FIRST_AUDIT.md` maakte er 6 gaten en 4 batches van; alle vier geshipt.
