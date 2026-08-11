@@ -819,6 +819,7 @@ public struct SettingsView: View {
 ///
 /// Distinct from the cache below it — that fills itself with whatever you played
 /// and is pruned; this is explicit, lives outside Caches/, and only you remove it.
+@MainActor
 struct OfflineDownloadsSection: View {
     @Environment(RoonClient.self) private var client
     @State private var sizeBytes = 0

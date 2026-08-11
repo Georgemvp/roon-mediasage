@@ -13,6 +13,7 @@ import SwiftUI
 /// to trigger it programmatically, so the real view has to be on screen. It only
 /// affects THIS device's audio session — a Roon zone is routed by Roon, which is
 /// why the button hides when a zone is the active output.
+@MainActor
 struct AirPlayRouteButton: View {
     @Environment(RoonClient.self) private var client
 
