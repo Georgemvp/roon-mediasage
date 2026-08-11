@@ -443,6 +443,10 @@
 "library.searchArtists"          = "Zoek op artiest…";
 "library.searchOverview"         = "Zoek in je bibliotheek…";
 "library.searchTracks"           = "Zoek op titel, artiest of album…";
+"search.noResultsBody"           = "Niets in je bibliotheek komt overeen met \u201C%@\u201D.";
+"search.noResultsTitle"          = "Geen resultaten";
+"search.showAll"                 = "Toon alle %@";
+"search.trySonic"                = "Zoek sonisch naar \u201C%@\u201D";
 "library.select"                 = "Selecteer";
 "library.selectMultiple"         = "Selecteer meerdere";
 "library.selectMultipleAlbums"   = "Selecteer meerdere albums";

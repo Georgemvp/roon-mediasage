@@ -443,6 +443,10 @@
 "library.searchArtists"          = "Search by artist…";
 "library.searchOverview"         = "Search your library…";
 "library.searchTracks"           = "Search by title, artist or album…";
+"search.noResultsBody"           = "Nothing in your library matches \u201C%@\u201D.";
+"search.noResultsTitle"          = "No results";
+"search.showAll"                 = "Show all %@";
+"search.trySonic"                = "Search sonically for \u201C%@\u201D";
 "library.select"                 = "Select";
 "library.selectMultiple"         = "Select multiple";
 "library.selectMultipleAlbums"   = "Select multiple albums";

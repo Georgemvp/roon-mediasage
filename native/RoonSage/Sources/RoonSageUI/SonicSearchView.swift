@@ -11,9 +11,21 @@ import SwiftUI
 @MainActor
 public struct SonicSearchView: View {
     public init() {}
+
+    /// Opened with words already typed elsewhere — the library's search box
+    /// hands its query over, so a literal-match miss doesn't mean retyping it
+    /// into a second search screen (readiness P7: "too many doors").
+    public init(initialQuery: String) {
+        _query = State(initialValue: initialQuery)
+        _autoRun = State(initialValue: !initialQuery.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
+
     @Environment(RoonClient.self) private var client
 
     @State private var query = ""
+    /// Run once on appear when handed a query, then never again — from that
+    /// point the search box is the user's.
+    @State private var autoRun = false
     @State private var results: [SonicEngine.Scored] = []
     @State private var lyricsHits: [DatabaseManager.LyricsSearchHit] = []   // gap C
     @State private var loading = false
@@ -54,6 +66,11 @@ public struct SonicSearchView: View {
             }
         }
         .navigationTitle(LS("nav.sonicSearch"))
+        .onAppear {
+            guard autoRun else { return }
+            autoRun = false
+            runSearch()
+        }
     }
 
     private var searchBar: some View {

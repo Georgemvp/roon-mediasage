@@ -15,6 +15,9 @@ public struct LibraryView: View {
     @State private var isLoadingGrid = false
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
+    /// Combined artist/album/track results for the overview's search box (P7).
+    /// nil = not searching; non-nil and empty = searched, found nothing.
+    @State private var unified: RoonClient.SearchResults?
     @State private var sort: SortField = .title
     @State private var viewMode: ViewMode = .overview
     /// Grid filter: only starred albums/artists (LMS "Starred" browse mode).
@@ -201,9 +204,10 @@ public struct LibraryView: View {
             #endif
         }
         .onChange(of: searchText) { _, _ in
-            // Searching in the overview jumps to the track browser — the overview has
-            // no result list of its own. Clearing search stays put (less surprising).
-            if !searchText.isEmpty, viewMode == .overview { viewMode = .tracks }
+            // No mode switch any more: the overview shows a combined result of
+            // its own, so you can find an album without first knowing to go to
+            // the album tab and typing it again.
+            if !isSearchActive { unified = nil }
             isSearching = true
             searchTask?.cancel()
             searchTask = Task {
@@ -281,11 +285,17 @@ public struct LibraryView: View {
     @ViewBuilder
     private var modeContent: some View {
         switch viewMode {
-        case .overview: overviewContent
+        // Searching from the overview no longer throws you into the track list:
+        // the overview IS the combined result now (P7).
+        case .overview: if isSearchActive { unifiedResults } else { overviewContent }
         case .tracks:  tracksContent
         case .albums:  albumsContent
         case .artists: artistsContent
         }
+    }
+
+    private var isSearchActive: Bool {
+        !searchText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     @ViewBuilder
@@ -573,7 +583,17 @@ public struct LibraryView: View {
     /// Loads data for whichever browse mode is active.
     private func reloadContent() {
         switch viewMode {
-        case .overview: loadOverview()
+        case .overview:
+            if isSearchActive {
+                loadUnified()
+            } else {
+                // `loadOverview` returns early once loaded, so it can't be the
+                // one to clear the spinner — clearing the search box would leave
+                // it turning forever. (Couldn't happen before: searching used to
+                // switch you to the track list, whose reload always cleared it.)
+                isSearching = false
+                loadOverview()
+            }
         case .tracks:  reloadTracks()
         case .albums:  loadAlbums()
         case .artists: loadArtists()
@@ -759,6 +779,158 @@ public struct LibraryView: View {
         } else {
             ContentUnavailableView(LS("library.notConnected"), systemImage: "wifi.slash",
                 description: LT("library.connectFirst"))
+        }
+    }
+
+    // MARK: - Combined search results
+
+    /// One search box, all three kinds at once (readiness P7).
+    ///
+    /// Before this, typing in the overview jumped you to the track list, so
+    /// finding an *album* meant knowing to switch to the album tab first and
+    /// search again. Three separate audits called that out. The sections are
+    /// capped at five and re-ranked by `UnifiedSearch` — see there for why the
+    /// alphabetical SQL order made a naive cap actively wrong.
+    @ViewBuilder
+    private var unifiedResults: some View {
+        if isSearching && unified == nil {
+            SkeletonRows()
+        } else if let unified, unified.isEmpty {
+            ContentUnavailableView {
+                Label(LS("search.noResultsTitle"), systemImage: "magnifyingglass")
+            } description: {
+                Text(String(format: LS("search.noResultsBody"), searchText))
+            } actions: {
+                // A literal miss is exactly when the sonic engine is worth
+                // trying — "dreamy late-night piano" matches no title anywhere.
+                sonicHandoff
+            }
+        } else if let unified {
+            List {
+                if !unified.artists.isEmpty {
+                    Section(LS("bm.section.artists")) {
+                        ForEach(unified.artists) { artist in
+                            NavigationLink(value: artist) { searchRow(
+                                artist.imageKey, title: artist.name, subtitle: artistSubtitle(artist),
+                                circular: true) }
+                        }
+                        showAllRow(.artists, shown: unified.artists.count)
+                    }
+                }
+                if !unified.albums.isEmpty {
+                    Section(LS("bm.section.albums")) {
+                        ForEach(unified.albums) { album in
+                            NavigationLink(value: album) { searchRow(
+                                album.imageKey, title: album.album, subtitle: albumSubtitle(album)) }
+                        }
+                        showAllRow(.albums, shown: unified.albums.count)
+                    }
+                }
+                if !unified.tracks.isEmpty {
+                    Section(LS("library.tracks")) {
+                        ForEach(unified.tracks, id: \.id) { track in
+                            Button {
+                                play([track])
+                            } label: {
+                                searchRow(track.imageKey, title: track.title,
+                                          subtitle: trackSubtitle(track))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!client.hasActiveOutput)
+                            .contextMenu { PlayActionsMenu(fetch: { [track] }) }
+                        }
+                        showAllRow(.tracks, shown: unified.tracks.count)
+                    }
+                }
+                Section { sonicHandoff }
+            }
+            .listStyle(.plain)
+        }
+    }
+
+    /// The same words, handed to the CLAP engine. `SonicSearchView` was a
+    /// separate door you had to know about and retype into; now the library's
+    /// search box opens it pre-filled and it runs on appear.
+    private var sonicHandoff: some View {
+        NavigationLink {
+            SonicSearchView(initialQuery: searchText)
+        } label: {
+            Label(String(format: LS("search.trySonic"), searchText), systemImage: "sparkle.magnifyingglass")
+                .font(.subheadline)
+        }
+    }
+
+    /// "Toon alles" — the combined view answers "which did you mean"; the
+    /// per-kind screen has the full list, with the query carried over.
+    ///
+    /// Only when the section filled up, because a capped section is the only
+    /// case where results may be hidden. Offering "show all albums" under a
+    /// single album is the kind of pointless chrome this screen was just
+    /// cleaned of.
+    @ViewBuilder
+    private func showAllRow(_ mode: ViewMode, shown: Int) -> some View {
+        if shown >= UnifiedSearch.sectionLimit {
+            showAllButton(mode)
+        }
+    }
+
+    private func showAllButton(_ mode: ViewMode) -> some View {
+        Button { viewMode = mode } label: {
+            HStack {
+                Text(String(format: LS("search.showAll"), mode.label.lowercased()))
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+            }
+            .font(.subheadline)
+        }
+    }
+
+    private func searchRow(_ imageKey: String?, title: String, subtitle: String,
+                           circular: Bool = false) -> some View {
+        HStack(spacing: Spacing.md) {
+            AlbumArtView(imageKey: imageKey, size: 44, cornerRadius: circular ? 22 : Radius.sm)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).lineLimit(1)
+                if !subtitle.isEmpty {
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(subtitle.isEmpty ? title : "\(title), \(subtitle)")
+    }
+
+    private func artistSubtitle(_ a: DatabaseManager.ArtistResult) -> String {
+        "\(a.albumCount) album\(a.albumCount == 1 ? "" : "s") · \(a.trackCount) \(LS("library.tracks").lowercased())"
+    }
+
+    private func albumSubtitle(_ album: DatabaseManager.AlbumResult) -> String {
+        var parts: [String] = []
+        if let a = album.artist, !a.isEmpty { parts.append(a) }
+        if let y = album.year { parts.append(String(y)) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func trackSubtitle(_ t: TrackRecord) -> String {
+        [t.artist, t.album].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// Runs the combined query. Guarded on the query text so a slow read for an
+    /// older keystroke can't overwrite the results of a newer one.
+    private func loadUnified() {
+        let q = searchText
+        guard !q.trimmingCharacters(in: .whitespaces).isEmpty else {
+            unified = nil
+            isSearching = false
+            return
+        }
+        Task {
+            let results = await client.searchEverything(query: q)
+            guard q == searchText else { return }
+            unified = results
+            isSearching = false
         }
     }
 

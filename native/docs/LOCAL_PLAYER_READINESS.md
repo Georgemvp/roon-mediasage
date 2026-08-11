@@ -168,11 +168,22 @@ sneuvelen tijdens gebruik, en het is een paar uur werk.
       Twee tests bewaken het nu, rood-groen bewezen door de migratie tijdelijk uit te zetten.
       P2 is compile-geverifieerd en de DispatchSource-API empirisch bevestigd; dat de
       handler onder echte druk vuurt is niet te forceren op deze machine.
-- [ ] Batch 2 — P5/P6
-- [ ] Batch 3 — P4
-- [ ] Batch 4 — P1
-- [ ] Batch 5 — P7
-- [ ] Backlog — P8/P9
+- [x] Batch 2 — P5/P6 · AirPlay-routekiezer (`AirPlayRouteButton`) + volume-ramp bij
+      pauze/stop/slaaptimer (`LocalPlayback.fade(to:over:then:)`). Echte crossfade
+      bewust niet: die deelt de motorombouw met P8.
+- [x] Batch 3 — P4 · per-item `AVAudioMix`, zodat de loudness-gain met het item
+      meereist in plaats van met de speler. **Of de klik weg is, is ongehoord.**
+- [x] Batch 4 — P1 · `RoonClient+Downloads` + `DownloadsView`; twee tiers, pinned
+      bestanden in Application Support en nooit gesnoeid.
+- [x] Batch 5 — P7 · v1.10.255 / ios-v1.7.220. Eén zoekbalk voor artiest/album/track,
+      plus de doorgeefrij naar sonisch zoeken. **De vondst zat niet in de UI maar in de
+      SQL:** `searchAlbums`/`searchArtists` sorteren `ORDER BY artist, year, album`,
+      dus alfabetisch. Een sectie op vijf afkappen liet de exacte treffer wegvallen —
+      "Dire Straits" stond achter "Alchemy: Dire Straits Live". `UnifiedSearch` haalt nu
+      120 kandidaten op en herordent op relevantie (exact > prefix > woord-prefix >
+      bevat), stabiel zodat de lijst niet flikkert tijdens typen.
+- [ ] Backlog — P8 (EQ + echte crossfade, samen; tweede motorombouw naar
+      `AVAudioEngine`). P9 is af via de offline-banner.
 
 ## 7. Nog altijd niet geverifieerd (vraagt een toestel)
 

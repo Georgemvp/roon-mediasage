@@ -356,6 +356,43 @@ extension RoonClient {
         return (try? await db.searchArtists(query: query, limit: limit, offset: offset)) ?? []
     }
 
+    /// One query, all three kinds — the single search entry from readiness P7.
+    ///
+    /// Every section over-fetches and is then re-ranked by `UnifiedSearch`,
+    /// because `searchAlbums`/`searchArtists` order alphabetically: capping an
+    /// A–Z list at five can drop the exact match. Tracks already come back in
+    /// FTS rank order, but they go through the same ranking so that an exact
+    /// title beats a track whose *album* merely contains the word.
+    public struct SearchResults: Sendable {
+        public var artists: [DatabaseManager.ArtistResult] = []
+        public var albums: [DatabaseManager.AlbumResult] = []
+        public var tracks: [TrackRecord] = []
+        public var isEmpty: Bool { artists.isEmpty && albums.isEmpty && tracks.isEmpty }
+        /// What the "no results" state should count.
+        public var total: Int { artists.count + albums.count + tracks.count }
+    }
+
+    public func searchEverything(query: String,
+                                 limit: Int = UnifiedSearch.sectionLimit) async -> SearchResults {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let db = database else { return SearchResults() }
+        let pool = UnifiedSearch.candidatePool
+
+        // Concurrently: three independent reads on a WAL pool, so serialising
+        // them would just add their latencies together for no benefit.
+        async let artistsTask = (try? await db.searchArtists(query: trimmed, limit: pool)) ?? []
+        async let albumsTask = (try? await db.searchAlbums(query: trimmed, limit: pool)) ?? []
+        async let tracksTask = (try? await db.searchTracks(query: trimmed, limit: pool)) ?? []
+        let (rawArtists, rawAlbums, rawTracks) = await (artistsTask, albumsTask, tracksTask)
+
+        return SearchResults(
+            artists: UnifiedSearch.rank(rawArtists, query: trimmed, limit: limit) { [$0.name] },
+            albums: UnifiedSearch.rank(rawAlbums, query: trimmed, limit: limit) { [$0.album, $0.artist] },
+            tracks: UnifiedSearch.rank(rawTracks, query: trimmed, limit: limit) {
+                [$0.title, $0.artist, $0.album]
+            })
+    }
+
     public func albumsByArtist(_ name: String) async -> [DatabaseManager.AlbumResult] {
         guard let db = database else { return [] }
         return (try? await db.albumsByArtist(name)) ?? []
