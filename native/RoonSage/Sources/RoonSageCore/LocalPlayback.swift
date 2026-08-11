@@ -138,6 +138,15 @@ public final class LocalPlaybackController {
     @ObservationIgnored private var scheduled: [(index: Int, item: AVPlayerItem, hasMix: Bool)] = []
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var currentItemObserver: NSKeyValueObservation?
+    /// True while `load` is tearing the player down and refilling it.
+    ///
+    /// `removeAllItems()` drives `currentItem` to nil SYNCHRONOUSLY, which fires
+    /// the observer below, which reads nil as "the queue ran dry" and calls
+    /// `stop()` — emptying `queue` out from under the rest of `load`, which then
+    /// subscripts it and crashes. Fresh playback never hit it (an empty player's
+    /// `currentItem` doesn't change), so it only bit when switching tracks WHILE
+    /// something was already playing: jumping in the queue, Journey, Play this mix.
+    @ObservationIgnored private var isRebuilding = false
     /// Watches the current item's `status` so a server-side failure surfaces as a
     /// visible error instead of a silent "engaged but no sound".
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
@@ -495,6 +504,11 @@ public final class LocalPlaybackController {
     // boundary with no reload. That path is the gapless one.
 
     private func load(index i: Int, autoPlay: Bool) {
+        guard queue.indices.contains(i) else { return }
+        #if canImport(AVFoundation)
+        isRebuilding = true
+        defer { isRebuilding = false }
+        #endif
         index = i
         positionSec = 0
         durationSec = queue.indices.contains(i) ? (queue[i].durationSec ?? 0) : 0
@@ -540,7 +554,9 @@ public final class LocalPlaybackController {
     /// ran dry. A hard `load` also triggers this, but there the item is already
     /// the head, so it's a no-op beyond re-scheduling.
     private func handleCurrentItemChanged(to item: AVPlayerItem?) {
-        guard isEngaged else { return }
+        // Ignore the churn `load` causes while it swaps items; only a genuine
+        // handover or a queue that really ran dry should be acted on.
+        guard isEngaged, !isRebuilding else { return }
         guard let item else {
             // Nothing left to play: the last track finished with no follower.
             stop()
