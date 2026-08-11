@@ -157,7 +157,8 @@ struct SimilarTracksView: View {
     }
 
     private static func record(_ t: DatabaseManager.SonicTrack) -> TrackRecord {
-        TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album)
+        TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album,
+                    imageKey: t.imageKey)
     }
 }
 

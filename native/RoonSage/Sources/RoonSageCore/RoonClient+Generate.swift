@@ -505,6 +505,18 @@ extension RoonClient {
             if filtered.count >= minPool { let dropped = pool.count - filtered.count; pool = filtered; trace?.kvIf("dislike-drop", dropped > 0 ? "\(dropped) tracks van \(disliked.count) artiesten" : "") }
         }
 
+        // Seasonal guard: nothing above excludes Christmas, and a Bublé holiday
+        // track is genuinely easy-listening/relaxed/chill — so it passed every
+        // gate into a playlist for sitting in the sun. Only drops when the
+        // request didn't ask for the season.
+        let seasonal = SeasonalFilter.filter(
+            pool, prompt: request, keepIfFewerThan: minPool,
+            title: { $0.title }, album: { $0.album }, genres: { _ in [] })
+        if seasonal.dropped > 0 {
+            pool = seasonal.kept
+            trace?.kv("seizoensfilter", "\(seasonal.dropped) kersttracks weg → \(pool.count)")
+        }
+
         // QW3/M1 — rank the pool with the radio engine around the request's CLAP
         // embedding (multi-anchor relevance, taste steering, MMR near-dup drop,
         // adventurousness), THEN cap. Falls back to a shuffle when embeddings or

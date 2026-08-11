@@ -188,6 +188,6 @@ extension RoonClient {
 
     private static func record(_ t: DatabaseManager.LibraryTrackRow) -> TrackRecord {
         TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album,
-                    year: t.year, isLive: t.isLive)
+                    year: t.year, isLive: t.isLive, imageKey: t.imageKey)
     }
 }

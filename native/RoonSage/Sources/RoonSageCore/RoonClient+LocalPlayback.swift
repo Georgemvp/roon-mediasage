@@ -194,7 +194,7 @@ extension RoonClient {
     /// Map a library-track row to a `TrackRecord` for local playback.
     private func record(_ t: DatabaseManager.LibraryTrackRow) -> TrackRecord {
         TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album,
-                    year: t.year, isLive: t.isLive)
+                    year: t.year, isLive: t.isLive, imageKey: t.imageKey)
     }
 
     // `playAlbumLocally` / `playArtistLocally` used to live here as the on-device

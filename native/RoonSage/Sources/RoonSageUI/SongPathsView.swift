@@ -169,7 +169,8 @@ public struct SongPathsView: View {
     private var pathRecords: [TrackRecord] {
         path.map {
             TrackRecord(id: $0.track.id, title: $0.track.title,
-                        artist: $0.track.artist, album: $0.track.album)
+                        artist: $0.track.artist, album: $0.track.album,
+                        imageKey: $0.track.imageKey)
         }
     }
 

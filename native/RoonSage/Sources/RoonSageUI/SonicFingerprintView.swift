@@ -284,7 +284,8 @@ public struct SonicFingerprintView: View {
     // MARK: - Helpers
 
     private func asTracks(_ scored: [SonicEngine.Scored]) -> [TrackRecord] {
-        scored.map { TrackRecord(id: $0.track.id, title: $0.track.title, artist: $0.track.artist, album: $0.track.album) }
+        scored.map { TrackRecord(id: $0.track.id, title: $0.track.title, artist: $0.track.artist, album: $0.track.album,
+                        imageKey: $0.track.imageKey) }
     }
 
     private func percent(_ v: Double) -> String { "\(Int((v * 100).rounded()))%" }

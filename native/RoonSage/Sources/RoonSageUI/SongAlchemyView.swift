@@ -202,7 +202,8 @@ public struct SongAlchemyView: View {
     private var topRecords: [TrackRecord] {
         results.prefix(20).map {
             TrackRecord(id: $0.track.id, title: $0.track.title,
-                        artist: $0.track.artist, album: $0.track.album)
+                        artist: $0.track.artist, album: $0.track.album,
+                        imageKey: $0.track.imageKey)
         }
     }
 

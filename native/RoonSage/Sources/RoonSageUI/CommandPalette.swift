@@ -249,7 +249,8 @@ struct CommandPaletteView: View {
     private func playTrack(_ t: DatabaseManager.LibraryTrackRow) {
         guard let zone = client.selectedZone?.id else { return }
         Haptics.tap()
-        let rec = TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album, year: t.year, isLive: t.isLive)
+        let rec = TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album,
+                              year: t.year, isLive: t.isLive, imageKey: t.imageKey)
         Task { await client.curateTracks([rec], zoneID: zone) }
     }
 

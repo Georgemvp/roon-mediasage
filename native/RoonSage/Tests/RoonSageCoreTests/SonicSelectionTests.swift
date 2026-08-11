@@ -13,6 +13,36 @@ final class SonicSelectionTests: XCTestCase {
         VectorIndex(tracks: tracks)!
     }
 
+    /// Four artists covering one song filled a fifth of a 20-track playlist.
+    /// `metaKey` is title|artist, so each cover had a different key and none
+    /// deduped — and the embedding check can't help, because a jazz cover and a
+    /// lofi cover genuinely sound different. One per song, whoever plays it.
+    func testKeepsOnlyOneVersionOfTheSameSongAcrossArtists() {
+        let a = track("a", title: "Sultans of Swing", artist: "Dire Straits", emb: [1, 0, 0])
+        let b = track("b", title: "Sultans of Swing", artist: "Jose Maria Nieto", emb: [0, 1, 0])
+        let c = track("c", title: "Sultans of Swing", artist: "Pericopes", emb: [0, 0, 1])
+        let other = track("d", title: "Down Under", artist: "Men at Work", emb: [0.7, 0.7, 0])
+        let idx = index([a, b, c, other])
+        let hits = [a, b, c, other].map { VectorIndex.Hit(track: $0, score: 1) }
+        let kept = SonicSelection.dropNearDuplicates(hits, index: idx, limit: 10)
+        XCTAssertEqual(kept.map { $0.track.id }, ["a", "d"],
+                       "three covers of one song must not survive alongside it")
+    }
+
+    /// Where the one-per-song rule deliberately STOPS. `TrackIdentity.cleanTitle`
+    /// keeps "Live"/"Remix"/"Edit" on purpose — a live take is a different
+    /// recording, not another pressing of the same one — so both survive. This
+    /// pins that boundary so a future widening of cleanTitle can't silently
+    /// swallow live versions.
+    func testALiveVersionCountsAsItsOwnSong() {
+        let a = track("a", title: "Sultans of Swing", artist: "Dire Straits", emb: [1, 0, 0])
+        let b = track("b", title: "Sultans of Swing (Live)", artist: "Dire Straits", emb: [0, 1, 0])
+        let idx = index([a, b])
+        let kept = SonicSelection.dropNearDuplicates(
+            [a, b].map { VectorIndex.Hit(track: $0, score: 1) }, index: idx, limit: 10)
+        XCTAssertEqual(kept.map { $0.track.id }, ["a", "b"])
+    }
+
     func testDropsEmbeddingNearDuplicate() {
         // Same recording on an album and a compilation: nearly identical vectors,
         // different titles (remaster suffix) so metadata doesn't catch it.

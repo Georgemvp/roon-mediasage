@@ -1,4 +1,5 @@
 import Accelerate
+import AudioAnalysis
 import Foundation
 
 /// Shared post-selection hygiene for embedding-ranked track lists (LMS-style
@@ -29,13 +30,24 @@ public enum SonicSelection {
         var kept: [VectorIndex.Hit] = []
         var keptVecs: [[Float]] = []
         var keptMetaKeys = Set<String>()
+        // Same SONG by different artists. `metaKey` is title|artist, so four
+        // covers of "Sultans of Swing" produced four different keys and none of
+        // them deduped — and the embedding check can't help, because a jazz cover
+        // and a lofi cover genuinely sound different. One per song title is the
+        // right call for a playlist: the rare loss (two unrelated songs sharing a
+        // title) beats four versions of one.
+        var keptTitleKeys = Set<String>()
         kept.reserveCapacity(min(limit, hits.count))
         for h in hits {
             if kept.count >= limit { break }
             let meta = metaKey(h.track)
             if !meta.isEmpty, keptMetaKeys.contains(meta) { continue }
+            let songKey = titleKey(h.track)
+            if !songKey.isEmpty, keptTitleKeys.contains(songKey) { continue }
             guard let v = index.embedding(forId: h.track.id) else {
-                kept.append(h); if !meta.isEmpty { keptMetaKeys.insert(meta) }
+                kept.append(h)
+                if !meta.isEmpty { keptMetaKeys.insert(meta) }
+                if !songKey.isEmpty { keptTitleKeys.insert(songKey) }
                 continue
             }
             var isDup = false
@@ -44,8 +56,16 @@ public enum SonicSelection {
             kept.append(h)
             keptVecs.append(v)
             if !meta.isEmpty { keptMetaKeys.insert(meta) }
+            if !songKey.isEmpty { keptTitleKeys.insert(songKey) }
         }
         return kept
+    }
+
+    /// The song, independent of who performs it. Edition suffixes are stripped
+    /// via `TrackIdentity.cleanTitle`, so "Sultans of Swing (Live)" and
+    /// "Sultans of Swing" count as the same song.
+    static func titleKey(_ t: DatabaseManager.SonicTrack) -> String {
+        TrackIdentity.cleanTitle(t.title).lowercased().trimmingCharacters(in: .whitespaces)
     }
 
     static func metaKey(_ t: DatabaseManager.SonicTrack) -> String {

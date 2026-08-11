@@ -153,7 +153,8 @@ public enum DiscoverWeekly {
         // (one track per artist before any artist's second, dup-version collapse).
         let byId = Dictionary(kept.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let capped = RoonClient.capForPlaylist(
-            kept.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album) },
+            kept.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album,
+                                   imageKey: $0.imageKey) },
             seedArtist: "", minTracks: options.trackCount, maxTracks: options.trackCount,
             maxPerArtist: options.maxPerArtist)
         let sonic = capped.compactMap { byId[$0.id] }
