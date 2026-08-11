@@ -482,12 +482,26 @@ struct RootView: View {
     private var tabView: some View {
         TabView(selection: iOSTabSelection) {
             NavigationStack {
-                NowPlayingView()
-                    // Immersive: no toolbar here. The redundant zone picker +
-                    // mini-transport (useful on list screens) just compete with
-                    // the hero's own zone strip and large transport, so hide the
-                    // whole bar and let the artwork run to the top.
-                    .toolbar(.hidden, for: .navigationBar)
+                // Two pages: Now Playing, and the queue one swipe to the left.
+                //
+                // The queue had no tab on iPhone at all — it existed only in the
+                // sidebar, which the phone doesn't have. So the queue this app
+                // can reorder and edit was simply unreachable on the device it
+                // matters most on. Paging beats another tab: the queue belongs
+                // TO what's playing, and the dots make the gesture discoverable.
+                TabView {
+                    NowPlayingView()
+                    QueueView()
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .always))
+                .indexViewStyle(.page(backgroundDisplayMode: .always))
+                // Immersive: no toolbar here. The redundant zone picker +
+                // mini-transport (useful on list screens) just compete with
+                // the hero's own zone strip and large transport, so hide the
+                // whole bar and let the artwork run to the top.
+                .toolbar(.hidden, for: .navigationBar)
+                .ignoresSafeArea(.keyboard)
             }
             .tabItem { Label { LT("nav.nowPlaying") } icon: { Image(systemName: "play.circle.fill") } }
             .tag(SidebarItem.nowPlaying)

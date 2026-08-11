@@ -531,7 +531,9 @@ private struct NowPlayingHero: View {
                 }
                 .frame(maxHeight: .infinity, alignment: .center)
                 .contentShape(Rectangle())
-                .gesture(
+                // High priority so a drag starting on the scrubber beats the paging
+                // TabView that now carries the queue one swipe away.
+                .highPriorityGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { v in
                             guard hasLength, w > 0 else { return }
