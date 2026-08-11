@@ -143,15 +143,16 @@ public struct DJModesView: View {
 
     // MARK: Actions
 
-    /// A persona starts on whatever is playing on the selected zone.
-    private var canStart: Bool { client.selectedZone?.nowPlaying != nil }
+    /// A persona starts on whatever is playing on the ACTIVE output — this
+    /// device as readily as a zone.
+    private var canStart: Bool { client.activeNowPlaying != nil }
 
     private func start(_ mode: DJMode) {
-        guard let zone = client.selectedZone, let np = zone.nowPlaying else { return }
+        guard let np = client.activeNowPlaying else { return }
         Haptics.tap()
         Task {
             await client.startTrackRadio(title: np.title, artist: np.artist,
-                                         album: np.album, zoneID: zone.id, djMode: mode)
+                                         album: np.album, djMode: mode)
         }
     }
 }

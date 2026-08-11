@@ -95,6 +95,16 @@ public final class LocalPlaybackController {
     /// can touch main-actor UI/system state directly.
     public var onStateChange: (@MainActor () -> Void)?
 
+    /// Fired once per *track change* (not on every state tick), so a listener can
+    /// do the things a new song warrants exactly once.
+    ///
+    /// Deliberately separate from `onStateChange`: that one is owned by the iOS
+    /// app for `MPNowPlayingInfoCenter` and fires ~2 Hz off the time observer.
+    /// `RoonClient` uses this hook to scrobble and log a listen — which zone
+    /// playback has always done from the zone-frame handler, and on-device
+    /// playback did not do at all.
+    public var onTrackChange: (@MainActor (Track) -> Void)?
+
     #if canImport(AVFoundation)
     /// `AVQueuePlayer`, not `AVPlayer`, so the next track can be handed to the
     /// render pipeline *before* the current one ends — that's what removes the
@@ -419,6 +429,7 @@ public final class LocalPlaybackController {
         applyLoudness(for: queue[i])
         if autoPlay { player.play(); isPlaying = true } else { player.pause(); isPlaying = false }
         scheduleFollower()
+        if autoPlay { onTrackChange?(queue[i]) }
         #endif
         onStateChange?()
     }
@@ -463,6 +474,7 @@ public final class LocalPlaybackController {
             // between tracks" other clients report. Fixing it properly means a
             // per-item AVAudioMix; noted as a follow-up rather than done blind.
             applyLoudness(for: queue[head.index])
+            onTrackChange?(queue[head.index])
             onStateChange?()
         }
         scheduleFollower()

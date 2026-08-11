@@ -22,7 +22,7 @@ public struct LiveDJView: View {
 
     public var body: some View {
         Group {
-            if let zone = client.selectedZone, let np = zone.nowPlaying {
+            if let np = client.activeNowPlaying {
                 List {
                     Section { currentCard(np) }
 
@@ -44,16 +44,16 @@ public struct LiveDJView: View {
                                 suggestions: suggestions,
                                 onPlay: { c in
                                     Haptics.tap()
-                                    Task { await client.curateTracks([asRecord(c)], zoneID: zone.id) }
+                                    Task { await client.playToActiveOutput([asRecord(c)]) }
                                 },
                                 onQueue: { c in
                                     Haptics.tap()
-                                    Task { await client.queueTracks([asRecord(c)], next: true, zoneID: zone.id) }
+                                    Task { await client.queueToActiveOutput([asRecord(c)], next: true) }
                                 }
                             )
                         }
                         Section {
-                            ForEach(suggestions, id: \.id) { row($0, zoneID: zone.id) }
+                            ForEach(suggestions, id: \.id) { row($0) }
                         } header: {
                             HStack {
                                 LT("liveDJ.mixesNext")
@@ -75,7 +75,7 @@ public struct LiveDJView: View {
 
     // MARK: Now-playing card
 
-    private func currentCard(_ np: NowPlaying) -> some View {
+    private func currentCard(_ np: RoonClient.ActiveTrack) -> some View {
         HStack(spacing: Spacing.md) {
             AlbumArtView(imageKey: np.imageKey, size: 72)
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -106,7 +106,7 @@ public struct LiveDJView: View {
 
     // MARK: Suggestion row
 
-    private func row(_ c: DatabaseManager.DJCandidate, zoneID: String) -> some View {
+    private func row(_ c: DatabaseManager.DJCandidate) -> some View {
         let relation = RoonClient.harmonicRelation(current: currentCamelot, candidate: c.camelot)
         return HStack(spacing: Spacing.md) {
             AlbumArtView(imageKey: c.imageKey, size: 44)
@@ -124,14 +124,14 @@ public struct LiveDJView: View {
             Spacer()
             Button {
                 Haptics.tap()
-                Task { await client.queueTracks([asRecord(c)], next: true, zoneID: zoneID) }
+                Task { await client.queueToActiveOutput([asRecord(c)], next: true) }
             } label: { Image(systemName: "text.line.first.and.arrowtriangle.forward") }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(LS("liveDJ.queueNext"))
                 .help(LS("liveDJ.queueNext"))
             Button {
                 Haptics.tap()
-                Task { await client.curateTracks([asRecord(c)], zoneID: zoneID) }
+                Task { await client.playToActiveOutput([asRecord(c)]) }
             } label: { Image(systemName: "play.fill") }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(LS("bm.playNow"))
@@ -155,7 +155,7 @@ public struct LiveDJView: View {
         TrackRecord(id: c.id, title: c.title, artist: c.artist, album: c.album)
     }
 
-    private func reload(_ np: NowPlaying) async {
+    private func reload(_ np: RoonClient.ActiveTrack) async {
         loading = true
         defer { loading = false }
         guard let feat = await client.featuresFor(title: np.title, artist: np.artist, album: np.album),

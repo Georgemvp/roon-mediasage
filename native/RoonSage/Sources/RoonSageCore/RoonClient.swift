@@ -381,6 +381,8 @@ public final class RoonClient {
         selectedZoneID = UserDefaults.standard.string(forKey: "selected_zone_id")
         refreshTrackCount()
         refreshGenreCount()
+        // On-device plays scrobble and land in listening_history like zone plays.
+        startLocalScrobbleBridge()
         #if os(macOS)
         // Sharing defaults to on so the iPhone can pull library + settings
         // without the user flipping a toggle first; an explicit opt-out (key

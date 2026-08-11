@@ -16,11 +16,12 @@ public final class AmbientTheme {
     public var artKey: String?
     public init() {}
 
-    /// Re-derive the tint for the selected zone's now-playing artwork. Cheap to
-    /// call repeatedly — `ImageCache.dominantColor` caches per URL. Cross-fades
-    /// with the ambient motion token so the whole app shifts colour smoothly.
+    /// Re-derive the tint from the ACTIVE output's now-playing artwork — this
+    /// device as readily as a zone. Cheap to call repeatedly:
+    /// `ImageCache.dominantColor` caches per URL. Cross-fades with the ambient
+    /// motion token so the whole app shifts colour smoothly.
     public func update(from client: RoonClient) async {
-        guard let key = client.selectedZone?.nowPlaying?.imageKey,
+        guard let key = client.activeNowPlaying?.imageKey,
               let url = client.imageURL(forKey: key, size: 64) else {
             withAnimation(Motion.ambient) { color = nil; artKey = nil }
             return

@@ -33,7 +33,7 @@ public struct ContentView: View {
         // the current track's artwork changes.
         .environment(ambient)
         .environment(sleepTimer)
-        .task(id: client.selectedZone?.nowPlaying?.imageKey) { await ambient.update(from: client) }
+        .task(id: client.activeNowPlaying?.imageKey) { await ambient.update(from: client) }
     }
 }
 

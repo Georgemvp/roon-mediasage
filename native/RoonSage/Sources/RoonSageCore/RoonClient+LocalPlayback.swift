@@ -207,6 +207,69 @@ extension RoonClient {
     /// True when there's somewhere to play — a Roon zone or this device.
     public var hasActiveOutput: Bool { localOutputSelected || selectedZone != nil }
 
+    /// Route on-device track changes into the same scrobble + listen-history path
+    /// that zone playback has always used.
+    ///
+    /// Zone plays are logged from the zone-frame handler in `RoonClient`; local
+    /// plays had no equivalent, so everything you listened to on the phone was
+    /// invisible: no Last.fm scrobble, and no row in `listening_history`. That
+    /// second one compounds — play counts feed the taste profile, "recent",
+    /// "forgotten music" and the discovery seeding, so the longer you listened
+    /// locally the more skewed those got.
+    ///
+    /// Idempotent: safe to call more than once, and the coordinator applies its
+    /// own minimum-play gate before anything is actually submitted.
+    func startLocalScrobbleBridge() {
+        guard localPlayback.onTrackChange == nil else { return }
+        localPlayback.onTrackChange = { [weak self] track in
+            guard let self else { return }
+            let item = ScrobbleCoordinator.Item(
+                title: track.title,
+                artist: track.artist.isEmpty ? nil : track.artist,
+                album: track.album.isEmpty ? nil : track.album,
+                length: track.durationSec,
+                zoneID: Self.localOutputID,
+                zoneName: "dit apparaat")
+            let db = self.database
+            Task { await self.scrobbler.trackChanged(item, database: db) }
+        }
+    }
+
+    /// A track playing on the active output, flattened so callers don't care
+    /// which output produced it.
+    public struct ActiveTrack: Sendable, Equatable {
+        public let title: String
+        public let artist: String?
+        public let album: String?
+        public let imageKey: String?
+        public let lengthSec: Int?
+    }
+
+    /// What is playing on the ACTIVE output — this device's engine when that's
+    /// the chosen output, otherwise the selected Roon zone.
+    ///
+    /// Every feature that acts on "the track playing right now" (Live DJ, the DJ
+    /// personas, the command palette, the ambient tint) used to read
+    /// `selectedZone?.nowPlaying` directly. On this device that is nil, so those
+    /// features quietly disabled themselves — Live DJ showed "start a track
+    /// first" while a track was audibly playing.
+    ///
+    /// Precedence matches `NowPlayingBar`: audible local playback wins (you need
+    /// to act on what you hear), an idle local output yields nil rather than
+    /// falling through to a zone, and otherwise the zone answers.
+    public var activeNowPlaying: ActiveTrack? {
+        if let t = localPlayback.current, localPlayback.isEngaged {
+            return ActiveTrack(title: t.title,
+                               artist: t.artist.isEmpty ? nil : t.artist,
+                               album: t.album.isEmpty ? nil : t.album,
+                               imageKey: t.imageKey,
+                               lengthSec: t.durationSec.map(Int.init))
+        }
+        guard !localOutputSelected, let np = selectedZone?.nowPlaying else { return nil }
+        return ActiveTrack(title: np.title, artist: np.artist, album: np.album,
+                           imageKey: np.imageKey, lengthSec: np.length)
+    }
+
     /// Route a "play now" request to whichever output is active: on-device when
     /// selected, otherwise the selected Roon zone. Lets the primary play verbs
     /// (Speel alles / Speel nu) follow the chosen output instead of always

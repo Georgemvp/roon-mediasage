@@ -306,7 +306,7 @@ struct CommandPaletteView: View {
             }
 
             // Now-playing specific
-            if let np = zone.nowPlaying {
+            if let np = client.activeNowPlaying {
                 out.append(PaletteCommand(
                     id: "like", title: LS("commandPalette.like"), icon: "hand.thumbsup",
                     keywords: ["like", "duim", "leuk"], group: "Nu speelt",
@@ -319,7 +319,7 @@ struct CommandPaletteView: View {
                     id: "sonicradio", title: LS("commandPalette.startSonicRadio"), subtitle: np.title,
                     icon: "dot.radiowaves.left.and.right",
                     keywords: ["radio", "station", "sonic"], group: "Nu speelt",
-                    run: { Task { await client.playSonicRadio(title: np.title, artist: np.artist, album: np.album, zoneID: zone.id) } }))
+                    run: { Task { await client.playSonicRadio(title: np.title, artist: np.artist, album: np.album) } }))
             }
         }
 
