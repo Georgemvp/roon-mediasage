@@ -498,6 +498,7 @@
 /* localNowPlaying */
 "localNowPlaying.deviceNounDevice"  = "dit apparaat";
 "localNowPlaying.nothingPlaying"    = "Niets aan het spelen";
+"localNowPlaying.sonicallySimilar" = "Sonisch vergelijkbaar";
 "localNowPlaying.stopAndClear"      = "Stop en wis wachtrij";
 "localNowPlaying.upNext"            = "HIERNA";
 "localNowPlaying.deviceNounMac"     = "deze Mac";

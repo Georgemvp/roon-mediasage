@@ -13,7 +13,10 @@ import SwiftUI
 struct WallDisplayView: View {
     @Environment(RoonClient.self) private var client
     @Environment(\.dismiss) private var dismiss
-    let zone: Zone
+    // Reads the ACTIVE output rather than taking a zone: the wall display used
+    // to be constructed with `WallDisplayView(zone:)` from the zone hero only, so
+    // it was unreachable on this device — the one output most likely to be
+    // propped up on a shelf as a display.
 
     @AppStorage("wallDisplayInterval") private var interval: Double = 12   // seconds per panel
     @State private var panelIndex = 0
@@ -33,7 +36,7 @@ struct WallDisplayView: View {
     }
 
     private var artURL: URL? {
-        zone.nowPlaying?.imageKey.flatMap { client.imageURL(forKey: $0, size: 1200) }
+        client.activeNowPlaying?.imageKey.flatMap { client.imageURL(forKey: $0, size: 1200) }
     }
 
     var body: some View {
@@ -47,7 +50,7 @@ struct WallDisplayView: View {
         .contentShape(Rectangle())
         .onTapGesture { withAnimation(Motion.quick) { showChrome.toggle() } }
         .task(id: artURL) { await loadArtTint() }
-        .task(id: zone.nowPlaying?.title) { await loadEditorial() }
+        .task(id: client.activeNowPlaying?.title) { await loadEditorial() }
         .task(id: interval) { await rotate() }
         #if os(macOS)
         .frame(minWidth: 800, minHeight: 600)
@@ -89,7 +92,7 @@ struct WallDisplayView: View {
 
     @ViewBuilder
     private var panel: some View {
-        let np = zone.nowPlaying
+        let np = client.activeNowPlaying
         VStack(alignment: .leading, spacing: 16) {
             switch panels[panelIndex % max(1, panels.count)] {
             case .track:
@@ -170,7 +173,7 @@ struct WallDisplayView: View {
     private func loadEditorial() async {
         panelIndex = 0
         bio = nil; review = nil
-        guard let np = zone.nowPlaying else { return }
+        guard let np = client.activeNowPlaying else { return }
         if let artist = np.artist { bio = await client.artistEditorial(name: artist) }
         if let album = np.album { review = await client.albumReview(album: album, artist: np.artist) }
     }

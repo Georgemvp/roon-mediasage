@@ -498,6 +498,7 @@
 /* localNowPlaying */
 "localNowPlaying.deviceNounDevice"  = "this device";
 "localNowPlaying.nothingPlaying"    = "Nothing playing";
+"localNowPlaying.sonicallySimilar" = "Sonically similar";
 "localNowPlaying.stopAndClear"      = "Stop and clear queue";
 "localNowPlaying.upNext"            = "UP NEXT";
 "localNowPlaying.deviceNounMac"     = "this Mac";

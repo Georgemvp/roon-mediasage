@@ -323,7 +323,7 @@ private struct NowPlayingHero: View {
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in tickPosition() }
         .task { await client.ensureFeedbackLoaded() }
         .sheet(isPresented: $showLyrics) { LyricsView(zone: zone) }
-        .sheet(isPresented: $showWall) { WallDisplayView(zone: zone) }
+        .sheet(isPresented: $showWall) { WallDisplayView() }
         .similarTracksSheet(item: $similarSeed)
     }
 

@@ -97,6 +97,9 @@ private struct LocalNowPlayingHero: View {
     @State private var seekFraction: Double = 0
     @State private var showFullArt = false
     @State private var showLyrics = false
+    @State private var showWall = false
+    @State private var similarSeed: SonicSeed?
+    @State private var startingAdventure = false
     @State private var feat: (bpm: Double, camelot: String, tags: [String])?
     @State private var attrs: [String: Float] = [:]
     @State private var volumeValue: Double = 100
@@ -142,6 +145,8 @@ private struct LocalNowPlayingHero: View {
         .onChange(of: lp.isMuted) { _, m in volumeValue = (m ? 0 : lp.volume) * 100 }
         .task { await client.ensureFeedbackLoaded() }
         .sheet(isPresented: $showLyrics) { LyricsView() }
+        .sheet(isPresented: $showWall) { WallDisplayView() }
+        .similarTracksSheet(item: $similarSeed)
     }
 
     // MARK: Art
@@ -359,6 +364,65 @@ private struct LocalNowPlayingHero: View {
             .buttonStyle(.plain)
             .accessibilityLabel(NowPlayingHeroOptions.loopLabel(lp.loopMode))
             .accessibilityAddTraits(lp.loopMode == "disabled" ? [] : .isSelected)
+
+            // Parity with the zone hero. These three used to exist only there,
+            // which made the on-device screen quietly poorer than the zone one —
+            // on the output that is now the default.
+            Button {
+                startingAdventure = true
+                Task {
+                    if let t = lp.current {
+                        await client.playSonicAdventure(title: t.title, artist: t.artist, album: t.album)
+                    }
+                    startingAdventure = false
+                }
+            } label: {
+                if startingAdventure {
+                    ProgressView().controlSize(.small).tappable44()
+                } else {
+                    Image(systemName: "map")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .tappable44()
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(startingAdventure || lp.current == nil)
+            .accessibilityLabel(LS("nowPlaying.journey"))
+
+            Button {
+                Haptics.tap()
+                if let t = lp.current {
+                    similarSeed = SonicSeed(title: t.title, artist: t.artist,
+                                            album: t.album, imageKey: t.imageKey)
+                }
+            } label: {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .tappable44()
+            }
+            .buttonStyle(.plain)
+            .disabled(lp.current == nil)
+            .accessibilityLabel(LS("localNowPlaying.sonicallySimilar"))
+
+            if let t = lp.current {
+                ShareCardButton(title: t.title.displayTitle,
+                                artist: t.artist.isEmpty ? nil : t.artist,
+                                imageKey: t.imageKey)
+            }
+
+            Button {
+                Haptics.tap(); showWall = true
+            } label: {
+                Image(systemName: "play.tv")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .tappable44()
+            }
+            .buttonStyle(.plain)
+            .disabled(lp.current == nil)
+            .accessibilityLabel(LS("nowPlaying.wallDisplay"))
         }
     }
 
