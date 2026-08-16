@@ -1153,7 +1153,7 @@ extension RoonClient {
         }
 
         // First pass over the full set.
-        var byIndex = await attempt(requests)
+        let byIndex = await attempt(requests)
         guard !byIndex.isEmpty else {
             // Batch unusable — degrade to per-station generation (still distinct-ish
             // via each station's own profile, just not co-optimised).
@@ -1256,7 +1256,7 @@ extension RoonClient {
     /// Dutch connector words a title must never end on. Punctuation trimming
     /// alone left names like "Film & Theater: Akoestisch en" on Qobuz — the word
     /// is a valid word, it's the dangling *position* that reads broken.
-    private static let danglingWords: Set<String> = [
+    nonisolated private static let danglingWords: Set<String> = [
         "en", "of", "met", "van", "voor", "in", "op", "bij", "uit", "naar",
         "tot", "als", "om", "te", "der", "den", "de", "het", "een"
     ]

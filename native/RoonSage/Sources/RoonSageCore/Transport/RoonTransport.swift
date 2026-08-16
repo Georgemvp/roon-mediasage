@@ -205,7 +205,7 @@ actor RoonTransport {
                 registrationTimeoutTask = Task {
                     try? await Task.sleep(nanoseconds: timeoutNanos)
                     guard !Task.isCancelled else { return }
-                    await self.failRegistration(with: RoonTransportError.requestTimeout)
+                    self.failRegistration(with: RoonTransportError.requestTimeout)
                 }
             }
         }

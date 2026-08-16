@@ -227,14 +227,14 @@ extension RoonClient {
 
     private func startRemotePolling() {
         guard remotePollTask == nil else { return }
-        remotePollTask = Task { [weak self] in
+        remotePollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 await self?.pollPlaybackOnce()
                 // Back right off while the stream is healthy: it already delivers
                 // every change within ~1.5 s, so polling on top of it is pure
                 // duplicate traffic. The slow tick stays as a safety net for a
                 // stream that dies without closing (NAT timeout, sleeping phone).
-                let live = await self?.eventStreamIsLive ?? false
+                let live = self?.eventStreamIsLive ?? false
                 try? await Task.sleep(nanoseconds: live ? Self.remotePollFallbackInterval
                                                         : Self.remotePollInterval)
             }

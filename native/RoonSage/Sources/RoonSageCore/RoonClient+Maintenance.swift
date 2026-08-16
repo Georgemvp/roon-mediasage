@@ -88,7 +88,7 @@ extension RoonClient {
                     let file = try await db.runBackup(databaseURL: Self.databaseURL)
                     let size = (try? FileManager.default
                         .attributesOfItem(atPath: file.path)[.size] as? Int64) ?? 0
-                    Log.info("back-up geschreven: \(file.lastPathComponent) (\((size ?? 0) / 1_048_576) MB)", category: .db)
+                    Log.info("back-up geschreven: \(file.lastPathComponent) (\(size / 1_048_576) MB)", category: .db)
                     return .completed
                 } catch {
                     return .failed("back-up mislukt: \(error.localizedDescription)")

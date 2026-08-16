@@ -982,7 +982,6 @@ public struct LibraryView: View {
 
     // MARK: Overview — hero + shelves
 
-    @ViewBuilder
     /// One quiet line instead of six dashboard pieces.
     ///
     /// This used to be three large number cards plus three chips (top genre,

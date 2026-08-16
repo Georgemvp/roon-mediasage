@@ -718,11 +718,14 @@ public actor QobuzClient {
     private func getJSON(_ request: URLRequest, attempts: Int = 5) async -> [String: Any]? {
         let path = request.url?.path ?? "?"
         for attempt in 0..<max(1, attempts) {
+            let allowed = await ProviderGate.shared.awaitSlot(for: "qobuz")
+            guard allowed else { return nil }
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 let http = response as? HTTPURLResponse
                 let status = http?.statusCode ?? 0
                 if status == 429 || (500...599).contains(status) {
+                    await ProviderGate.shared.recordFailure(for: "qobuz", error: "HTTP \(status)")
                     if attempt < attempts - 1 {
                         let retryAfter = http?.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init)
                         try? await Task.sleep(
@@ -739,11 +742,14 @@ public actor QobuzClient {
                     return nil
                 }
                 guard (200...299).contains(status) else {
+                    await ProviderGate.shared.recordFailure(for: "qobuz", error: "HTTP \(status)")
                     Log.warning("Qobuz GET \(path): HTTP \(status)", category: .network)
                     return nil
                 }
+                await ProviderGate.shared.recordSuccess(for: "qobuz")
                 return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
             } catch {
+                await ProviderGate.shared.recordFailure(for: "qobuz", error: "network")
                 if attempt < attempts - 1 {
                     try? await Task.sleep(
                         nanoseconds: UInt64(Self.retryDelay(attempt: attempt, retryAfter: nil) * 1_000_000_000))

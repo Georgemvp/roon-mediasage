@@ -1,3 +1,4 @@
+import AudioAnalysis
 import Foundation
 
 // MARK: - Lyrics models
@@ -89,16 +90,34 @@ public actor LyricsService {
     }
 
     private func getJSON(path: String, query: [URLQueryItem]) async -> [String: Any]? {
-        guard let req = request(path: path, query: query),
-              let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        let allowed = await ProviderGate.shared.awaitSlot(for: "lrclib")
+        guard allowed, let req = request(path: path, query: query) else { return nil }
+        guard let (data, resp) = try? await URLSession.shared.data(for: req) else {
+            await ProviderGate.shared.recordFailure(for: "lrclib", error: "network")
+            return nil
+        }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200 else {
+            await ProviderGate.shared.recordFailure(for: "lrclib", error: "HTTP \(code)")
+            return nil
+        }
+        await ProviderGate.shared.recordSuccess(for: "lrclib")
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
     private func getJSONArray(path: String, query: [URLQueryItem]) async -> [[String: Any]]? {
-        guard let req = request(path: path, query: query),
-              let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        let allowed = await ProviderGate.shared.awaitSlot(for: "lrclib")
+        guard allowed, let req = request(path: path, query: query) else { return nil }
+        guard let (data, resp) = try? await URLSession.shared.data(for: req) else {
+            await ProviderGate.shared.recordFailure(for: "lrclib", error: "network")
+            return nil
+        }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200 else {
+            await ProviderGate.shared.recordFailure(for: "lrclib", error: "HTTP \(code)")
+            return nil
+        }
+        await ProviderGate.shared.recordSuccess(for: "lrclib")
         return (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
     }
 

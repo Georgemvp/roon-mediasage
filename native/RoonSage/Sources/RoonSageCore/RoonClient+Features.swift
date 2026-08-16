@@ -412,7 +412,7 @@ extension RoonClient {
     public func saveDJSet(name: String, set: [DatabaseManager.DJCandidate]) {
         let tracks = set.map { TrackRecord(id: $0.id, title: $0.title, artist: $0.artist, album: $0.album,
                                     imageKey: $0.imageKey) }
-        _ = savePlaylist(name: name, tracks: tracks)
+        savePlaylist(name: name, tracks: tracks)
     }
 
     // MARK: - Discovery sections

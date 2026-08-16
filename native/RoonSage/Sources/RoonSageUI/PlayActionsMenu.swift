@@ -18,7 +18,6 @@ struct PlayActionsMenu: View {
     var trackRadioSeed: TrackRecord? = nil
 
     var body: some View {
-        let hasZone = client.selectedZone != nil
         // Every play AND queue verb follows the active output — the selected Roon
         // zone, or this device when "dit apparaat" is chosen. The queue verbs used
         // to be Roon-only because the local engine had no insert-next; it has one
