@@ -72,6 +72,7 @@ jobs:
           cd native/iosapp
           xcodebuild archive \
             -scheme RoonSageiOS \
+            -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath build/RoonSage.xcarchive \
             DEVELOPMENT_TEAM=5W3QDZ94FH \

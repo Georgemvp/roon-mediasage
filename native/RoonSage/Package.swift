@@ -47,7 +47,8 @@ let package = Package(
         ),
         .target(
             name: "AudioAnalysis",
-            path: "Sources/AudioAnalysis"
+            path: "Sources/AudioAnalysis",
+            resources: [.process("Resources")]
         ),
         .target(
             name: "AnalyzerCore",
