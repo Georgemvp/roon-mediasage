@@ -12,6 +12,8 @@ public actor ImageCache {
     private let cache = NSCache<NSURL, PlatformImage>()
     private var inFlight: [URL: Task<(image: PlatformImage, cost: Int)?, Never>] = [:]
 
+    private static let sharedContext = CIContext(options: [.workingColorSpace: NSNull()])
+
     private init() {
         cache.countLimit = 400
         // Byte budget on top of the count limit: 400 un-downsampled bitmaps
@@ -20,6 +22,16 @@ public actor ImageCache {
         cache.totalCostLimit = 96 * 1024 * 1024
         // Bound the on-disk cache once per session, off the main thread.
         Task.detached(priority: .utility) { DiskImageCache.prune() }
+
+        #if os(iOS)
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { [weak cache] _ in
+            cache?.removeAllObjects()
+        }
+        #endif
     }
 
     /// Decode `data` downsampled to at most `maxPixel` on its longest side.
@@ -83,6 +95,12 @@ public actor ImageCache {
     private var colorCache: [URL: Color] = [:]
     private let colorCacheLimit = 256
 
+    /// Purge in-memory caches (called on memory warning or low resources).
+    public func clearMemoryCache() {
+        cache.removeAllObjects()
+        colorCache.removeAll(keepingCapacity: false)
+    }
+
     /// Average ("dominant") colour of the art at `url`, for a tinted backdrop.
     /// Cached per URL; returns nil if the image can't be loaded/analysed.
     public func dominantColor(for url: URL) async -> Color? {
@@ -92,10 +110,9 @@ public actor ImageCache {
                                      kCIInputExtentKey: CIVector(cgRect: ci.extent)]
         guard let output = CIFilter(name: "CIAreaAverage", parameters: params)?.outputImage else { return nil }
         var bitmap = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: NSNull()])
-        context.render(output, toBitmap: &bitmap, rowBytes: 4,
-                       bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-                       format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+        Self.sharedContext.render(output, toBitmap: &bitmap, rowBytes: 4,
+                                  bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                  format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
         let color = Color(.sRGB,
                           red: Double(bitmap[0]) / 255, green: Double(bitmap[1]) / 255,
                           blue: Double(bitmap[2]) / 255, opacity: 1)

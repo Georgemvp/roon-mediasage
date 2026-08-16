@@ -87,7 +87,7 @@ struct RecentView: View {
     private var content: some View {
         switch pivot {
         case .tracks:
-            List(Array(recent.enumerated()), id: \.offset) { _, e in
+            List(recent, id: \.playedAt) { e in
                 row(kind: "track", title: e.title,
                     subtitle: [e.artist, e.album].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
                     played: e.playedAt, artist: e.artist, album: e.album)
@@ -101,7 +101,7 @@ struct RecentView: View {
                 row(kind: "album", title: a.album, subtitle: a.artist, played: nil, artist: a.artist, album: nil)
             }
         case .onThisDay:
-            List(Array(onThisDay.enumerated()), id: \.offset) { _, e in
+            List(onThisDay, id: \.playedAt) { e in
                 row(kind: "track", title: e.title,
                     subtitle: [e.artist, e.album].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
                     played: e.playedAt, artist: e.artist, album: e.album)

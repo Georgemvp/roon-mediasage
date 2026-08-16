@@ -743,7 +743,7 @@ public final class RoonClient {
     /// foregrounding isn't a silent no-op against a dead socket. No-op when
     /// already connected/connecting or the user disconnected on purpose.
     public func reconnectOnForeground() {
-        if isRemote { Task { await startServerMode() }; return }
+        if isRemote { Task { await startServerMode(forceReconnectStream: true) }; return }
         guard !intentionalDisconnect, let host = savedHost else { return }
         switch connectionState {
         case .disconnected, .failed:

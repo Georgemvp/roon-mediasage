@@ -68,7 +68,7 @@ public struct FilteredTracksView: View {
                        onRetry: { loaded = false; reachedEnd = false; Task { await load() } }) {
             List {
                 headerBar.plainCardRow()
-                ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     FilteredTrackRow(track: track, canPlay: client.hasActiveOutput) {
                         Haptics.tap()
                         Task { await client.playToActiveOutput([track]) }

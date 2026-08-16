@@ -147,8 +147,14 @@ extension RoonClient {
 
     /// "Connect" in server mode: find the RoonSage server and start polling its
     /// playback state. Safe to call repeatedly.
-    func startServerMode() async {
+    func startServerMode(forceReconnectStream: Bool = false) async {
         guard isRemote else { return }
+        if forceReconnectStream {
+            remoteEventTask?.cancel()
+            remoteEventTask = nil
+            remotePollTask?.cancel()
+            remotePollTask = nil
+        }
         // A client must never target loopback — that's its own (legacy) share
         // server, not the real one. Drop a remembered localhost so we re-discover
         // the actual server; also self-heals a bad value persisted by an earlier
@@ -192,6 +198,13 @@ extension RoonClient {
         startRemotePolling()
         startRemoteEventStream()
         await pollPlaybackOnce()
+    }
+
+    public func restartRemoteEventStream() {
+        guard isRemote else { return }
+        remoteEventTask?.cancel()
+        remoteEventTask = nil
+        startRemoteEventStream()
     }
 
     /// Quick liveness probe of a share-server base URL (`/health` → 200). Used to

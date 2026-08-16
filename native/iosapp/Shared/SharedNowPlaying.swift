@@ -3,12 +3,19 @@ import Foundation
 /// Now-playing snapshot gedeeld tussen de app en de widget-extensie via de
 /// App Group. De app schrijft hem bij elke track-/state-wissel; de widget
 /// leest hem in zijn TimelineProvider. Gecompileerd in beide targets.
-struct SharedNowPlaying: Codable {
+struct SharedNowPlaying: Codable, Equatable {
     var title: String
     var artist: String?
     var zoneName: String
     var isPlaying: Bool
     var updatedAt: Date
+
+    static func == (lhs: SharedNowPlaying, rhs: SharedNowPlaying) -> Bool {
+        lhs.title == rhs.title &&
+        lhs.artist == rhs.artist &&
+        lhs.zoneName == rhs.zoneName &&
+        lhs.isPlaying == rhs.isPlaying
+    }
 
     static let appGroup = "group.com.roonsage.ios"
     private static let key = "shared_now_playing"

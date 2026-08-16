@@ -14,6 +14,7 @@ import RoonSageUI
 struct RoonSageiOSApp: App {
     @State private var client: RoonClient
     @State private var bgTaskID: UIBackgroundTaskIdentifier = .invalid
+    @State private var lastSavedNowPlaying: SharedNowPlaying?
     @Environment(\.scenePhase) private var scenePhase
     private let liveActivity = NowPlayingActivityController()
     private let nowPlayingCenter = NowPlayingCenter()
@@ -135,17 +136,23 @@ struct RoonSageiOSApp: App {
         liveActivity.sync(zone: zone)
         nowPlayingCenter.sync(zone: zone)
 
+        let nextShared: SharedNowPlaying?
         if let zone, let np = zone.nowPlaying,
            zone.state == .playing || zone.state == .paused {
-            SharedNowPlaying.save(SharedNowPlaying(
+            nextShared = SharedNowPlaying(
                 title: np.title,
                 artist: np.artist,
                 zoneName: zone.displayName,
                 isPlaying: zone.state == .playing,
-                updatedAt: Date()))
+                updatedAt: Date())
         } else {
-            SharedNowPlaying.save(nil)
+            nextShared = nil
         }
-        WidgetCenter.shared.reloadTimelines(ofKind: "ZoneControl")
+
+        if nextShared != lastSavedNowPlaying {
+            lastSavedNowPlaying = nextShared
+            SharedNowPlaying.save(nextShared)
+            WidgetCenter.shared.reloadTimelines(ofKind: "ZoneControl")
+        }
     }
 }
