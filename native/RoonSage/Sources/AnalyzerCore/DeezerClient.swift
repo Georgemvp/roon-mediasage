@@ -165,26 +165,27 @@ public actor DeezerClient {
     /// nil on any non-200 / decode failure / Deezer `error` payload — popularity
     /// is best-effort and never throws.
     private func getJSON(_ url: URL) async -> [String: Any]? {
-        await awaitSlot()
+        let allowed = await ProviderGate.shared.awaitSlot(for: "deezer")
+        guard allowed else { return nil }
         var req = URLRequest(url: url, timeoutInterval: 20)
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
+        guard let (data, resp) = try? await URLSession.shared.data(for: req) else {
+            await ProviderGate.shared.recordFailure(for: "deezer", error: "network")
+            return nil
+        }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        if json["error"] != nil { return nil }   // Deezer returns {"error": {...}} on quota / bad query
+        else {
+            await ProviderGate.shared.recordFailure(for: "deezer", error: "HTTP \(code)")
+            return nil
+        }
+        if json["error"] != nil {
+            await ProviderGate.shared.recordFailure(for: "deezer", error: "API error")
+            return nil
+        }
+        await ProviderGate.shared.recordSuccess(for: "deezer")
         return json
-    }
-
-    /// Block until this caller's reserved slot. Reserving `nextSlot` before the
-    /// suspension point is what serialises concurrent callers (actor reentrancy
-    /// would otherwise let them all read the same past instant).
-    private func awaitSlot() async {
-        let now = Date()
-        let slot = max(now, nextSlot)
-        nextSlot = slot.addingTimeInterval(minInterval)
-        let wait = slot.timeIntervalSince(now)
-        if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
     }
 
     private func url(_ path: String, query: [String: String]) -> URL? {

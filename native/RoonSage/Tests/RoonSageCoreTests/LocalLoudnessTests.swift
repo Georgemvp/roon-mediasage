@@ -48,4 +48,19 @@ final class LocalLoudnessTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(v, 0)
         XCTAssertLessThan(v, 0.001) // −66 dB
     }
+
+    func testLoudnessMixTriggerThreshold() {
+        // Mode off -> unity gain -> no mix needed
+        let unity = LocalLoudness.volume(trackLufs: -14, albumLufs: nil, mode: .off, preampDB: 0)
+        XCTAssertLessThanOrEqual(abs(unity - 1.0), 0.001)
+
+        // Exact match with target (-14 LUFS) -> unity gain
+        let targetMatch = LocalLoudness.volume(trackLufs: -14, albumLufs: nil, mode: .track, preampDB: 0)
+        XCTAssertLessThanOrEqual(abs(targetMatch - 1.0), 0.001)
+
+        // Loud track (-8 LUFS) -> attenuation -> needs per-item mix
+        let loudGain = LocalLoudness.volume(trackLufs: -8, albumLufs: nil, mode: .track, preampDB: 0)
+        XCTAssertGreaterThan(abs(loudGain - 1.0), 0.001)
+    }
 }
+

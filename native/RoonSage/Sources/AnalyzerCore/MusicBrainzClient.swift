@@ -187,15 +187,21 @@ public actor MusicBrainzClient {
     /// enrichment is best-effort and never throws.
     private func getJSON(_ url: URL) async -> [String: Any]? {
         for attempt in 0..<2 {
-            await awaitSlot()
+            let allowed = await ProviderGate.shared.awaitSlot(for: "musicbrainz")
+            guard allowed else { return nil }
             var req = URLRequest(url: url, timeoutInterval: 30)
             req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
             req.setValue("application/json", forHTTPHeaderField: "Accept")
-            guard let (data, resp) = try? await URLSession.shared.data(for: req) else { return nil }
+            guard let (data, resp) = try? await URLSession.shared.data(for: req) else {
+                await ProviderGate.shared.recordFailure(for: "musicbrainz", error: "network")
+                return nil
+            }
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             if code == 200 {
+                await ProviderGate.shared.recordSuccess(for: "musicbrainz")
                 return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
             }
+            await ProviderGate.shared.recordFailure(for: "musicbrainz", error: "HTTP \(code)")
             if code == 503, attempt == 0 {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)   // back off, then retry once
                 continue
@@ -203,17 +209,6 @@ public actor MusicBrainzClient {
             return nil
         }
         return nil
-    }
-
-    /// Block until this caller's reserved slot. Reserving `nextSlot` before the
-    /// suspension point is what serialises concurrent callers (actor reentrancy
-    /// would otherwise let them all read the same past instant).
-    private func awaitSlot() async {
-        let now = Date()
-        let slot = max(now, nextSlot)
-        nextSlot = slot.addingTimeInterval(minInterval)
-        let wait = slot.timeIntervalSince(now)
-        if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
     }
 
     private func url(_ path: String, query: [String: String]) -> URL? {
