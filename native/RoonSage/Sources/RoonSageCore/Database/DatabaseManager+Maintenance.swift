@@ -34,7 +34,7 @@ extension DatabaseManager {
     /// `VACUUM INTO` refuses to overwrite, which is a feature: a backup that
     /// silently clobbers a good one is worse than no backup.
     public func backup(to url: URL) async throws {
-        try await pool.write { db in
+        try await pool.writeWithoutTransaction { db in
             try db.execute(sql: "VACUUM INTO ?", arguments: [url.path])
         }
     }
@@ -120,7 +120,7 @@ extension DatabaseManager {
         report.oldBatchItems = counts.items
         report.oldBatches = counts.batches
         // VACUUM cannot run inside a transaction, hence its own write.
-        try await pool.write { db in try db.execute(sql: "VACUUM") }
+        try await pool.writeWithoutTransaction { db in try db.execute(sql: "VACUUM") }
         return report
     }
 

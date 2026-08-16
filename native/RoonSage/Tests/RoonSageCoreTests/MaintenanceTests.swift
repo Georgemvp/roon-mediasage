@@ -102,12 +102,37 @@ final class MaintenanceTests: XCTestCase {
             RoonClient.shouldRunScheduledSync(isSyncing: true, isConnected: false), .skipBusy)
     }
 
-    // MARK: - Housekeeping report
+    // MARK: - Live DatabaseManager execution (VACUUM / VACUUM INTO)
 
-    func testHousekeepingReportStartsEmpty() {
-        let r = DatabaseManager.HousekeepingReport()
-        XCTAssertEqual(r.expiredEditorial, 0)
-        XCTAssertEqual(r.oldBatches, 0)
-        XCTAssertEqual(r.oldBatchItems, 0)
+    func testRunBackupCreatesValidDatabase() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roonsage-backup-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let dbURL = dir.appendingPathComponent("library.db")
+        let db = try DatabaseManager(url: dbURL)
+        let backupURL = try await db.runBackup(databaseURL: dbURL, keep: 3)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: backupURL.path))
+        // Verify the backed up DB opens and passes integrity check
+        let backupDB = try DatabaseManager(url: backupURL)
+        let count = try await backupDB.trackCount()
+        XCTAssertEqual(count, 0)
+    }
+
+    func testRunHousekeepingExecutesVacuumSuccessfully() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roonsage-housekeeping-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let dbURL = dir.appendingPathComponent("library.db")
+        let db = try DatabaseManager(url: dbURL)
+        let report = try await db.runHousekeeping(editorialTTLDays: 30, batchRetentionDays: 180)
+        XCTAssertEqual(report.expiredEditorial, 0)
+        XCTAssertEqual(report.oldBatches, 0)
+        XCTAssertEqual(report.oldBatchItems, 0)
     }
 }
+
