@@ -52,9 +52,7 @@ public struct MetadataReader {
         }
 
         apply(asset.commonMetadata)
-        for format in asset.availableMetadataFormats {
-            apply(asset.metadata(forFormat: format))
-        }
+        apply(asset.metadata)
         return m
     }
 }

@@ -40,7 +40,19 @@ import UIKit
 ///   GET  /discovery/run-status → DiscoveryRunStatus
 ///   GET  /system/tasks → [TaskScheduler.TaskInfo] (cadans + laatste uitkomst per job)
 ///   POST /system/tasks/{name}/run → trigger een job nu (409 als hij al draait)
-///   GET  /health   → {"status":"ok","tracks":n,"hosts":[all server IPv4s]}
+private actor LibraryCacheStore {
+    private var cache: (sig: String, data: Data)?
+
+    func get(for sig: String) -> Data? {
+        if let cache, cache.sig == sig { return cache.data }
+        return nil
+    }
+
+    func set(sig: String, data: Data) {
+        cache = (sig, data)
+    }
+}
+
 public final class LibraryShareServer: @unchecked Sendable {
     public static let defaultPort: UInt16 = 5767   // 5766 is the analyzer
 
@@ -311,9 +323,7 @@ public final class LibraryShareServer: @unchecked Sendable {
     // clients re-pull it whenever the /playback libraryRevision shifts (its
     // featuresRevision part changes during analysis) — though library CONTENT only
     // changes on a sync. Cache it, keyed on `last_sync`, so those re-pulls don't
-    // rebuild. @unchecked Sendable → guard with a lock.
-    private let libCacheLock = NSLock()
-    private var libraryCache: (sig: String, data: Data)?
+    private let libCache = LibraryCacheStore()
 
     public init(port: UInt16 = LibraryShareServer.defaultPort, database: DatabaseManager) {
         self.port = port
@@ -812,11 +822,11 @@ public final class LibraryShareServer: @unchecked Sendable {
         }
         if path.hasPrefix("/library") {
             let sig = ((try? database.syncStateValue(forKey: "last_sync")) ?? nil) ?? ""
-            libCacheLock.lock()
-            if let c = libraryCache, c.sig == sig { let d = c.data; libCacheLock.unlock(); return ("200 OK", d, "application/json") }
-            libCacheLock.unlock()
+            if let cached = await libCache.get(for: sig) {
+                return ("200 OK", cached, "application/json")
+            }
             if let body = try? await database.exportLibraryJSON() {
-                libCacheLock.lock(); libraryCache = (sig, body); libCacheLock.unlock()
+                await libCache.set(sig: sig, data: body)
                 return ("200 OK", body, "application/json")
             }
             return ("500 Internal Server Error", Data("export failed".utf8), "text/plain")

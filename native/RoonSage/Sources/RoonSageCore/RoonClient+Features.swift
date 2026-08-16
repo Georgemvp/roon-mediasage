@@ -149,13 +149,13 @@ extension RoonClient {
             let d = try? await db?.reconcileFeatureMatches(payload.identities, apply: true)
             // Backfill tracks.year from the analyzer's file tags (Roon Browse has no
             // year). After reconcile so fuzzy-rewritten match_keys also resolve.
-            try? await db?.applyTrackYears(payload.years)
+            _ = try? await db?.applyTrackYears(payload.years)
             // MusicBrainz genres (keyed by match_key, like features) — the richer
             // genre set the analyzer enriched.
-            try? await db?.upsertMBGenres(payload.genres)
+            _ = try? await db?.upsertMBGenres(payload.genres)
             // Deezer genres (second signal, feeds libraryGenreSet's genreOverlap
             // scoring) — same keyed-by-match_key pattern as MB genres above.
-            try? await db?.upsertDeezerGenres(payload.deezerGenres)
+            _ = try? await db?.upsertDeezerGenres(payload.deezerGenres)
             return d
         }.value
         // Pull the 512-dim embeddings (binary bundle) after match_keys are

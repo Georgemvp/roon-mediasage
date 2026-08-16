@@ -197,7 +197,7 @@ final class LogStore: @unchecked Sendable {
             fileManager.createFile(atPath: currentFileURL.path, contents: nil)
         }
         handle = try? FileHandle(forWritingTo: currentFileURL)
-        try? handle?.seekToEnd()
+        _ = try? handle?.seekToEnd()
         return handle
     }
 
