@@ -324,8 +324,15 @@ struct CommandPaletteView: View {
             }
         }
 
-        // Navigation to every destination
-        for item in SidebarItem.allCases {
+        // Navigation to primary destinations (consolidated hubs)
+        let primaryItems: [SidebarItem] = [
+            .nowPlaying, .queue, .library, .bookmarks,
+            .generate, .playlists,
+            .stationsHub, .dj,
+            .discovery, .sonicLab, .musicMap, .multitag,
+            .tasteHub, .settings
+        ]
+        for item in primaryItems {
             out.append(PaletteCommand(
                 id: "nav-\(item.id)", title: LS("Ga naar \(item.title)"), icon: item.icon,
                 keywords: [item.title, "open", "ga naar", "navigatie"], group: "Navigatie",

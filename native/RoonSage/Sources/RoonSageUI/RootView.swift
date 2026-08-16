@@ -341,7 +341,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         case .playback: [.nowPlaying, .queue, .library, .bookmarks]
         case .create:   [.generate, .playlists]
         case .stations: [.stationsHub, .dj]
-        case .explore:  [.discover, .discovery, .sonicLab, .musicMap, .multitag]
+        case .explore:  [.discovery, .sonicLab, .musicMap, .multitag]
         case .you:      [.tasteHub]
         case .settings: [.settings]
         }
@@ -601,15 +601,9 @@ struct RootView: View {
     @ViewBuilder
     private var iOSExploreHub: some View {
         List {
-            Section(LS("root.sectionDiscovering")) {
-                NavigationLink { DiscoverWeeklyView().navigationBarTitleDisplayMode(.large) } label: {
-                    Label(LS("root.discoverWeekly"), systemImage: "sparkles")
-                }
-                NavigationLink { DiscoverFeedView().navigationTitle(LS("nav.discover")).navigationBarTitleDisplayMode(.large) } label: {
-                    Label(LS("nav.discover"), systemImage: SidebarItem.discover.icon)
-                }
-                NavigationLink { DiscoveryView().navigationTitle(LS("nav.discovery")).navigationBarTitleDisplayMode(.large) } label: {
-                    Label(LS("nav.discovery"), systemImage: SidebarItem.discovery.icon)
+            Section(LS("section.explore")) {
+                NavigationLink { DiscoverHubView().navigationTitle(LS("section.explore")).navigationBarTitleDisplayMode(.large) } label: {
+                    Label(LS("section.explore"), systemImage: SidebarItem.discovery.icon)
                 }
             }
             Section(LS("section.stations")) {
@@ -650,31 +644,16 @@ struct RootView: View {
         case .nowPlaying:  NowPlayingView()
         case .queue:       QueueView()
         case .library:     LibraryView()
-        case .ask:         AskView()
-        case .generate:    CreateHubView()
-        case .recommend:   RecommendView()
+        case .ask, .generate, .recommend: CreateHubView()
         case .playlists:   PlaylistsView()
         case .bookmarks:   BookmarksView()
-        case .djSet:       DJSetView()
-        case .liveDJ:      LiveDJView()
-        case .djModes:     DJModesView()
-        case .dj:          DJView()
-        case .stationsHub: StationsHubView()
-        case .fingerprint: SonicFingerprintView()
+        case .djSet, .liveDJ, .dj: DJView()
+        case .stationsHub, .radios, .journeys, .djModes: StationsHubView()
         case .musicMap:    MusicMapView()
-        case .songPaths:   SongPathsView()
-        case .alchemy:     SongAlchemyView()
-        case .sonicSearch: SonicSearchView()
-        case .sonicLab:    SonicLabView()
+        case .songPaths, .alchemy, .sonicSearch, .sonicLab: SonicLabView()
         case .multitag:    MultitagView()
-        case .discover:    DiscoverFeedView()
-        case .discovery:   DiscoveryView()
-        case .radios:      SonicRadioView()
-        case .journeys:    SonicJourneysView()
-        case .recent:      RecentView()
-        case .taste:       TasteProfileView()
-        case .tasteHub:    TasteHubView()
-        case .yearInReview: YearInReviewView()
+        case .discover, .discovery: DiscoverHubView()
+        case .fingerprint, .recent, .taste, .tasteHub, .yearInReview: TasteHubView()
         case .settings:    SettingsView()
         }
     }
