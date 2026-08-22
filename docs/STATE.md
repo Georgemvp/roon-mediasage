@@ -67,6 +67,18 @@ de wachtrij leegloopt (stond al open in LOCAL_PLAYER_READINESS §7).
 i.p.v. op een lege speler. Let op de val in `NowPlayingBar.swift:9-12`: de
 mini-balk hoort met `safeAreaInset` één keer om de `TabView`, niet per tab.
 
+**DE MACOS-RELEASE VAN DEZE BATCH FAALDE TWEE KEER OP APPLE, NIET OP DE CODE**
+(v1.10.263). De build was compleet, de `.app` gesigneerd, notarisatie *Accepted*
+en gestapled, de DMG aangemaakt — en dan struikelde de állerlaatste stap:
+`codesign --timestamp` op de DMG zelf, met "The timestamp service is not
+available". Twee keer, vier minuten uit elkaar, terwijl stap 3 de `.app` beide
+keren wél timestampte. Dat is throttling: het is de derde aanroep naar Apple
+binnen een paar minuten. `build-release.sh` heeft nu een backoff-lus (5 pogingen,
+15/30/45/60 s) om die DMG-codesign, naar analogie van de bestaande hdiutil-lus.
+Geshipt als **v1.10.264**. iOS is bewust NIET opnieuw getagd — `ios-v1.7.230`
+slaagde en de app-binary is ongewijzigd, dus een nieuwe tag zou alleen een
+TestFlight-build verbranden voor identieke code.
+
 **Losse waarneming, niet van deze batch:** `native/RoonSage/Package.swift` heeft
 een ongecommitte wijziging (`.process("Resources")` → `.copy("Resources")` in
 het AudioAnalysis-target) die er al stond; met rust gelaten.

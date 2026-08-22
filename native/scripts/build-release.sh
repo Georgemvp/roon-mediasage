@@ -142,9 +142,30 @@ done
 
 rm -rf "$STAGING"
 
-# Sign the DMG itself (required for notarization of the DMG)
+# Sign the DMG itself (required for notarization of the DMG).
+#
+# `--timestamp` calls Apple's timestamp service, and THIS call is the one that
+# gets refused: it lands right after signing the .app (also timestamped) and a
+# full notarytool round-trip, so it is the third request to Apple in a couple of
+# minutes and gets throttled with "The timestamp service is not available".
+# Failed twice in a row on v1.10.263 (2026-08-22) while step 3 signed the .app
+# fine both times and notarization came back Accepted — so it is rate limiting,
+# not a broken certificate or an outage. Retry with a growing pause rather than
+# losing an otherwise complete release; same shape as the hdiutil retry above,
+# but with a longer backoff because a throttle window is seconds, not
+# milliseconds.
 if [[ -n "${SIGN_IDENTITY:-}" ]]; then
-    codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG_PATH"
+    for attempt in 1 2 3 4 5; do
+        if codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG_PATH"; then
+            break
+        fi
+        if [[ $attempt -eq 5 ]]; then
+            echo "   ✗ DMG codesign failed after 5 attempts" >&2
+            exit 1
+        fi
+        echo "   ⚠ DMG codesign failed (attempt $attempt/5) — waiting for the timestamp service"
+        sleep $((attempt * 15))
+    done
 fi
 
 echo ""
