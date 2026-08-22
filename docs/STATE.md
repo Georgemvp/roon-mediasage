@@ -19,6 +19,62 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+NU (2026-08-22, avond): **HET STATIONS-PLAN UITGEVOERD — fase 1 t/m 3 compleet,
+fase 4 deels; W11/W13 bewust gestopt.** (user: "Begin maar, doe alles.")
+Geshipt in vijf commits, `native/docs/STATIONS_PLAN.md` §5b houdt de stand bij.
+
+**Fase 1 — snelheid.** `RadioListCache` memoizeert de stationslijst per
+rotatiebucket (die was per definitie constant en werd bij élke verschijning van
+het scherm herberekend, want de "loaded"-vlag leefde in SwiftUI-`@State`). De
+Qobuz-spiegel hangt niet langer als scherm-brede `.task` maar aan zijn eigen
+sectie — dat scheelt 0,91 s netwerk (6,08 s koud) per opening. En
+`analyzedTrackIdentities()` bouwt de lijst zonder één embedding aan te raken; dat
+was ~165 MB voor een scherm met een dozijn tegels. **Bewust: de
+geheugendruk-handler laat de lijstcache staan** — die paar dozijn namen zijn juist
+wat de 165 MB-herlaadslag voorkomt.
+
+**Fase 2 — woordenschat.** Voor jou · Gast-DJ · Reizen · Genereer. Album Radio
+verhuisde naar de stations (het eindigt nooit; het stond tussen twee reizen die
+dat wél doen), de Qobuz-spiegel is van een tweede volledig raster teruggebracht
+tot één regel met een eigen scherm erachter.
+
+**Fase 3 — de persona overal.** `RoonClient.stationPersona` gaat mee bij élke
+station-start; de motor accepteerde dat al (`startRadio(djMode:)`) maar de UI bood
+het alleen op de nu spelende track. Lang-indrukken op een stationskaart geeft
+"Start als …". Het Gast-DJ-scherm is niet langer dood zonder muziek: kiezen zet nu
+de persona die je stations stuurt. De dial benoemt zijn eigen override.
+
+**Fase 4 — deels.** W12 is er: `RadioConfig.fromStation` maakt van elk
+automatisch station een bewaarbaar eigen station ("bewaar als eigen station" in
+het contextmenu). Onderweg bleek ik dáár zelf te dupliceren —
+`radioConfigFromAIRadio` had al dezelfde switch — dus dat is nu één mapping.
+
+**W11 EN W13 ZIJN GESTOPT, OP TWEE BEVINDINGEN UIT DE UITVOERING:**
+1. **De stabiele station-id is een anker in de echte wereld.** `artist:<lower>`
+   draagt `radiosync.selection.v1`, `radioHidden`, én `titleKey(id)` — en die
+   gecachete AI-titel ís de Qobuz-playlistnaam waarop `find-or-create` matcht
+   ("the one chosen key", aldus `RoonClient+ArtistRadio`). Omzetten naar
+   `custom:<uuid>` laat elke bestaande playlist opnieuw aanmaken **naast** de
+   oude, in Caspers echte Qobuz-account.
+2. **De twee gates verschillen bewust.** `bucketGate` matcht genres op
+   `SonicTrack.genres` (MB ∪ Deezer), `customGate` op Roon's `track_genres`. Ik
+   had dat al omgezet als "vergeten helft" — tot `b5325a9` (de commit die de
+   buckets omzette wegens "Daft Punk in jazz") letterlijk bleek te zeggen: *"Roon
+   genresByTrackID() blijft ongemoeid (artist-affiniteit/custom/SonicDNA hangen
+   eraan)."* Teruggedraaid; `StationGateParityTests` pint het verschil.
+
+**OPENSTAANDE VRAAG VOOR CASPER:** een eigen station met een genre-facet is nu
+*losser* dan het automatische station van dezelfde naam — het laat muziek toe die
+Roon grof als dat genre tagde. Het argument dat die grove bron voor de buckets
+afschoot geldt hier net zo goed, maar omzetten verandert wat je opgeslagen
+stations afspelen. Zeg het woord en ik trek ze gelijk.
+
+**Verified: 971 tests 0 failures (was 956) · `swift build -c release` exit 0 ·
+check-localization 999 sleutels, 0 missend / 0 wees · alle drie de UI-tests groen
+· vier segmenten gefotografeerd.** Nog niet getagd/gedeployd.
+
+---
+
 NU (2026-08-22, avond): **FUNCTIONELE AUDIT VAN STATIONS + PLAN —
 `native/docs/STATIONS_PLAN.md`.** (user: "Controleer alle functies, kijk of de
 functies wel slim zijn of kunnen opgaan in andere functies … kijk of alles snel
