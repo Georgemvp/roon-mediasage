@@ -85,27 +85,32 @@ public enum LocalAudioCache {
     }
 
     private static func pinnedURL(forKey key: String, variant: String) -> URL? {
-        pinnedDirectory()?.appendingPathComponent(filename(forKey: key, variant: variant))
+        guard let dir = pinnedDirectory() else { return nil }
+        return locate(base: filename(forKey: key, variant: variant), in: dir)
     }
 
     /// The downloaded file for this track, or nil. Unlike the cache this does NOT
     /// touch the modification date — nothing ages downloads out.
     public static func downloadedFile(forKey key: String, variant: String) -> URL? {
-        guard !key.isEmpty, let f = pinnedURL(forKey: key, variant: variant),
-              FileManager.default.fileExists(atPath: f.path) else { return nil }
-        return f
+        guard !key.isEmpty else { return nil }
+        return pinnedURL(forKey: key, variant: variant)
     }
 
     public static func storeDownload(_ data: Data, forKey key: String, variant: String) -> Bool {
-        guard !data.isEmpty, !key.isEmpty,
-              let f = pinnedURL(forKey: key, variant: variant) else { return false }
+        guard !data.isEmpty, !key.isEmpty, let dir = pinnedDirectory() else { return false }
+        let f = destination(base: filename(forKey: key, variant: variant), in: dir, for: data)
         do { try data.write(to: f, options: .atomic); return true } catch { return false }
     }
 
     @discardableResult
     public static func removeDownload(forKey key: String, variant: String) -> Bool {
-        guard let f = pinnedURL(forKey: key, variant: variant) else { return false }
-        return (try? FileManager.default.removeItem(at: f)) != nil
+        guard let dir = pinnedDirectory() else { return false }
+        var removed = false
+        for f in allPaths(base: filename(forKey: key, variant: variant), in: dir)
+        where FileManager.default.fileExists(atPath: f.path) {
+            if (try? FileManager.default.removeItem(at: f)) != nil { removed = true }
+        }
+        return removed
     }
 
     public static func downloadsSizeBytes() -> Int {
@@ -145,6 +150,92 @@ public enum LocalAudioCache {
         return queryItems.map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
     }
 
+    // MARK: - File type
+    //
+    // **The extension is not cosmetic — without it nothing stored here plays.**
+    // `filename(forKey:variant:)` is a bare SHA-256 hex string, and `AVURLAsset`
+    // derives the media type from the path extension: handed the same bytes it
+    // opens `x.m4a` and refuses the extensionless copy with `-12847 "This media
+    // format is not supported"`. That is exactly what the on-device player logged
+    // for every downloaded track. Streaming never showed it, because an HTTP
+    // response carries `Content-Type` and a file on disk carries nothing — so the
+    // tier broke precisely and only when the network was gone, which is the one
+    // case it exists for.
+    //
+    // (AVFoundation does have an out-of-band MIME hint, but that key is not
+    // declared in any public header — it lives in the .tbd only. An extension is
+    // the supported way to say the same thing.)
+
+    /// Extensions we may append, and therefore also the ones a lookup must try.
+    static let knownExtensions = ["m4a", "flac", "mp3", "wav", "aiff", "ogg", "opus"]
+
+    /// The extension matching these first bytes, or nil if we don't recognise
+    /// them. Better no extension than a wrong one: a wrong type makes
+    /// AVFoundation fail in a way that reads like a corrupt file.
+    public static func fileExtension(forHeader head: Data) -> String? {
+        let b = [UInt8](head)
+        guard b.count >= 4 else { return nil }
+
+        func matches(_ ascii: String, at offset: Int) -> Bool {
+            let want = [UInt8](ascii.utf8)
+            guard b.count >= offset + want.count else { return false }
+            return Array(b[offset..<(offset + want.count)]) == want
+        }
+
+        if matches("fLaC", at: 0) { return "flac" }
+        if matches("ftyp", at: 4) { return "m4a" }    // AAC/ALAC in an MP4 box
+        if matches("RIFF", at: 0), matches("WAVE", at: 8) { return "wav" }
+        if matches("FORM", at: 0), matches("AIFF", at: 8) { return "aiff" }
+        if matches("OggS", at: 0) { return "ogg" }
+        if matches("ID3", at: 0) { return "mp3" }
+        // Bare MPEG frame sync (11 set bits) — an MP3 with no ID3 tag.
+        if b[0] == 0xFF, (b[1] & 0xE0) == 0xE0 { return "mp3" }
+        return nil
+    }
+
+    /// Same question, asked of a file already on disk.
+    public static func fileExtension(ofFileAt url: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        guard let head = try? handle.read(upToCount: 12) else { return nil }
+        return fileExtension(forHeader: head)
+    }
+
+    /// Find `base`, `base.m4a`, `base.flac`, … in `dir`.
+    ///
+    /// A hit on the bare name is a file written before this fix; rename it to the
+    /// extension its bytes call for, so it becomes playable without a
+    /// re-download. Best-effort — if the rename fails we still return something,
+    /// and the caller is no worse off than before.
+    private static func locate(base: String, in dir: URL) -> URL? {
+        let fm = FileManager.default
+        for ext in knownExtensions {
+            let candidate = dir.appendingPathComponent("\(base).\(ext)")
+            if fm.fileExists(atPath: candidate.path) { return candidate }
+        }
+        let bare = dir.appendingPathComponent(base)
+        guard fm.fileExists(atPath: bare.path) else { return nil }
+        guard let ext = fileExtension(ofFileAt: bare) else { return bare }
+        let renamed = dir.appendingPathComponent("\(base).\(ext)")
+        do { try fm.moveItem(at: bare, to: renamed); return renamed }
+        catch { return bare }
+    }
+
+    /// Where to write `data` for `base`: with the extension its header calls for.
+    private static func destination(base: String, in dir: URL, for data: Data) -> URL {
+        guard let ext = fileExtension(forHeader: data.prefix(12)) else {
+            return dir.appendingPathComponent(base)
+        }
+        return dir.appendingPathComponent("\(base).\(ext)")
+    }
+
+    /// Every path `base` could occupy — for deletion, which must not leave a
+    /// second copy behind under another extension.
+    private static func allPaths(base: String, in dir: URL) -> [URL] {
+        [dir.appendingPathComponent(base)]
+            + knownExtensions.map { dir.appendingPathComponent("\(base).\($0)") }
+    }
+
     /// Stable filename for a (match key, variant) pair — hashed because match
     /// keys are free text ("artist|title") and would not survive as paths.
     static func filename(forKey key: String, variant: String) -> String {
@@ -153,7 +244,8 @@ public enum LocalAudioCache {
     }
 
     private static func fileURL(forKey key: String, variant: String) -> URL? {
-        directory()?.appendingPathComponent(filename(forKey: key, variant: variant))
+        guard let dir = directory() else { return nil }
+        return locate(base: filename(forKey: key, variant: variant), in: dir)
     }
 
     /// The local file for this track: a pinned download first, then the LRU
@@ -171,15 +263,14 @@ public enum LocalAudioCache {
     /// The cached file for this track, or nil on a miss. Touches the modification
     /// date on a hit so pruning keeps what you actually listen to (LRU-ish).
     public static func cachedFile(forKey key: String, variant: String) -> URL? {
-        guard !key.isEmpty, let f = fileURL(forKey: key, variant: variant),
-              FileManager.default.fileExists(atPath: f.path) else { return nil }
+        guard !key.isEmpty, let f = fileURL(forKey: key, variant: variant) else { return nil }
         try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: f.path)
         return f
     }
 
     public static func store(_ data: Data, forKey key: String, variant: String) {
-        guard !data.isEmpty, !key.isEmpty,
-              let f = fileURL(forKey: key, variant: variant) else { return }
+        guard !data.isEmpty, !key.isEmpty, let dir = directory() else { return }
+        let f = destination(base: filename(forKey: key, variant: variant), in: dir, for: data)
         try? data.write(to: f, options: .atomic)
     }
 

@@ -140,4 +140,90 @@ final class LocalAudioCacheTests: XCTestCase {
         XCTAssertEqual(LocalAudioCache.sizeBytes(), 0)
         XCTAssertNil(LocalAudioCache.cachedFile(forKey: "a", variant: "orig"))
     }
+
+    // MARK: - File type
+    //
+    // These files are named by SHA-256. `AVURLAsset` reads the media type off
+    // the path extension and will not sniff content: handed the same bytes it
+    // opens "x.m4a" and refuses the extensionless copy with -12847. So without
+    // an extension NOTHING in either tier can be played — which is why offline
+    // playback was broken while streaming the same track was fine (an HTTP
+    // response carries Content-Type; a file does not).
+
+    private func ascii(_ s: String) -> [UInt8] { Array(s.utf8) }
+
+    func testRecognisesTheFormatsWeStore() {
+        let cases: [(String, [UInt8])] = [
+            ("flac", ascii("fLaC") + [0, 0, 0, 34]),
+            // "ftyp" sits at offset 4, behind the box length — the only magic
+            // that isn't at the start of the file.
+            ("m4a",  [0, 0, 0, 0x20] + ascii("ftypM4A ")),
+            ("wav",  ascii("RIFF") + [0, 0, 0, 0] + ascii("WAVE")),
+            ("aiff", ascii("FORM") + [0, 0, 0, 0] + ascii("AIFF")),
+            ("ogg",  ascii("OggS") + [0, 2, 0, 0]),
+            ("mp3",  ascii("ID3") + [3, 0, 0, 0, 0, 0, 0]),
+            ("mp3",  [0xFF, 0xFB, 0x90, 0x00]),   // frame sync, no ID3 tag
+        ]
+        for (want, bytes) in cases {
+            XCTAssertEqual(LocalAudioCache.fileExtension(forHeader: Data(bytes)), want,
+                           "header \(bytes.prefix(4)) hoort \(want) te geven")
+        }
+    }
+
+    func testUnrecognisedHeaderGetsNoExtension() {
+        // Better none than a wrong one: a wrong type makes AVFoundation fail in
+        // a way that reads like a corrupt file.
+        XCTAssertNil(LocalAudioCache.fileExtension(forHeader: Data(ascii("not audio at all"))))
+        XCTAssertNil(LocalAudioCache.fileExtension(forHeader: Data([0x00, 0x01])))
+        // RIFF alone isn't enough — RIFF/AVI is not audio.
+        XCTAssertNil(LocalAudioCache.fileExtension(
+            forHeader: Data(ascii("RIFF") + [0, 0, 0, 0] + ascii("AVI "))))
+    }
+
+    private var m4a: Data { Data([0, 0, 0, 0x20] + ascii("ftypM4A ") + [0, 0, 0, 0]) }
+
+    func testDownloadLandsOnAPlayableName() {
+        XCTAssertTrue(LocalAudioCache.storeDownload(m4a, forKey: key, variant: "orig"))
+        let f = LocalAudioCache.downloadedFile(forKey: key, variant: "orig")
+        XCTAssertEqual(f?.pathExtension, "m4a",
+                       "zonder extensie weigert AVURLAsset het bestand")
+    }
+
+    func testCachedFileLandsOnAPlayableName() {
+        LocalAudioCache.store(m4a, forKey: key, variant: "orig")
+        XCTAssertEqual(LocalAudioCache.cachedFile(forKey: key, variant: "orig")?.pathExtension, "m4a")
+    }
+
+    func testUnknownFormatStillRoundTripsWithoutExtension() {
+        // We must not lose data we can't name; playback then behaves exactly as
+        // it did before this fix rather than worse.
+        let blob = Data(ascii("iets onbekends maar wel bytes"))
+        XCTAssertTrue(LocalAudioCache.storeDownload(blob, forKey: key, variant: "orig"))
+        let f = LocalAudioCache.downloadedFile(forKey: key, variant: "orig")
+        XCTAssertEqual(f?.pathExtension, "")
+        XCTAssertEqual(try? Data(contentsOf: XCTUnwrap(f)), blob)
+    }
+
+    func testExistingExtensionlessFileIsAdoptedAndRenamed() {
+        // The migration that matters: everything already downloaded on a phone
+        // sits under a bare hash. It must become playable without re-downloading.
+        let dir = LocalAudioCache.pinnedDirectoryOverride!
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let bare = dir.appendingPathComponent(
+            LocalAudioCache.filename(forKey: key, variant: "orig"))
+        try? m4a.write(to: bare)
+
+        let found = LocalAudioCache.downloadedFile(forKey: key, variant: "orig")
+        XCTAssertEqual(found?.pathExtension, "m4a", "oude download is niet hernoemd")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: bare.path),
+                       "de oude naam moet weg zijn, niet gedupliceerd")
+        XCTAssertEqual(try? Data(contentsOf: XCTUnwrap(found)), m4a)
+    }
+
+    func testRemoveDownloadLeavesNoCopyBehind() {
+        LocalAudioCache.storeDownload(m4a, forKey: key, variant: "orig")
+        XCTAssertTrue(LocalAudioCache.removeDownload(forKey: key, variant: "orig"))
+        XCTAssertNil(LocalAudioCache.downloadedFile(forKey: key, variant: "orig"))
+    }
+
 }

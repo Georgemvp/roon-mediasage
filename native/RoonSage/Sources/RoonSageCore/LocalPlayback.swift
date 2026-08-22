@@ -682,6 +682,13 @@ public final class LocalPlaybackController {
         // works with no server at all.
         // A pinned download wins over the opportunistic cache; both skip the
         // network entirely, which is what makes offline playback work at all.
+        //
+        // The URL that comes back carries a path extension, and it has to:
+        // `AVURLAsset` reads the media type off the extension and does not sniff
+        // content, so a bare-hash filename fails the whole asset with -12847
+        // "This media format is not supported". Streaming hid that for months
+        // because an HTTP response carries Content-Type — see
+        // `LocalAudioCache.fileExtension(forHeader:)`.
         if let local = LocalAudioCache.localFile(forKey: track.id, variant: variant) {
             return AVPlayerItem(url: local)
         }
