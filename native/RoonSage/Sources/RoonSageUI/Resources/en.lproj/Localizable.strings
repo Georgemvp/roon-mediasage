@@ -481,6 +481,7 @@
 "library.syncThenSearch"         = "Sync your library and search again.";
 "library.syncToFillOverview"     = "Sync your library to fill this overview.";
 "library.tracks"                 = "Tracks";
+"library.titleWithCount"      = "Library (%d tracks)";
 
 /* libraryDetail */
 "libraryDetail.aboutAlbum"       = "About this album";

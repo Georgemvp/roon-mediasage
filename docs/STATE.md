@@ -5,7 +5,7 @@ Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst geshipt: v1.10.269 / ios-v1.7.235 / analyzer-v1.1.200 (getagd; de
+Laatst geshipt: v1.10.270 / ios-v1.7.236 / analyzer-v1.1.200 (getagd; de
 analyzer draait sinds 2c50e34 wél als v1.1.200 op de mini, via de CI-DMG).
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
@@ -246,7 +246,41 @@ wachtrij bereikbaar in 1 tik · verzonnen eigennamen in de tabbalk 9 → 0. De t
 resterende maten (tikken tot muziek, speler ↔ bladeren met behoud van context)
 zijn per constructie waar maar niet gemeten, want dat vraagt een toestel.
 
-**WAT ER NIET IS GEBEURD EN DE VOLGENDE SESSIE MOET DOEN: kijken.** Geen enkele
+**DE BLINDE VLEK IS WEG — v1.10.270 / ios-v1.7.236.** Er is nu een UI-harnas:
+`native/scripts/ui-verify.sh` maakt een wegwerp-simulator, bouwt, **zaait een
+demo-bibliotheek** (zonder tracks biedt het verbindscherm geen "Offline
+gebruiken" en kom je nergens), draait `UXSnapshotTests` en pakt de
+schermafdrukken uit in `/tmp/roonsage-ui`. **Geen enkel systeemrecht nodig** —
+XCUITest draait ín de simulator via de testharnas. Dat werkte de hele tijd al;
+ik heb zes batches lang "NIET geverifieerd" geschreven en dat als een
+eigenschap van de machine beschreven terwijl de route openlag.
+
+**De eerste foto toonde meteen twee fouten die zes batches bouwen niet gaven:**
+- In offlinemodus stond er permanent een alarmpil "Fout: geen RoonSage-server
+  gevonden" óver de zoekbalk, vlak onder een banner die hetzelfde al rustig had
+  uitgelegd. `ReconnectingBanner` had geen `offlineMode`-uitzondering en offline
+  is de status blijvend `.failed`. Gefixt.
+- De offline-banner lag óver de navigatiebalk: tandwiel, uitvoerkiezer en
+  sync-knop zaten erachter. Gemeten door de test zelf (tandwiel y 66–102, banner
+  57–98). Gefixt door de banner een `VStack`-broer te maken in plaats van een
+  top-`safeAreaInset` — dezelfde vorm als `nowPlayingBarDocked` onderaan, en om
+  dezelfde reden: een safe-area-inset rond een NavigationStack is een suggestie,
+  een VStack-broer niet.
+- De hoofdtitel bleef Nederlands op een Engelse telefoon:
+  `LS("Bibliotheek (\(count))")` interpoleert het getal ín de sleutel, dus die
+  kan nooit oplossen. Gefixt — **en er zijn er nog 69 van die soort.**
+  `check-localization.sh` telt ze nu apart (nog niet gegate: een poort die vanaf
+  dag één faalt wordt genegeerd; wél zichtbaar in de diff van wie er een toevoegt).
+
+**Nog open, met schermafdruk als bewijs:** dubbele chevrons (`> >`) op de
+kaarten in Stations, en de navigatietitel daar zegt "Radios" terwijl de tab
+"Stations" heet.
+
+**Visueel bevestigd wat wél klopte:** vier tabs die alle vier op inhoud landen ·
+Stations met Radio's · DJ-modi · Journeys · Genereer · de instellingen als twee
+deuren mét hun uitleg · de kaarten Playlists/Bewaard/Lab op het overzicht.
+
+**VOLGENDE:** Geen enkele
 wijziging uit deze zes batches is visueel geverifieerd. `simctl` maakt
 schermafdrukken maar verstuurt geen tikken, en GUI-automatisering is op deze
 machine geblokkeerd, dus voorbij het verbindscherm kom ik niet (zie

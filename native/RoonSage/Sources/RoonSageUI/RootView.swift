@@ -24,9 +24,23 @@ public struct ContentView: View {
             // drops to the connect screen. Prevents a heavy generate stalling
             // /playback from tearing down views and losing in-flight state.
             if client.connectionState.isConnected || client.hasLiveSession || client.offlineMode {
-                RootView()
-                    .overlay(alignment: .top) { ReconnectingBanner() }
-                    .safeAreaInset(edge: .top, spacing: 0) { OfflineBanner() }
+                // The banner is a layout SIBLING, not a top safe-area inset.
+                //
+                // As an inset it drew straight over the navigation toolbar: on
+                // iOS 26 that toolbar floats as a capsule and kept its position,
+                // so the gear (Instellingen), the output picker and the sync
+                // button all sat behind the banner whenever the app was offline.
+                // Measured, not guessed — the UI harness reported the gear at
+                // y 66–102 in a window whose banner ran from 57 to 98.
+                //
+                // Same shape of fix as `nowPlayingBarDocked` at the bottom, and
+                // for the same reason: a safe-area inset around a NavigationStack
+                // is a suggestion, a VStack sibling is not.
+                VStack(spacing: 0) {
+                    OfflineBanner()
+                    RootView()
+                        .overlay(alignment: .top) { ReconnectingBanner() }
+                }
             } else {
                 WelcomeGate()
             }
@@ -86,7 +100,15 @@ struct ReconnectingBanner: View {
         // session exists a poll blip must NOT drop a "Verbinden met …" pill over
         // the nav title (it was covering it and never clearing). Real failures
         // still surface via the bottom ActionErrorToast.
-        if !client.connectionState.isConnected && !client.hasLiveSession {
+        //
+        // And NOT in offline mode. There the connection state is permanently
+        // `.failed`, so this pill sat over the search field forever, saying
+        // "Fout: geen RoonSage-server gevonden" directly under a banner that had
+        // already explained the situation calmly. Two messages about one fact,
+        // one of them alarming and covering a control. Found on the first
+        // screenshot the UI harness ever took — six batches of building never
+        // surfaced it, because you have to *look*.
+        if !client.connectionState.isConnected && !client.hasLiveSession && !client.offlineMode {
             Label(client.connectionState.label, systemImage: "arrow.clockwise")
                 .font(.caption.weight(.medium))
                 .padding(.horizontal, 12)
@@ -570,7 +592,13 @@ struct RootView: View {
         TabView(selection: iOSTabSelection) {
             NavigationStack {
                 LibraryView()
-                    .navigationTitle(LS("Bibliotheek (\(client.trackCount))"))
+                    // NOT `LS("Bibliotheek (\(count))")`. That interpolates the
+                    // number INTO the key, so it can never resolve and silently
+                    // renders the Dutch literal — the app's main heading stayed
+                    // Dutch on an English phone while everything under it
+                    // translated. Photographed by the UI harness; there are ~70
+                    // more of these, see check-localization.sh.
+                    .navigationTitle(String(format: LS("library.titleWithCount"), client.trackCount))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { navToolbar }
                     .toolbar { settingsToolbarItem }
@@ -631,6 +659,10 @@ struct RootView: View {
                 Image(systemName: "gearshape")
             }
             .accessibilityLabel(LS("nav.settings"))
+            // Language-independent handle for the UI walk: every visible label
+            // in this app is localised, and a test that matches on Dutch would
+            // pass or fail on the device's language rather than on the UI.
+            .accessibilityIdentifier("gear.settings")
         }
     }
 

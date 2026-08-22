@@ -52,6 +52,23 @@ for lang in nl en; do
     fi
 done
 
+# Interpolated keys: LS("Bibliotheek (\(count))"). These CANNOT resolve — the
+# value is baked into the key, so the lookup always misses and SwiftUI renders
+# the key itself, which is the Dutch literal. On an English phone that shows as
+# one Dutch line between English ones; the app's own main heading did exactly
+# that until a screenshot from native/scripts/ui-verify.sh caught it.
+#
+# Not gated yet: there are ~70, and a gate that fails from day one gets ignored.
+# Reported so the number can only go down, and so a new one is visible in the
+# diff of whoever adds it. The fix is always the same shape:
+#   String(format: LS("some.key"), value)   met %d / %@ in de catalogus.
+interp=$(grep -rhoE '\bL[ST]\("[^"]*\\\([^"]*"' --include='*.swift' "$UI" | sort -u || true)
+interp_count=$(printf '%s' "$interp" | grep -c . || true)
+echo "── interpolated keys (kunnen nooit oplossen, vallen terug op het Nederlands): $interp_count"
+if [[ -n "${VERBOSE:-}" && -n "$interp" ]]; then
+    printf '%s\n' "$interp" | sed 's/^/     /'
+fi
+
 # Orphans: defined but no longer referenced. Harmless at runtime, but they hide
 # real drift — two of them (from a deleted component) are what made the missing
 # count not add up when this script was first written.

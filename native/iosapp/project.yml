@@ -69,6 +69,13 @@ targets:
       - package: RoonSage
         product: RoonSageCore
       - target: RoonSageWidgets   # embeds the Live Activity extension
+    scheme:
+      # Hangs the UI tests on the app's own scheme, so `xcodebuild test -scheme
+      # RoonSageiOS` runs them. Zonder dit genereert xcodegen wel het target maar
+      # kent geen enkel schema het, en `xcodebuild test` zegt dan alleen dat er
+      # niets te testen valt.
+      testTargets:
+        - RoonSageiOSUITests
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.roonsage.ios
@@ -121,3 +128,30 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 5W3QDZ94FH
         SKIP_INSTALL: YES
+
+  # UI-test target — het enige gereedschap dat op deze machine écht in de app kan
+  # tikken.
+  #
+  # De terminal heeft geen Accessibility- of Screen-Recording-TCC, dus
+  # `osascript … System Events` en `screencapture` zijn dood, en `simctl` maakt
+  # wél schermafdrukken maar verstuurt géén tikken. Zes UX-batches lang stond
+  # daarom in elke commit "NIET geverifieerd: hoe het eruitziet". XCUITest draait
+  # ín de simulator via de testharnas en vraagt geen enkel systeemrecht.
+  #
+  # Draaien: native/scripts/ui-verify.sh (die zaait ook een demo-bibliotheek, want
+  # zonder gesynchroniseerde tracks biedt het verbindscherm geen "Offline
+  # gebruiken" en kom je er niet voorbij).
+  RoonSageiOSUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: RoonSageiOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.roonsage.ios.uitests
+        SWIFT_VERSION: "5.9"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 5W3QDZ94FH
+        TEST_TARGET_NAME: RoonSageiOS

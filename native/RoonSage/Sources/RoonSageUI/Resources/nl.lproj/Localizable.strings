@@ -481,6 +481,7 @@
 "library.syncThenSearch"         = "Synchroniseer je bibliotheek en zoek opnieuw.";
 "library.syncToFillOverview"     = "Synchroniseer je bibliotheek om dit overzicht te vullen.";
 "library.tracks"                 = "Tracks";
+"library.titleWithCount"      = "Bibliotheek (%d tracks)";
 
 /* libraryDetail */
 "libraryDetail.aboutAlbum"       = "Over dit album";

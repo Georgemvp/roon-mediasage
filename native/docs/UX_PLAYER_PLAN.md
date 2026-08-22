@@ -253,6 +253,40 @@ blad-overgang soepel is met de art-crossfade eronder, of de veeggebaren botsen
 met de systeem-terugveeg, en of de mini-balk boven de tabbalk blijft staan met
 een geopende sheet.
 
+## 7c. De blinde vlek is weg (2026-08-22, v1.10.270)
+
+§7b hieronder zei: `simctl` kan geen tikken versturen, dus voorbij het
+verbindscherm kom ik niet, en de enige route is een XCUITest-target. **Dat target
+is er nu**, en het had er zes batches eerder moeten zijn.
+
+`native/scripts/ui-verify.sh` maakt een wegwerp-simulator, bouwt, **zaait een
+demo-bibliotheek** (zonder gesynchroniseerde tracks biedt het verbindscherm geen
+"Offline gebruiken" en kom je nergens), draait `UXSnapshotTests` en pakt de
+schermafdrukken uit in `/tmp/roonsage-ui`. Geen enkel systeemrecht nodig:
+XCUITest draait ín de simulator via de testharnas, en dat werkte de hele tijd al.
+
+**De eerste foto die hij ooit nam, toonde meteen twee fouten die zes batches
+bouwen niet hadden opgeleverd:**
+
+| Bevinding | Bewijs | Status |
+|---|---|---|
+| In offlinemodus stond er permanent een alarmpil *"Fout: geen RoonSage-server gevonden"* óver de zoekbalk — vlak onder een banner die hetzelfde feit al rustig had uitgelegd | `ReconnectingBanner` heeft geen `offlineMode`-uitzondering, en offline is de verbindingsstatus blijvend `.failed` | **gefixt** |
+| De offline-banner lag óver de navigatiebalk: tandwiel, uitvoerkiezer en sync-knop zaten erachter | gemeten door de test: tandwiel op y 66–102, banner 57–98 | **gefixt** — banner is nu een `VStack`-broer i.p.v. een top-`safeAreaInset`, dezelfde vorm als `nowPlayingBarDocked` onderaan |
+| De hoofdtitel van de app bleef Nederlands op een Engelse telefoon | `LS("Bibliotheek (\(count))")` interpoleert het getal ín de sleutel, dus die kan nooit oplossen | **gefixt** |
+| **Er zijn er nog 69 van die soort** | `check-localization.sh` telt ze nu apart | **backlog, geteld** |
+| Dubbele chevrons (`> >`) op de kaarten in Stations | `04-tab-Stations.png` | open |
+| De navigatietitel op Stations zegt "Radios", de tab zegt "Stations" | idem | open |
+
+**Wat wél klopte, nu met bewijs:** vier tabs die alle vier op inhoud landen ·
+Stations met Radio's · DJ-modi · Journeys · Genereer · de instellingen als twee
+deuren met hun uitleg eronder · de kaarten voor Playlists, Bewaard en Lab op het
+bibliotheekoverzicht.
+
+**De les, en hij is groter dan deze bevindingen:** ik heb zes batches lang
+"NIET geverifieerd" in commits gezet en dat als een eigenschap van de machine
+beschreven, terwijl de route de hele tijd openlag. Een grens die je één keer
+vaststelt en daarna citeert, blijft niet vanzelf waar.
+
 ## 7b. Wat de simulator wél en niet kon bewijzen (2026-08-22)
 
 Er stond geen simulator op deze machine; er is er één aangemaakt (iPhone 17,
