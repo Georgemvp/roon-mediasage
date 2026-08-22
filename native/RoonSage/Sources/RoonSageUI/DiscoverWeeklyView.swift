@@ -47,7 +47,7 @@ public struct DiscoverWeeklyView: View {
                 emptyState.plainCardRow()
             }
         }
-        .navigationTitle(LS("discoverWeekly.navTitle"))
+        .screenTitle(LS("discoverWeekly.navTitle"))
         .toolbar {
             Button {
                 Task { await refreshNow() }

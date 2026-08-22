@@ -103,14 +103,28 @@ public struct QueueView: View {
     }
 
     /// "23 nummers · 1 u 42 m" — the queue's footprint at a glance.
+    ///
+    /// Through the catalogue, plural included: this line was assembled from Dutch
+    /// literals and so read "1 nummer" on an English phone, on the queue page of
+    /// an otherwise English player.
     private var queueSummary: String {
         let items = client.queueItems
         let total = items.reduce(0) { $0 + max(0, $1.length) }
-        let noun = items.count == 1 ? "nummer" : "nummers"
-        guard total > 0 else { return "\(items.count) \(noun)" }
+        let count = Self.trackCount(items.count)
+        guard total > 0 else { return count }
         let h = total / 3600, m = (total % 3600) / 60
-        let duration = h > 0 ? "\(h) u \(m) m" : "\(m) m"
-        return "\(items.count) \(noun) · \(duration)"
+        let duration = h > 0 ? String(format: LS("queue.durationHM"), h, m)
+                             : String(format: LS("queue.durationM"), m)
+        return "\(count) · \(duration)"
+    }
+
+    /// "1 nummer" / "23 nummers", localised.
+    static func trackCount(_ n: Int) -> String {
+        // Two spelled-out calls, not `LS(n == 1 ? … : …)`: check-localization.sh
+        // greps for `LS("literal")` and reads a key chosen inside the call as
+        // used by nobody.
+        if n == 1 { return String(format: LS("queue.trackCountOne"), n) }
+        return String(format: LS("queue.trackCountMany"), n)
     }
 
     /// Queue items as denormalized track records (the saved-playlist format:
@@ -261,11 +275,10 @@ public struct QueueView: View {
     /// useful number instead.
     private var localSummary: String {
         let lp = client.localPlayback
-        let total = lp.queue.count
-        let noun = total == 1 ? "nummer" : "nummers"
-        let remaining = max(0, total - lp.index - 1)
-        guard remaining > 0 else { return "\(total) \(noun)" }
-        return "\(total) \(noun) · nog \(remaining)"
+        let count = Self.trackCount(lp.queue.count)
+        let remaining = max(0, lp.queue.count - lp.index - 1)
+        guard remaining > 0 else { return count }
+        return "\(count) · \(String(format: LS("queue.remaining"), remaining))"
     }
 
     /// Shuffle, repeat and save for the on-device queue — the same vocabulary as

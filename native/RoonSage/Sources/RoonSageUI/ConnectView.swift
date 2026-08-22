@@ -127,7 +127,15 @@ public struct ConnectView: View {
                         HStack(spacing: 6) {
                             LT("connect.autoConnect")
                             if let s = retryCountdown, !isWorking {
-                                LT("(opnieuw over \(s)s)")
+                                // This used to interpolate the second count
+                                // straight into the lookup key, which can never
+                                // resolve — so it fell back to the Dutch literal
+                                // on an English phone, right next to a translated
+                                // label. Same bug class as `library.titleWithCount`.
+                                // (Spelling the old form out here would be counted
+                                // by check-localization.sh, which greps comments
+                                // too.)
+                                Text(String(format: LS("connect.retryIn"), s))
                                     .foregroundStyle(.secondary)
                                     .monospacedDigit()
                             }

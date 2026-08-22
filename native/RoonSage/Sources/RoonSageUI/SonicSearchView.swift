@@ -65,7 +65,7 @@ public struct SonicSearchView: View {
                 if !lyricsHits.isEmpty { lyricsSection }
             }
         }
-        .navigationTitle(LS("nav.sonicSearch"))
+        .screenTitle(LS("nav.sonicSearch"))
         .onAppear {
             guard autoRun else { return }
             autoRun = false

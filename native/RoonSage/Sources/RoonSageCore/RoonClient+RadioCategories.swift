@@ -33,16 +33,22 @@ extension RoonClient {
             self = c
         }
 
-        /// Dutch label for the segmented picker.
+        /// Label for the category picker.
+        ///
+        /// Via `CoreStrings`, not a bare literal: this row sits on the Stations
+        /// screen and used to be the last Dutch thing on an otherwise English
+        /// page. Core is beneath the catalogue and cannot call `LS`, so each call
+        /// carries its Dutch text as the fallback — a missed registration then
+        /// degrades to today's behaviour instead of showing raw keys.
         public var label: String {
             switch self {
-            case .artist:   return "Artiest"
-            case .genre:    return "Genre"
-            case .mood:     return "Sfeer"
-            case .activity: return "Activiteit"
-            case .decade:   return "Decennium"
-            case .sonic:    return "Buurten"
-            case .recent:   return "Recent"
+            case .artist:   return CoreStrings.s("radioCategory.artist", "Artiest")
+            case .genre:    return CoreStrings.s("radioCategory.genre", "Genre")
+            case .mood:     return CoreStrings.s("radioCategory.mood", "Sfeer")
+            case .activity: return CoreStrings.s("radioCategory.activity", "Activiteit")
+            case .decade:   return CoreStrings.s("radioCategory.decade", "Decennium")
+            case .sonic:    return CoreStrings.s("radioCategory.sonic", "Buurten")
+            case .recent:   return CoreStrings.s("radioCategory.recent", "Recent")
             }
         }
     }

@@ -91,7 +91,7 @@ public struct DiscoveryView: View {
                 emptyState.plainCardRow()
             }
         }
-        .navigationTitle(LS("discovery.title"))
+        .screenTitle(LS("discovery.title"))
         .toolbar {
             Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
                 .help(LS("discovery.refresh"))
@@ -211,10 +211,25 @@ public struct DiscoveryView: View {
                         item.play()
                     } label: {
                         Label(LS("bm.playNow"), systemImage: "play.fill")
+                            // Both spelled out because this button photographed
+                            // as an EMPTY gold pill, and it took two fixes: the
+                            // colour (it was the only prominent button in the app
+                            // inheriting the app tint) and the label style —
+                            // `Label` inside a button may fall back to icon-only,
+                            // which is what was left after the colour was fixed.
+                            .labelStyle(.titleAndIcon)
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
+                            .foregroundStyle(.white)
                     }
+                        // Every other prominent button in this app tints
+                        // explicitly; these two were the only ones inheriting the
+                        // app tint, and they photographed as an EMPTY gold pill —
+                        // no text, no icon — on both hero cards. Stating the tint
+                        // and the label colour makes the contrast independent of
+                        // whatever the style derives from an inherited tint.
                         .buttonStyle(.borderedProminent)
+                        .tint(Color.roonGold)
                         .disabled(!client.hasActiveOutput)
                 }
             }
@@ -251,10 +266,25 @@ public struct DiscoveryView: View {
                         Task { await client.playAlbum(albumKey: a.albumKey) }
                     } label: {
                         Label(LS("bm.playNow"), systemImage: "play.fill")
+                            // Both spelled out because this button photographed
+                            // as an EMPTY gold pill, and it took two fixes: the
+                            // colour (it was the only prominent button in the app
+                            // inheriting the app tint) and the label style —
+                            // `Label` inside a button may fall back to icon-only,
+                            // which is what was left after the colour was fixed.
+                            .labelStyle(.titleAndIcon)
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
+                            .foregroundStyle(.white)
                     }
+                        // Every other prominent button in this app tints
+                        // explicitly; these two were the only ones inheriting the
+                        // app tint, and they photographed as an EMPTY gold pill —
+                        // no text, no icon — on both hero cards. Stating the tint
+                        // and the label colour makes the contrast independent of
+                        // whatever the style derives from an inherited tint.
                         .buttonStyle(.borderedProminent)
+                        .tint(Color.roonGold)
                         .disabled(!client.hasActiveOutput)
                 }
             }

@@ -102,17 +102,28 @@ public func LS(_ key: String.LocalizationValue) -> String {
 /// Register once at launch; the closure re-reads the language preference on
 /// every call, so switching language in Settings takes effect immediately.
 public func installCoreStringsTranslator() {
-    CoreStrings.register { key in
-        let missing = "\u{0}"
-        var bundle = uiBundle
-        if let loc = LocalePreference.current.locale,
-           let path = uiBundle.path(forResource: loc.identifier, ofType: "lproj"),
-           let localised = Bundle(path: path) {
-            bundle = localised
-        }
-        let value = bundle.localizedString(forKey: key, value: missing, table: nil)
-        return value == missing ? nil : value
+    CoreStrings.register { LSDynamic($0) }
+}
+
+/// Look up a key that is only known at runtime, returning nil when it is absent.
+///
+/// `LS` takes a compile-time `String.LocalizationValue` and renders the key
+/// itself on a miss — the "raw key on screen" failure. Callers who build a key
+/// from data (`"playlistTemplate.\(id)"` over 63 generated ids) need the miss to
+/// be visible as nil so they can fall back to something readable.
+///
+/// Note for `check-localization.sh`: keys reached this way are invisible to a
+/// grep of the source, so their prefixes are listed in that script.
+public func LSDynamic(_ key: String) -> String? {
+    let missing = "\u{0}"
+    var bundle = uiBundle
+    if let loc = LocalePreference.current.locale,
+       let path = uiBundle.path(forResource: loc.identifier, ofType: "lproj"),
+       let localised = Bundle(path: path) {
+        bundle = localised
     }
+    let value = bundle.localizedString(forKey: key, value: missing, table: nil)
+    return value == missing ? nil : value
 }
 
 /// Localized name for the on-device output ("dit apparaat" / "deze Mac").

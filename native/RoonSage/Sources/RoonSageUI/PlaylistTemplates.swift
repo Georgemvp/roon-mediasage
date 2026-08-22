@@ -1,5 +1,13 @@
 // AUTO-GEGENEREERD uit data/playlist_templates.yaml (63 sjablonen).
-// Namen + categorieën in het Nederlands; prompts blijven Engels (LLM-input).
+//
+// `name` en `category` zijn de Nederlandse originelen en dienen nu als sleutel +
+// terugval; wat de gebruiker ziet komt uit `displayName` / `displayCategory` en
+// dus uit de catalogus (`playlistTemplate.*`, `playlistCategory.*`). Vóór die
+// splitsing kreeg een Engelstalige telefoon een rij Nederlandse playlistnamen
+// tussen vertaalde labels. Prompts blijven Engels: die zijn LLM-invoer, geen UI.
+//
+// Hergenereer je dit bestand, neem `displayName`/`displayCategory` dan mee — en
+// voeg voor elk nieuw sjabloon een `playlistTemplate.<id>` toe in nl én en.
 import Foundation
 
 struct PlaylistTemplate: Identifiable, Hashable {
@@ -9,6 +17,18 @@ struct PlaylistTemplate: Identifiable, Hashable {
     let category: String
     let trackCount: Int
     let prompt: String
+
+    /// The name as shown to the user.
+    ///
+    /// `name` is the Dutch original and doubles as the fallback: these strings
+    /// used to be rendered straight, so an English phone browsing "Snelle
+    /// sjablonen" got a row of Dutch playlist names between translated labels.
+    /// The id is stable and generated, which makes it the right key.
+    var displayName: String { LSDynamic("playlistTemplate.\(id)") ?? name }
+
+    /// The category as shown to the user. `category` itself stays the lookup key
+    /// (`inCategory(_:)`, `categorySymbol`) — translating it would break both.
+    var displayCategory: String { PlaylistTemplates.displayName(ofCategory: category) }
 
     /// A monochrome SF Symbol per category, for surfaces that follow the app's
     /// SF-Symbol style (the quick "Snelle sjablonen" chips) rather than the
@@ -31,6 +51,15 @@ struct PlaylistTemplate: Identifiable, Hashable {
 enum PlaylistTemplates {
     /// Categorie-volgorde voor de tabs.
     static let categories: [String] = ["Sfeer", "Activiteiten", "Dagdeel", "Tijdperken", "Genres", "Sociaal", "Seizoenen", "Ontdekking"]
+
+    /// Display name for a category key.
+    static func displayName(ofCategory category: String) -> String {
+        let slug = ["Sfeer": "mood", "Activiteiten": "activities", "Dagdeel": "timeOfDay",
+                    "Tijdperken": "eras", "Genres": "genres", "Sociaal": "social",
+                    "Seizoenen": "seasons", "Ontdekking": "discovery"][category]
+        guard let slug else { return category }
+        return LSDynamic("playlistCategory.\(slug)") ?? category
+    }
 
     static func inCategory(_ category: String) -> [PlaylistTemplate] {
         all.filter { $0.category == category }

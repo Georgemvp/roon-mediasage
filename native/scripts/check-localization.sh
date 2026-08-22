@@ -38,6 +38,20 @@ for path in pathlib.Path(sys.argv[1]).rglob("*.swift"):
         keys.add(m.group(1))
 print("\n".join(sorted(keys)))
 PYEOF
+# Keys looked up through a computed name, which no grep can see.
+#
+# `PlaylistTemplate.displayName` builds "playlistTemplate.<id>" from the template
+# id — 63 generated ids, so writing them out at the call site would just be the
+# same list twice. Without this the gate reported all 71 as orphans, and a gate
+# that cries wolf about its own design gets ignored. Anything matching one of
+# these prefixes counts as used; a genuinely dead one shows up as a template that
+# renders its Dutch fallback, not as a raw key.
+DYNAMIC_PREFIXES=("playlistTemplate." "playlistCategory.")
+for prefix in "${DYNAMIC_PREFIXES[@]}"; do
+    grep -h "^\"$prefix" "$RES/nl.lproj/Localizable.strings" \
+        | sed -E 's/^"([^"]+)".*/\1/' >> "$tmp/used" || true
+done
+
 sort -u -o "$tmp/used" "$tmp/used"
 
 status=0

@@ -52,5 +52,8 @@ public struct SearchView: View {
             case .ask:     AskView()
             }
         }
+        // The tab already carries the name; a segment's child must not
+        // rename it out from under us. See `ScreenTitle.swift`.
+        .hubContent()
     }
 }

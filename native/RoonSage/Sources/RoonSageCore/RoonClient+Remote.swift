@@ -346,6 +346,18 @@ extension RoonClient {
             remotePollFailures += 1
             if remotePollFailures >= 5 {
                 connectionState = .disconnected
+                // Five misses in a row and we've never had a session this run:
+                // we are away from the server, not mid-blip. Slide into offline
+                // mode so a phone with a synced library and downloads opens on
+                // its music instead of parking on the connect screen.
+                //
+                // `connectionState.didSet` does this for `.failed`, but this path
+                // sets `.disconnected` — which is why the app sat on the connect
+                // screen with 15 downloaded tracks behind it, the one case the
+                // whole download tier exists for. The `hasLiveSession` guard
+                // keeps a genuine blip at home (where we did connect) on the
+                // reconnect path.
+                if !hasLiveSession, hasLocalLibrary, !offlineMode { enterOfflineMode() }
                 // A network switch (wifi → 4G/5G) leaves the old address dead
                 // while the server is still reachable on another one (ZeroTier).
                 // Re-discover across all known addresses instead of polling the

@@ -78,7 +78,7 @@ public struct AskView: View {
         .onChange(of: prompt) { _, newValue in
             if newValue.isEmpty { results = []; summary = nil; filters = nil }
         }
-        .navigationTitle(LS("nav.ask"))
+        .screenTitle(LS("nav.ask"))
         .alert(LS("ask.saveAlertTitle"), isPresented: $showSaveAlert) {
             TextField(LS("ask.playlistNamePlaceholder"), text: $playlistName)
             Button(LS("ask.cancel"), role: .cancel) {}

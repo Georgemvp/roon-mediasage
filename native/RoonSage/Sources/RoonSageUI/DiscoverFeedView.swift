@@ -115,7 +115,7 @@ public struct DiscoverFeedView: View {
                 .listStyle(.plain)
             }
         }
-        .navigationTitle(LS("discoverFeed.navTitle"))
+        .screenTitle(LS("discoverFeed.navTitle"))
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {

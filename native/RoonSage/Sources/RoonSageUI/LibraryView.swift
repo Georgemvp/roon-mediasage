@@ -159,8 +159,14 @@ public struct LibraryView: View {
         .navigationDestination(for: DatabaseManager.AlbumResult.self) { AlbumDetailView(album: $0) }
         .navigationDestination(for: DatabaseManager.ArtistResult.self) { ArtistDetailView(artist: $0) }
         .navigationDestination(for: LibraryFilter.self) { FilteredTracksView(filter: $0) }
-        .navigationTitle(LS("Bibliotheek (\(client.trackCount) tracks)"))
+        .screenTitle(String(format: LS("library.titleWithCount"), client.trackCount))
         .searchable(text: $searchText, prompt: searchPrompt)
+        // NOT auto-focused on the Zoek tab, though it is tempting: raising the
+        // keyboard on appear takes the tab bar with it, so you land on Zoek and
+        // cannot leave it again without dismissing a keyboard you never asked
+        // for. Measured, not assumed — with autofocus on, the UI walk could no
+        // longer select a single tab (2026-08-22). One extra tap beats a screen
+        // you can't get out of.
         .toolbar {
             ToolbarItem {
                 if isSearching {
@@ -261,7 +267,11 @@ public struct LibraryView: View {
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var hSizeClass
-    /// Four segments + titles overflow a compact iPhone width, so drop to icon-only there.
+    /// Titles *and* icons overflow a compact iPhone width. Dropping the titles
+    /// was the wrong half to drop: "Overzicht · Tracks · Albums · Artiesten" is
+    /// 30 characters over four segments and fits, while the icon-only row read as
+    /// a house, a list, a grid and two people — a vocabulary you have to learn
+    /// before you can use the screen. Keep the words, drop the pictures.
     private var compactPicker: Bool { hSizeClass == .compact }
     #else
     private var compactPicker: Bool { false }
@@ -277,7 +287,7 @@ public struct LibraryView: View {
 
         return Group {
             if compactPicker {
-                picker.labelStyle(.iconOnly)
+                picker.labelStyle(.titleOnly)
             } else {
                 picker.labelStyle(.titleAndIcon)
             }
