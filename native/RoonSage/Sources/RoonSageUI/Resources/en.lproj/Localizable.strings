@@ -588,6 +588,8 @@
 "nowPlaying.pause"            = "Pause";
 "nowPlaying.play"             = "Play";
 "nowPlaying.playbackPosition" = "Playback position";
+"nowPlaying.queuePosition"    = "%1$d of %2$d";
+"nowPlaying.queueRemaining"   = "%d to go";
 "nowPlaying.previousTrack"    = "Previous track";
 "nowPlaying.repeatAll"        = "Repeat all";
 "nowPlaying.repeatOff"        = "Repeat off";
@@ -710,13 +712,10 @@
 "recommend.unknownArtist"            = "Unknown";
 
 /* root */
-"root.chooseOutput"       = "Choose output";
-"root.chooseZoneHelp"     = "Choose a zone or this device";
 "root.commandPalette"     = "Command palette";
 "root.commandPaletteHelp" = "Command palette (⌘K)";
 "root.discoverWeekly"     = "Discover Weekly";
 "root.nextTrack"          = "Next track";
-"root.none"               = "none";
 "root.pause"              = "Pause";
 "root.play"               = "Play";
 "root.previousTrack"      = "Previous track";

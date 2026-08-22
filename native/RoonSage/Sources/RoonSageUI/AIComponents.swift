@@ -101,23 +101,11 @@ public struct ZonePicker: View {
             if !client.zones.isEmpty {
                 let localOn = client.localOutputSelected
                 Menu {
-                    ForEach(client.zones) { z in
-                        Button {
-                            client.selectZone(z.id)
-                            Haptics.tap()
-                        } label: {
-                            Label(z.displayName,
-                                  systemImage: (!localOn && z.id == client.selectedZone?.id) ? "checkmark" : z.state.icon)
-                        }
-                    }
-                    Divider()
-                    Button {
-                        client.selectLocalOutput()
-                        Haptics.tap()
-                    } label: {
-                        Label(localOutputLabel,
-                              systemImage: localOn ? "checkmark" : RoonClient.localOutputIcon)
-                    }
+                    // Third copy of the destination menu, now shared. It had
+                    // drifted from the other two: "dit apparaat" sat below a
+                    // divider, after the zones, which is backwards since local
+                    // became the default output.
+                    OutputMenuContent()
                 } label: {
                     let unset = !localOn && client.selectedZone == nil
                     HStack(spacing: Spacing.xs) {

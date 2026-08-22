@@ -15,6 +15,24 @@ import UIKit
 ///
 /// What genuinely differs per output is asked of the surface — see
 /// `NowPlayingSurface`.
+/// How this screen reaches the queue.
+///
+/// On the phone the player is a sheet whose second page IS the queue, so the
+/// button pages sideways; presenting yet another sheet on top of a sheet would
+/// be a worse version of a gesture that already exists. In the macOS/iPad split
+/// view there is no paging, so the button falls back to presenting the queue
+/// itself. Nil means "no pager here — use the sheet".
+struct ShowQueueKey: EnvironmentKey {
+    static let defaultValue: (@MainActor () -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var showQueue: (@MainActor () -> Void)? {
+        get { self[ShowQueueKey.self] }
+        set { self[ShowQueueKey.self] = newValue }
+    }
+}
+
 @MainActor
 struct PlayerScreen: View {
     let surface: any NowPlayingSurface
@@ -146,7 +164,9 @@ private struct PlayerHero: View {
     @State private var showLyrics = false
     @State private var showFullArt = false
     @State private var showWall = false
+    @State private var showQueueSheet = false
     @State private var similarSeed: SonicSeed?
+    @Environment(\.showQueue) private var pageToQueue
     @AppStorage("showVisualizer") private var showVisualizer = true
 
     /// The real width to bound the hero to. On iOS we read the active window's
@@ -210,6 +230,9 @@ private struct PlayerHero: View {
         .onChange(of: surface.volume?.value) { _, v in if let v, !isAdjustingVolume { volumeValue = v } }
         .sheet(isPresented: $showLyrics) { lyricsSheet }
         .sheet(isPresented: $showWall) { WallDisplayView() }
+        .sheet(isPresented: $showQueueSheet) {
+            NavigationStack { QueueView().navigationTitle(LS("nav.queue")) }
+        }
         .similarTracksSheet(item: $similarSeed)
     }
 
@@ -430,6 +453,17 @@ private struct PlayerHero: View {
             HStack {
                 Text(NowPlayingModel.formatTime(pos))
                 Spacer()
+                // "3 van 24" between the two counters: it's positional
+                // information, same as the clock, and this row already has the
+                // space. A line of its own under the title would have made the
+                // busiest part of the screen busier.
+                if let queue = surface.queueSummary {
+                    Text(queue)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                }
                 Text(NowPlayingModel.remainingLabel(position: pos, duration: dur))
             }
             .font(.footnote.weight(.medium).monospacedDigit())
@@ -595,6 +629,23 @@ private struct PlayerHero: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(LS("nowPlaying.lyrics"))
+
+                // The queue had no handle at all: on the phone it was one
+                // undiscoverable sideways swipe, and the page dots that would
+                // have advertised it were removed because they swallowed taps
+                // meant for the buttons right here. A button says it out loud.
+                Button {
+                    Haptics.tap()
+                    if let pageToQueue { pageToQueue() } else { showQueueSheet = true }
+                } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.title3)
+                        .foregroundStyle(.primary)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(LS("nav.queue"))
+                .accessibilityValue(surface.queueSummary ?? "")
 
                 // Everything you might want but rarely mid-song, behind one
                 // glyph. Four icons on the screen became one; nothing was lost.

@@ -588,6 +588,8 @@
 "nowPlaying.pause"            = "Pauzeer";
 "nowPlaying.play"             = "Speel af";
 "nowPlaying.playbackPosition" = "Afspeelpositie";
+"nowPlaying.queuePosition"    = "%1$d van %2$d";
+"nowPlaying.queueRemaining"   = "nog %d";
 "nowPlaying.previousTrack"    = "Vorige track";
 "nowPlaying.repeatAll"        = "Herhaal alles";
 "nowPlaying.repeatOff"        = "Herhalen uit";
@@ -710,13 +712,10 @@
 "recommend.unknownArtist"            = "Onbekend";
 
 /* root */
-"root.chooseOutput"       = "Kies output";
-"root.chooseZoneHelp"     = "Kies een zone of dit apparaat";
 "root.commandPalette"     = "Opdrachtenpalet";
 "root.commandPaletteHelp" = "Opdrachtenpalet (⌘K)";
 "root.discoverWeekly"     = "Ontdek Wekelijks";
 "root.nextTrack"          = "Volgende track";
-"root.none"               = "geen";
 "root.pause"              = "Pauzeer";
 "root.play"               = "Speel af";
 "root.previousTrack"      = "Vorige track";

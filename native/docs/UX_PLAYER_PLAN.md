@@ -236,7 +236,7 @@ automatiseren is — het bureaublad heeft geen Screen-Recording-TCC):
 |---|---|---|
 | Tikken van koude start tot muziek | 3 (Bibliotheek-tab → item → play) vanaf een leeg spelerscherm | **≤ 2**, en het eerste scherm toont al speelbare rijen |
 | Tikken van bladeren naar de speler en terug | 2 + verloren scrollpositie | **2, context behouden** |
-| Tikken naar de wachtrij | onbekend (blinde veeg) | **1 vanuit de speler** |
+| Tikken naar de wachtrij | onbekend (blinde veeg) | **1 vanuit de speler** — gehaald (U5) |
 | Verzonnen eigennamen in het navigatiepad | 9 (Sonic Lab, Music Map, Sonic DNA, Song Paths, Alchemy, Multitag, Journeys, DJ-modi, Ontdek Wekelijks) | **0 in de tabbalk** (Bibliotheek · Zoek · Ontdek · Stations); Lab is één kaart, en daarbinnen krijgt elk gereedschap een regel gewone taal — gehaald (U3) |
 | Bestemmingen in de tabbalk | 5, waarvan 3 kastjes | **4 echte** — gehaald (U3) |
 | Regels Nu-speelt-code | 1.421 in 2 bestanden | **< 900 in 1** — gehaald: 704 (U1) |
@@ -345,7 +345,32 @@ door. Los uit te zoeken; het raakt P9 (half-offline zichtbaar maken).
       ook, in dezelfde kaartvorm als Gedownload.
       Sidebar 29 items → **11**, met dezelfde vijf woorden als de telefoon.
       Catalogus 846 → 854 (14 nieuw, 6 wezen van de gesloopte kastjes weg).
-- [ ] Batch 4 — U4 + U5
+- [x] Batch 4 — U4 + U5 · v1.10.268 / ios-v1.7.234.
+      **U4 anders uitgevoerd dan gepland, en dat is een API-grens, geen keuze.**
+      Het plan zei "één lijst met Dit apparaat · AirPlay-doelen · Roon-zones".
+      Dat kán niet: `AVRoutePickerView` toont het systeemblad zélf, er is geen
+      publieke API om routes op te sommen of de kiezer te openen, dus de echte
+      view moet op het scherm staan. In de view-hiërarchie graaien om een tik na
+      te bootsen werkt vandaag en breekt stil op een volgende OS-versie — niet
+      waard voor één scheidingslijn minder. Wél gedaan: de twee knoppen zitten nu
+      in **één capsule** (menu links, AirPlay rechts achter een dun streepje, en
+      alleen als dit apparaat de uitvoer is, want AirPlay routeert geen Roon-zone).
+      **De echte vondst zat in de bestemmingenlijst zelf: er waren drie kopieën**
+      — de pil op Nu speelt, de toolbar-kiezer in `RootView` en die in
+      `AIComponents` — en ze wáren al uit elkaar gelopen: elk bouwde zijn eigen
+      icoonlogica, en alle drie zetten "dit apparaat" ónder een scheidingslijn,
+      ná de zones. Die volgorde stamt uit de tijd dat lokaal afspelen de
+      uitzondering was; het is de standaarduitvoer sinds v1.10.228. Nu één
+      `OutputMenuContent`: dit apparaat eerst, dan de zones, geen streep.
+      **U5:** de wachtrij had helemaal geen handvat — op de telefoon één
+      onaangekondigde zijwaartse veeg, en de paginabolletjes die dat hadden
+      kunnen verklappen zijn juist weggehaald omdat ze tikken opslokten. Nu een
+      knop in de voetrij, die op de telefoon naar de tweede pagina bládert in
+      plaats van een blad op een blad te stapelen (`\.showQueue` in de
+      environment; zonder pager valt hij terug op een sheet). En "3 van 24" staat
+      tussen de twee tijdtellers — positie-informatie hoort bij de klok, niet in
+      een extra regel onder de titel. Een Roon-zone zegt "nog 12", want die meldt
+      alleen wat er nog komt en er is geen eerlijke "van N".
 - [x] Batch 5 — U7 · v1.10.267 / ios-v1.7.233.
       Eén `Form` van 21 secties werd twee deuren: **Dit apparaat** (uiterlijk,
       taal, loudness, transcode, cache, downloads, Qobuz lokaal, over — 8) en

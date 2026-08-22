@@ -383,6 +383,8 @@ struct RootView: View {
     /// Same for settings: a tab in the bar is prime real estate for a screen you
     /// visit twice a year. It's a gear on the library, and a sheet from here.
     @State private var showSettings = false
+    /// Which page of the player sheet is showing: 0 the player, 1 the queue.
+    @State private var playerPage = 0
     @AppStorage("lastTab") private var lastTabRaw: String = SidebarItem.library.rawValue
     @AppStorage("lastZoneID") private var lastZoneID: String = ""
     /// One-shot guard for the "restore the last zone" hook below.
@@ -436,7 +438,7 @@ struct RootView: View {
         #if os(iOS)
         if horizontalSizeClass == .compact {
             switch item {
-            case .nowPlaying: showPlayer = true; return
+            case .nowPlaying: playerPage = 0; showPlayer = true; return
             case .settings:   showSettings = true; return
             default: break
             }
@@ -659,11 +661,14 @@ struct RootView: View {
         NavigationStack {
             // Two pages: the player, and the queue one swipe to the left. The
             // queue has no tab on the phone — it lives TO what's playing, so it
-            // travels with the player instead of being a destination.
-            TabView {
-                NowPlayingView()
+            // travels with the player instead of being a destination. The
+            // selection binding is what lets the player's queue button page here
+            // rather than stack another sheet on this one.
+            TabView(selection: $playerPage) {
+                NowPlayingView().tag(0)
                 QueueView()
                     .navigationBarTitleDisplayMode(.inline)
+                    .tag(1)
             }
             // No page dots. The index view renders as a capsule pinned to the
             // bottom centre — right on top of the feedback row — so it swallowed
@@ -684,6 +689,7 @@ struct RootView: View {
             showPlayer = false
             go(to: item)
         })
+        .environment(\.showQueue, { withAnimation(Motion.standard) { playerPage = 1 } })
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
@@ -816,41 +822,11 @@ struct RootView: View {
         }
     }
 
-    /// Zone selector: a Menu that clearly shows the active zone (speaker symbol +
-    /// name + chevron) instead of an unlabeled control, and lets you switch.
-    private var zonePicker: some View {
-        let localOn = client.localOutputSelected
-        let active = client.selectedZone
-        return Menu {
-            ForEach(client.zones) { zone in
-                Button {
-                    client.selectZone(zone.id); lastZoneID = zone.id
-                } label: {
-                    Label(zone.displayName,
-                          systemImage: (!localOn && zone.id == active?.id) ? "checkmark"
-                              : (zone.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"))
-                }
-            }
-            Divider()
-            Button {
-                client.selectLocalOutput()
-            } label: {
-                Label(localOutputLabel,
-                      systemImage: localOn ? "checkmark" : RoonClient.localOutputIcon)
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: localOn ? RoonClient.localOutputIcon
-                          : (active?.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"))
-                Text(localOn ? localOutputLabel : (active?.displayName ?? LS("root.chooseOutput")))
-                    .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
-                    .opacity(0.7)
-            }
-            .font(.subheadline.weight(.semibold))
-        }
-        .accessibilityLabel(LS("Output: \(localOn ? localOutputLabel : (active?.displayName ?? LS("root.none")))"))
-        .help(LS("root.chooseZoneHelp"))
-    }
+    /// The output picker in the toolbar.
+    ///
+    /// This used to be a third hand-built copy of the destination menu, next to
+    /// `OutputSelector` and the one in `AIComponents` — and the three had already
+    /// drifted apart in icon logic and ordering. It's the shared control now; the
+    /// menu itself lives in `OutputMenuContent`.
+    private var zonePicker: some View { OutputSelector() }
 }

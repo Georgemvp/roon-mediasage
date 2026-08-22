@@ -1,11 +1,11 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met "fix alles" uit de audit. Pak de VOLGENDE
-batch uit ## Next (nu: UX-speler-plan batch 4 = U4+U5, zie native/docs/UX_PLAYER_PLAN.md).
+batch uit ## Next (nu: UX-speler-plan batch 6 = U8+U9, de laatste, zie native/docs/UX_PLAYER_PLAN.md).
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst geshipt: v1.10.267 / ios-v1.7.233 / analyzer-v1.1.200 (getagd; de
+Laatst geshipt: v1.10.268 / ios-v1.7.234 / analyzer-v1.1.200 (getagd; de
 analyzer draait sinds 2c50e34 wél als v1.1.200 op de mini, via de CI-DMG).
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
@@ -172,8 +172,43 @@ niet de build.
 **Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
 SUCCEEDED · check-localization 859 sleutels, 0 missend / 0 wees.**
 
-**VOLGENDE: batch 4 = U4 + U5** (één routeknop: dit apparaat / AirPlay / zones,
-en een wachtrijknop in de speler). Daarna batch 6 = U8 + U9.
+**BATCH 4 (U4 + U5) IS AF EN GETAGD — v1.10.268 / ios-v1.7.234.**
+
+**U4 is anders uitgevoerd dan gepland, en dat is een API-grens.** Het plan zei
+"één lijst met Dit apparaat · AirPlay-doelen · Roon-zones". Dat kán niet:
+`AVRoutePickerView` toont het systeemblad zélf en er is geen publieke API om
+routes op te sommen of de kiezer te openen, dus de echte view moet op het scherm
+staan. In de view-hiërarchie graaien om een tik na te bootsen werkt vandaag en
+breekt stil op een volgende OS-versie. Wél gedaan: beide knoppen in **één
+capsule** (menu links, AirPlay rechts achter een dun streepje, alleen zichtbaar
+als dit apparaat de uitvoer is — AirPlay routeert geen Roon-zone).
+
+**DE ECHTE VONDST: er waren drie kopieën van de bestemmingenlijst** — de pil op
+Nu speelt, de toolbar-kiezer in `RootView` en die in `AIComponents` — en ze waren
+al uit elkaar gelopen: elk zijn eigen icoonlogica, en alle drie zetten "dit
+apparaat" ónder een scheidingslijn ná de zones. Die volgorde stamt uit de tijd
+dat lokaal afspelen de uitzondering was; het is de standaarduitvoer sinds
+v1.10.228. Nu één `OutputMenuContent`: dit apparaat eerst, dan de zones, geen
+streep. `RootView.zonePicker` is nog één regel.
+
+**U5:** de wachtrij had geen handvat — op de telefoon één onaangekondigde
+zijwaartse veeg, en de paginabolletjes die dat hadden kunnen verklappen zijn
+juist weggehaald omdat ze tikken opslokten (v1.10.229). Nu een knop in de
+voetrij die op de telefoon naar de tweede pagina bládert in plaats van een blad
+op een blad te stapelen (`\.showQueue` in de environment; zonder pager valt hij
+terug op een sheet). "3 van 24" staat tússen de twee tijdtellers — dat is
+positie-informatie, net als de klok, en die rij had de ruimte al. Een Roon-zone
+zegt "nog 12": die meldt alleen wat er nog komt, dus een "van N" zou verzonnen
+zijn.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 858 sleutels, 0 missend / 0 wees** (3 wezen van de
+verwijderde `zonePicker` opgeruimd).
+
+**VOLGENDE: batch 6 = U8 + U9** — duim-ergonomie (veeg links/rechts over de
+hoes, veeg omhoog voor songtekst, marquee voor lange titels, lang indrukken voor
+volledig scherm) en offline zichtbaar ín de bibliotheek (downloadknop in het
+contextmenu, badge, filter "alleen gedownload"). Daarmee is het plan rond.
 
 **DE MACOS-RELEASE VAN DEZE BATCH FAALDE TWEE KEER OP APPLE, NIET OP DE CODE**
 (v1.10.263). De build was compleet, de `.app` gesigneerd, notarisatie *Accepted*
@@ -478,7 +513,7 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batches 1-3 en 5 af en getagd (U1, U2+U6, U3+U10+U11, U7); **volgende is batch 4 = U4 + U5** (routeknop, wachtrijknop). Zie §6 voor de volgorde.
+- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batches 1-5 af en getagd (U1, U2+U6, U3+U10+U11, U4+U5, U7); **volgende is batch 6 = U8 + U9**, de laatste. Zie §6 voor de volgorde.
 - **B3 (mood-backfill, GROTER dan gedacht):** er is GEEN mood-backfill — bouwen naar analogie van `refreshAttributes`/`autoArousalRefreshIfNeeded` (FeatureStore `moodRefreshRows`+`setMoodsBatch`, LibraryWalker `refreshMoods(missingKey:)`, AnalyzerModel `autoMoodRefreshIfNeeded()` + launch-wiring). **TRAP: `FeatureStore.contentSignature()` heeft GEEN moods-term** → zonder toevoeging pullen clients de nieuwe moods nooit (mirror ar/tm-patroon).
 - Resterend maar NIET headless verifieerbaar (vereist toestel/GUI): crossfade + gapless (AVPlayer→AVAudioEngine, groot/risico), Siri-intents, Control Center, CarPlay (OS-integratie), chat-agent (LLM), share-CARDS als afbeelding (ImageRenderer — kan niet getest: testtarget importeert RoonSageUI niet)
 - B7b Architectuur (groot/risico): RoonClient god-object-split, alleen build-verifieerbaar

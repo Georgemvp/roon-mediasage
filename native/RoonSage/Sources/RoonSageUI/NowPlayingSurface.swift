@@ -79,6 +79,12 @@ protocol NowPlayingSurface {
 
     var upNext: PlayerUpNext? { get }
 
+    /// Where you are in the queue, in words. Deliberately a string rather than a
+    /// pair of numbers: the two outputs know different things. The on-device
+    /// queue is an array we own, so it can say "3 van 24"; a Roon zone reports
+    /// only what is still to come, so it says that instead of inventing a total.
+    var queueSummary: String? { get }
+
     // MARK: Actions
 
     func toggle()
@@ -199,6 +205,12 @@ struct LocalNowPlayingSurface: NowPlayingSurface {
         return PlayerUpNext(title: t.title, subtitle: t.artist.nilIfEmpty, imageKey: t.imageKey)
     }
 
+    var queueSummary: String? {
+        let total = lp.queue.count
+        guard total > 1 else { return nil }
+        return String(format: LS("nowPlaying.queuePosition"), lp.index + 1, total)
+    }
+
     func toggle() { lp.togglePlayPause() }
     func next() { lp.next() }
     func previous() { lp.previous() }
@@ -275,6 +287,14 @@ struct ZoneNowPlayingSurface: NowPlayingSurface {
         guard client.queueItems.count > 1 else { return nil }
         let item = client.queueItems[1]
         return PlayerUpNext(title: item.title, subtitle: item.subtitle, imageKey: item.imageKey)
+    }
+
+    /// Roon's queue starts at the playing track, so index 0 is "now" and the
+    /// rest is what's left — there is no honest "van N" to report.
+    var queueSummary: String? {
+        let remaining = client.queueItems.count - 1
+        guard remaining > 0 else { return nil }
+        return String(format: LS("nowPlaying.queueRemaining"), remaining)
     }
 
     func toggle() { Task { await client.playPause(zoneID: zone.id) } }

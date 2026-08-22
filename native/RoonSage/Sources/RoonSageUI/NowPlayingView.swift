@@ -82,56 +82,106 @@ enum NowPlayingHeroOptions {
 
 // MARK: - Output switcher
 
-/// Single dropdown pill for switching the playback output — every Roon zone plus
-/// "dit apparaat" (on-device playback), so the local player is a first-class
-/// output alongside the zones. A `Menu` (not a horizontal strip) can't clip a
-/// chip and is unaffected by window/scene resizing. Shared by the zone hero and
-/// the local Now Playing screen so the two never drift.
+/// The list of places the music can come out, shared by every picker in the app.
+///
+/// There were three copies of this menu — the Now Playing pill, the toolbar
+/// picker in `RootView`, and the one in `AIComponents` — and they had already
+/// drifted: each built its own icon logic, and all three put "dit apparaat"
+/// BELOW a divider, after the Roon zones. That framing is left over from when
+/// on-device playback was the exception you switched out of; it has been the
+/// default output since v1.10.228. One list, this device first, no divider —
+/// they're all just destinations.
 @MainActor
-struct OutputSelector: View {
+struct OutputMenuContent: View {
     @Environment(RoonClient.self) private var client
     @AppStorage("lastZoneID") private var lastZoneID: String = ""
 
     var body: some View {
         let localOn = client.localOutputSelected
         let active = client.selectedZone
-        Menu {
-            ForEach(client.zones) { zone in
-                Button {
-                    client.selectZone(zone.id); lastZoneID = zone.id; Haptics.tap()
-                } label: {
-                    Label(zone.displayName,
-                          systemImage: (!localOn && zone.id == active?.id) ? "checkmark"
-                              : (zone.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"))
-                }
-            }
-            Divider()
-            Button {
-                client.selectLocalOutput(); Haptics.tap()
-            } label: {
-                Label(localOutputLabel,
-                      systemImage: localOn ? "checkmark" : RoonClient.localOutputIcon)
-            }
+
+        Button {
+            client.selectLocalOutput(); Haptics.tap()
         } label: {
-            HStack(spacing: Spacing.xs + 2) {
-                Image(systemName: localOn ? RoonClient.localOutputIcon
-                          : (active?.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"))
-                    .font(.caption)
-                Text(localOn ? localOutputLabel : (active?.displayName ?? LS("nowPlaying.chooseOutput")))
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
-                    .opacity(0.7)
-            }
-            .padding(.horizontal, Spacing.md)
-            .padding(.vertical, Spacing.xs + 2)
-            .background(.quaternary, in: Capsule())
-            .foregroundStyle(.primary)
+            Label(localOutputLabel,
+                  systemImage: localOn ? "checkmark" : RoonClient.localOutputIcon)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Output: \(localOn ? localOutputLabel : (active?.displayName ?? LS("nowPlaying.none")))")
-        .accessibilityHint(LS("nowPlaying.chooseOutputHint"))
+
+        ForEach(client.zones) { zone in
+            Button {
+                client.selectZone(zone.id); lastZoneID = zone.id; Haptics.tap()
+            } label: {
+                Label(zone.displayName,
+                      systemImage: (!localOn && zone.id == active?.id) ? "checkmark"
+                          : (zone.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"))
+            }
+        }
+    }
+
+    /// The icon for whatever is currently selected — same logic for every label
+    /// that shows the active output, so they can't disagree.
+    @MainActor
+    static func activeIcon(_ client: RoonClient) -> String {
+        if client.localOutputSelected { return RoonClient.localOutputIcon }
+        return client.selectedZone?.state == .playing ? "speaker.wave.2.fill" : "hifi.speaker"
+    }
+
+    @MainActor
+    static func activeName(_ client: RoonClient, fallback: String) -> String {
+        if client.localOutputSelected { return localOutputLabel }
+        return client.selectedZone?.displayName ?? fallback
+    }
+}
+
+/// One pill for "where does this come out": the destination menu, and — only
+/// while this device is the output — the system AirPlay picker beside it,
+/// inside the same capsule.
+///
+/// They used to be two separate controls sitting next to each other, which read
+/// as two unrelated decisions. They aren't: AirPlay is where THIS device sends
+/// its audio, so it belongs in the same pill as the choice of device.
+///
+/// The AirPlay targets themselves can't join the menu above. `AVRoutePickerView`
+/// presents the system sheet itself and there is no public API to enumerate
+/// routes or to trigger the picker, so the real view has to be on screen and
+/// keeps its own hit target. Reaching into its view hierarchy to fake a tap
+/// would work today and break silently on some future OS — not worth it for one
+/// less divider.
+@MainActor
+struct OutputSelector: View {
+    @Environment(RoonClient.self) private var client
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Menu {
+                OutputMenuContent()
+            } label: {
+                HStack(spacing: Spacing.xs + 2) {
+                    Image(systemName: OutputMenuContent.activeIcon(client))
+                        .font(.caption)
+                    Text(OutputMenuContent.activeName(client, fallback: LS("nowPlaying.chooseOutput")))
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .opacity(0.7)
+                }
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.xs + 2)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Output: \(OutputMenuContent.activeName(client, fallback: LS("nowPlaying.none")))")
+            .accessibilityHint(LS("nowPlaying.chooseOutputHint"))
+
+            if client.localOutputSelected {
+                Divider().frame(height: 18).opacity(0.4)
+                AirPlayRouteButton()
+                    .padding(.horizontal, Spacing.xs)
+            }
+        }
+        .background(.quaternary, in: Capsule())
+        .foregroundStyle(.primary)
     }
 }
 
