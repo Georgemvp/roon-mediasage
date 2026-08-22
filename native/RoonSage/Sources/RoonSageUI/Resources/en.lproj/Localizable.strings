@@ -219,12 +219,13 @@
 "dJ.mode" = "Mode";
 
 /* dJModes */
+"dJModes.startFromCurrent" = "Start from what's playing";
+"dJModes.pickToSteer" = "Nothing is playing — pick a DJ and they'll steer the stations you start from here.";
 "dJModes.autoPersonaToggle"   = "Pick the persona automatically";
 "dJModes.autoplayTitle" = "Guest DJ · Autoplay";
 "dJModes.autoplayPersonaLabel" = "DJ";
 "dJModes.autoplayDescription" = "Tops up the queue automatically when it runs dry.";
 "dJModes.autoplayToggle"      = "Auto-fill the queue";
-"dJModes.needNowPlaying"      = "Start a track first — the DJ needs somewhere to begin.";
 "dJModes.radioPlaying"        = "Radio playing";
 "dJModes.stop"  = "Stop";
 "dJModes.title" = "DJ modes";
@@ -871,6 +872,11 @@
 "state.retry"      = "Try again";
 
 /* stationsHub */
+"stations.startPlain" = "Start with my own setting";
+"stations.personaSteers" = "%@ is steering your stations — the slider doesn't apply meanwhile.";
+"stations.personaClear" = "Turn off";
+"stations.useForStations" = "Use for my stations";
+"stations.personaActive" = "Steering your stations";
 "stationsHub.radiosBlurb" = "Endless stations, fresh from your own library every day.";
 "stationsHub.djModesBlurb" = "A guest DJ takes over from the track playing now.";
 "stationsHub.journeysBlurb" = "Two journeys with a beginning and an end.";

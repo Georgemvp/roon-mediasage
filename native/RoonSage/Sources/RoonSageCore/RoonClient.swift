@@ -282,6 +282,22 @@ public final class RoonClient {
         didSet { UserDefaults.standard.set(selectedDJMode.rawValue, forKey: "dj_mode") }
     }
 
+    /// The persona that steers **any** station you start, or nil for "just use my
+    /// adventurousness dial".
+    ///
+    /// `startRadio(_:zoneID:djMode:)` and `startAlbumRadio(…djMode:)` have always
+    /// accepted a persona — a persona is a preset of (dial, arc, gate) over the
+    /// same engine, not a separate one. But the UI only ever offered them on the
+    /// track playing right now, so "this genre, but adventurous" was a capability
+    /// the app had and nobody could reach. Setting this makes every station start
+    /// carry it.
+    public var stationPersona: DJMode? =
+        DJMode(rawValue: UserDefaults.standard.string(forKey: "station_persona") ?? "") {
+        didSet {
+            UserDefaults.standard.set(stationPersona?.rawValue ?? "", forKey: "station_persona")
+        }
+    }
+
     /// When on, normal playback that runs dry is topped up by `selectedDJMode`
     /// seeded on the now-playing track (Plexamp's Guest-DJ autoplay). Off by
     /// default so we never inject tracks the user didn't ask for.

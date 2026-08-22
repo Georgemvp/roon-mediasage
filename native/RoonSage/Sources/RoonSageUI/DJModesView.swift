@@ -31,7 +31,7 @@ public struct DJModesView: View {
             ZoneHintBanner().plainCardRow()
 
             if !canStart {
-                LT("dJModes.needNowPlaying")
+                LT("dJModes.pickToSteer")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .plainCardRow()
@@ -109,8 +109,14 @@ public struct DJModesView: View {
     }
 
     private func personaCard(_ mode: DJMode) -> some View {
+        // Two things a persona can do, and until now only one was reachable:
+        // take over from the track playing right now, OR steer every station you
+        // start from here on (`stationPersona`). The second needs nothing to be
+        // playing — which is why this grid used to be entirely dead on a quiet
+        // app, with six greyed-out cards and a line telling you to go play
+        // something first.
         Button {
-            start(mode)
+            if canStart { start(mode) } else { useForStations(mode) }
         } label: {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 HStack {
@@ -126,6 +132,11 @@ public struct DJModesView: View {
                 Text(mode.title)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
+                if client.stationPersona == mode {
+                    Text(LS("stations.personaActive"))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Color.roonGold)
+                }
                 Text(mode.blurb)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -137,7 +148,22 @@ public struct DJModesView: View {
             .contentShape(RoundedRectangle(cornerRadius: Radius.lg))
         }
         .buttonStyle(.plain)
-        .disabled(!canStart)
+        .contextMenu {
+            if canStart {
+                Button {
+                    start(mode)
+                } label: { Label(LS("dJModes.startFromCurrent"), systemImage: "play.fill") }
+            }
+            Button {
+                useForStations(mode)
+            } label: { Label(LS("stations.useForStations"), systemImage: "dot.radiowaves.left.and.right") }
+        }
+    }
+
+    /// Make this persona steer every station start (see `RoonClient.stationPersona`).
+    private func useForStations(_ mode: DJMode) {
+        Haptics.tap()
+        client.stationPersona = (client.stationPersona == mode) ? nil : mode
     }
 
     // MARK: Actions

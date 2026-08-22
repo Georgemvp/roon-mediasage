@@ -236,6 +236,26 @@ public struct SonicRadioView: View {
             .font(.caption)
             .foregroundStyle(.tertiary)
             .fixedSize(horizontal: false, vertical: true)
+
+            // One visible truth: a persona OVERRIDES this slider, so say so where
+            // the slider is instead of leaving two settings silently fighting.
+            if let persona = client.stationPersona {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: persona.symbol).foregroundStyle(Color.roonGold)
+                    Text(String(format: LS("stations.personaSteers"), persona.title))
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: Spacing.sm)
+                    Button(LS("stations.personaClear")) {
+                        Haptics.tap()
+                        client.stationPersona = nil
+                    }
+                    .font(.caption)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.roonGold)
+                }
+                .padding(.top, Spacing.xs)
+            }
         }
         .cardStyle()
     }
@@ -299,6 +319,26 @@ public struct SonicRadioView: View {
         }
         .buttonStyle(.plain)
         .disabled(!client.hasActiveOutput)
+        .contextMenu { personaMenu(for: radio) }
+    }
+
+    /// "Start as …" — the six personas, plus the way back to the plain dial.
+    @ViewBuilder
+    private func personaMenu(for radio: RoonClient.SonicRadio) -> some View {
+        Button {
+            client.stationPersona = nil
+            start(radio)
+        } label: {
+            Label(LS("stations.startPlain"), systemImage: "play.fill")
+        }
+        Divider()
+        ForEach(DJMode.allCases, id: \.self) { mode in
+            Button {
+                start(radio, as: mode)
+            } label: {
+                Label(mode.title, systemImage: mode.symbol)
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -318,10 +358,14 @@ public struct SonicRadioView: View {
 
     // MARK: Actions
 
-    private func start(_ radio: RoonClient.SonicRadio) {
-
+    /// Start a station, carrying whichever persona is set — the engine has always
+    /// taken one here (`startRadio(_:zoneID:djMode:)`); nothing in the UI ever
+    /// passed it.
+    private func start(_ radio: RoonClient.SonicRadio, as persona: DJMode? = nil) {
         Haptics.tap()
-        Task { await client.startRadio(radio) }
+        let mode = persona ?? client.stationPersona
+        if let persona { client.stationPersona = persona }
+        Task { await client.startRadio(radio, djMode: mode) }
     }
 
     private func load(force: Bool) async {

@@ -219,12 +219,13 @@
 "dJ.mode" = "Modus";
 
 /* dJModes */
+"dJModes.startFromCurrent" = "Start vanaf wat nu speelt";
+"dJModes.pickToSteer" = "Er speelt niets — kies een DJ en hij stuurt de stations die je hierna start.";
 "dJModes.autoPersonaToggle"   = "Persona automatisch kiezen";
 "dJModes.autoplayTitle" = "Gast-DJ · Autoplay";
 "dJModes.autoplayPersonaLabel" = "DJ";
 "dJModes.autoplayDescription" = "Vult de wachtrij automatisch aan zodra die leegloopt.";
 "dJModes.autoplayToggle"      = "Automatisch aanvullen";
-"dJModes.needNowPlaying"      = "Start eerst een nummer — de DJ heeft een vertrekpunt nodig.";
 "dJModes.radioPlaying"        = "Radio speelt";
 "dJModes.stop"  = "Stop";
 "dJModes.title" = "DJ-modi";
@@ -871,6 +872,11 @@
 "state.retry"      = "Opnieuw proberen";
 
 /* stationsHub */
+"stations.startPlain" = "Start met mijn eigen instelling";
+"stations.personaSteers" = "%@ stuurt je stations — de schuif geldt zolang niet.";
+"stations.personaClear" = "Uitzetten";
+"stations.useForStations" = "Gebruik voor mijn stations";
+"stations.personaActive" = "Stuurt je stations";
 "stationsHub.radiosBlurb" = "Eindeloze stations, elke dag vers uit je eigen bibliotheek.";
 "stationsHub.djModesBlurb" = "Een gast-DJ neemt het over vanaf het nummer dat nu speelt.";
 "stationsHub.journeysBlurb" = "Twee reizen met een begin en een eind.";
