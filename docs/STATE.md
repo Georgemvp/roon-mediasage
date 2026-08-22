@@ -1,11 +1,11 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met "fix alles" uit de audit. Pak de VOLGENDE
-batch uit ## Next (nu: UX-speler-plan batch 3 = U3+U10+U11, zie native/docs/UX_PLAYER_PLAN.md).
+batch uit ## Next (nu: UX-speler-plan batch 5 = U7, zie native/docs/UX_PLAYER_PLAN.md).
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst geshipt: v1.10.265 / ios-v1.7.231 / analyzer-v1.1.200 (getagd; de
+Laatst geshipt: v1.10.266 / ios-v1.7.232 / analyzer-v1.1.200 (getagd; de
 analyzer draait sinds 2c50e34 wél als v1.1.200 op de mini, via de CI-DMG).
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
@@ -106,11 +106,42 @@ Los uit te zoeken.
 **Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
 SUCCEEDED · check-localization 846 sleutels, 0 missend / 0 wees.**
 
-**VOLGENDE: batch 3 = U3 + U10 + U11** — de twee kastjes-tabs (`iOSCreateHub`,
-`iOSExploreHub`) opheffen, zoeken een eigen tab geven en de sidebar dezelfde
-begrippen laten spreken. De tabbalk staat nu op vier: Bibliotheek · Maak ·
-Ontdek · Instellingen; doel is Start · Bibliotheek · Zoek · Stations, met
-Instellingen achter een tandwiel (dat laatste is U7, batch 5).
+**BATCH 3 (U3 + U10 + U11) IS AF EN GETAGD — v1.10.266 / ios-v1.7.232.**
+**Vier tabs, en ze landen alle vier op inhoud:** Bibliotheek · Zoek · Ontdek ·
+Stations. `iOSCreateHub` en `iOSExploreHub` — de twee `List`s die alleen naar een
+hub linkten — zijn weg; hun hubs zijn nu zélf de tab. Instellingen is een
+tandwiel op Bibliotheek plus een blad; `go(to:)` vangt `.settings` op dezelfde
+plek af als `.nowPlaying`, dus ⌘K "Ga naar Instellingen" werkt nog.
+
+**Zoek is een eigen tab** (Bibliotheek · Sonisch · Vraag het) en er is bewust
+GEEN tweede zoekimplementatie gebouwd: de gecombineerde artiest/album/track-zoek
+(P7) zit in `LibraryView`, mét de "toon alles"-doorstap en de sonische
+doorgeefrij. `LibraryView(searchOnly:)` hergebruikt dat en verbergt alleen de
+moduskiezer tot een doorstap hem nodig maakt. Een eigen kopie zou letterlijk de
+fout van de twee spelers herhalen.
+
+**Genereer** hoort nu bij Stations (alle vier beantwoorden "zet iets op"; ze
+verschillen alleen in eindeloos versus eindig). **Lab** — Sonic Lab, Music Map,
+Multitag, DJ (set·live), smaak — is één kaart op het bibliotheekoverzicht, met
+per gereedschap een regel gewone taal, want "Sonic DNA" en "Multitag" zeggen
+niemand iets. Playlists en Bewaard staan daar nu ook, in dezelfde kaartvorm als
+Gedownload. Sidebar **29 → 11 items**, met dezelfde woorden als de telefoon.
+Catalogus 846 → 854 (14 nieuw; 6 wezen van de gesloopte kastjes verwijderd).
+
+**Eén maat uit mijn eigen plan geschrapt: "tikken naar Sonic Search".** Die was 2
+en werd 2. De winst zat nooit in tikken maar in wat je onderweg moest wéten; een
+tabbalk waarin twee van de vijf knoppen een lijst openen die naar een hub linkt
+is furniture. Vervangen door "verzonnen eigennamen in het navigatiepad": 9 → 0 in
+de tabbalk.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 854 sleutels, 0 missend / 0 wees.**
+**NIET geverifieerd: hoe de vier tabs eruitzien** — zie de simulator-grens
+hierboven (geen tikken mogelijk).
+
+**VOLGENDE: batch 5 = U7** (SettingsView splitsen in "Dit apparaat" versus
+"Server & diensten"; de plaatsing is met batch 3 al gedaan, de splitsing niet).
+Daarna batch 4 = U4 + U5 (één routeknop, wachtrijknop) en batch 6 = U8 + U9.
 
 **DE MACOS-RELEASE VAN DEZE BATCH FAALDE TWEE KEER OP APPLE, NIET OP DE CODE**
 (v1.10.263). De build was compleet, de `.app` gesigneerd, notarisatie *Accepted*
@@ -415,7 +446,7 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batch 1 (U1) en batch 2 (U2+U6) af en getagd; **volgende is batch 3 = U3 + U10 + U11** (kastjes-tabs opheffen, zoek-tab, sidebar gelijk). Zie §6 voor de volgorde.
+- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batches 1-3 af en getagd (U1, U2+U6, U3+U10+U11); **volgende is batch 5 = U7** (SettingsView splitsen). Zie §6 voor de volgorde.
 - **B3 (mood-backfill, GROTER dan gedacht):** er is GEEN mood-backfill — bouwen naar analogie van `refreshAttributes`/`autoArousalRefreshIfNeeded` (FeatureStore `moodRefreshRows`+`setMoodsBatch`, LibraryWalker `refreshMoods(missingKey:)`, AnalyzerModel `autoMoodRefreshIfNeeded()` + launch-wiring). **TRAP: `FeatureStore.contentSignature()` heeft GEEN moods-term** → zonder toevoeging pullen clients de nieuwe moods nooit (mirror ar/tm-patroon).
 - Resterend maar NIET headless verifieerbaar (vereist toestel/GUI): crossfade + gapless (AVPlayer→AVAudioEngine, groot/risico), Siri-intents, Control Center, CarPlay (OS-integratie), chat-agent (LLM), share-CARDS als afbeelding (ImageRenderer — kan niet getest: testtarget importeert RoonSageUI niet)
 - B7b Architectuur (groot/risico): RoonClient god-object-split, alleen build-verifieerbaar

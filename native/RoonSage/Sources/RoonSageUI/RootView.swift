@@ -206,6 +206,8 @@ public enum SidebarItem: String, CaseIterable, Identifiable {
     case alchemy     = "Song Alchemy"
     case sonicSearch = "Sonic Search"
     case sonicLab    = "Sonic Lab"
+    /// The power-tool drawer (Sonic Lab, Music Map, Multitag, DJ, taste).
+    case lab         = "Lab"
     case multitag    = "Multitag"
     case discover    = "Discoveries"   // outward-facing recommendation engine ("Ontdekkingen")
     case discovery   = "Discovery"     // inward editorial "Listen Now" (library stats)
@@ -242,6 +244,7 @@ public enum SidebarItem: String, CaseIterable, Identifiable {
         case .alchemy:     LS("nav.alchemy")
         case .sonicSearch: LS("nav.sonicSearch")
         case .sonicLab:    LS("nav.sonicLab")
+        case .lab:         LS("nav.lab")
         case .multitag:    LS("nav.multitag")
         case .discover:    LS("nav.discover")   // outward: music you don't own yet
         case .discovery:   LS("nav.discovery")
@@ -276,6 +279,7 @@ public enum SidebarItem: String, CaseIterable, Identifiable {
         case .alchemy:     "wand.and.sparkles"
         case .sonicSearch: "sparkle.magnifyingglass"
         case .sonicLab:    "atom"
+        case .lab:         "flask"
         case .multitag:    "tag"
         case .discover:    "wand.and.stars.inverse"
         case .discovery:   "sparkles"
@@ -322,7 +326,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .playback: LS("section.playback")
-        case .create:   LS("section.create")
+        case .create:   LS("nav.search")
         case .stations: LS("section.stations")
         case .explore:  LS("section.explore")
         case .you:      LS("section.you")
@@ -330,18 +334,21 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The same five words the phone uses, in the same order.
+    ///
+    /// The sidebar listed 29 items while `detailView(for:)` only knows 13
+    /// destinations, so more than half of them landed on a screen they didn't
+    /// name — granularity the sidebar promised and couldn't deliver. Worse, it
+    /// taught a different vocabulary than the tab bar, so the two platforms
+    /// needed two mental models of the same app. This is the phone's shape with
+    /// the desk's extra room: Now Playing and the queue earn their own rows here
+    /// (there's a column to spare), everything else matches.
     var items: [SidebarItem] {
         switch self {
-        // Grouped by user intent, not by underlying engine:
-        //   Play      — what's on now / your collection
-        //   Create    — make a playlist from an idea
-        //   Stations  — self-driving / mixing playback (all share RadioEngine or the harmonic mixer)
-        //   Explore   — discover new music + navigate the sonic space of what you own
-        //   You       — your taste, history and yearly recap
-        case .playback: [.nowPlaying, .queue, .library, .bookmarks]
-        case .create:   [.generate, .playlists]
-        case .stations: [.stationsHub, .dj]
-        case .explore:  [.discovery, .sonicLab, .musicMap, .multitag]
+        case .playback: [.nowPlaying, .queue, .library, .playlists, .bookmarks]
+        case .create:   [.sonicSearch]
+        case .stations: [.stationsHub]
+        case .explore:  [.discovery, .lab]
         case .you:      [.tasteHub]
         case .settings: [.settings]
         }
@@ -373,6 +380,9 @@ struct RootView: View {
     /// The player is presented OVER whatever you were doing (iPhone) rather than
     /// being a tab you switch to. See `playerSheet`.
     @State private var showPlayer = false
+    /// Same for settings: a tab in the bar is prime real estate for a screen you
+    /// visit twice a year. It's a gear on the library, and a sheet from here.
+    @State private var showSettings = false
     @AppStorage("lastTab") private var lastTabRaw: String = SidebarItem.library.rawValue
     @AppStorage("lastZoneID") private var lastZoneID: String = ""
     /// One-shot guard for the "restore the last zone" hook below.
@@ -424,9 +434,12 @@ struct RootView: View {
     /// still exists and this stays a plain selection.
     private func go(to item: SidebarItem) {
         #if os(iOS)
-        if item == .nowPlaying, horizontalSizeClass == .compact {
-            showPlayer = true
-            return
+        if horizontalSizeClass == .compact {
+            switch item {
+            case .nowPlaying: showPlayer = true; return
+            case .settings:   showSettings = true; return
+            default: break
+            }
         }
         #endif
         selection = item
@@ -437,7 +450,8 @@ struct RootView: View {
     private func restoreLastTab() {
         guard let item = SidebarItem(rawValue: lastTabRaw) else { return }
         #if os(iOS)
-        if item == .nowPlaying, horizontalSizeClass == .compact { return }
+        // Neither has a tab on a compact iPhone any more; both are sheets.
+        if horizontalSizeClass == .compact, item == .nowPlaying || item == .settings { return }
         #endif
         selection = item
     }
@@ -537,8 +551,17 @@ struct RootView: View {
     }
 
     // MARK: Tabs (iPhone) — iOS only
-    // 5 primary tabs to avoid the "More" overflow. Create/Explore are hub screens
-    // with NavigationLinks into the full feature set.
+    //
+    // Four tabs, and every one of them lands on content.
+    //
+    // It used to be five, of which three weren't destinations at all: "Maak" and
+    // "Ontdek" were `List`s whose only job was to link to a hub that then showed
+    // a segmented control, and "Instellingen" was a screen of 21 sections in the
+    // prime row of the app. Two taps of navigation furniture before anything
+    // played. What lived in those cupboards didn't go anywhere — it moved one
+    // level UP (Ontdek and Stations are now the hubs themselves) or one level
+    // sideways (Lab, playlists and bookmarks are cards on the library; settings
+    // is a gear).
 
     #if os(iOS)
     private var tabView: some View {
@@ -548,6 +571,7 @@ struct RootView: View {
                     .navigationTitle(LS("Bibliotheek (\(client.trackCount))"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { navToolbar }
+                    .toolbar { settingsToolbarItem }
                     .ambientSurface()
             }
             .nowPlayingBarDocked()
@@ -555,36 +579,70 @@ struct RootView: View {
             .tag(SidebarItem.library)
 
             NavigationStack {
-                iOSCreateHub.toolbar { navToolbar }.ambientSurface()
+                SearchView()
+                    .navigationTitle(LS("nav.search"))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { navToolbar }
+                    .ambientSurface()
             }
             .nowPlayingBarDocked()
-            .tabItem { Label { LT("section.create") } icon: { Image(systemName: "wand.and.stars") } }
-            .tag(SidebarItem.generate)
+            .tabItem { Label { LT("nav.search") } icon: { Image(systemName: "magnifyingglass") } }
+            .tag(SidebarItem.sonicSearch)
 
             NavigationStack {
-                iOSExploreHub.toolbar { navToolbar }.ambientSurface()
+                DiscoverHubView()
+                    .navigationTitle(LS("section.explore"))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { navToolbar }
+                    .ambientSurface()
             }
             .nowPlayingBarDocked()
             .tabItem { Label { LT("section.explore") } icon: { Image(systemName: "sparkles") } }
             .tag(SidebarItem.discovery)
 
             NavigationStack {
-                SettingsView()
-                    .navigationTitle(LS("nav.settings"))
+                StationsHubView()
+                    .navigationTitle(LS("section.stations"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { navToolbar }
                     .ambientSurface()
             }
             .nowPlayingBarDocked()
-            .tabItem { Label { LT("nav.settings") } icon: { Image(systemName: "gearshape") } }
-            .tag(SidebarItem.settings)
+            .tabItem { Label { LT("section.stations") } icon: { Image(systemName: "dot.radiowaves.left.and.right") } }
+            .tag(SidebarItem.stationsHub)
         }
         .onChange(of: client.zones) { _, _ in restoreLastZoneOnce() }
         .environment(\.navigateTo, NavigateAction { go(to: $0) })
         .onAppear { restoreLastTab() }
         .onChange(of: selection) { _, item in lastTabRaw = item.rawValue }
         .sheet(isPresented: $showPlayer) { playerSheet }
+        .sheet(isPresented: $showSettings) { settingsSheet }
         .task { await autoPullFromServerIfEmpty() }
+    }
+
+    /// The gear, on the library — the tab you open most, so the one place a
+    /// settings entry is always within reach without costing a tab.
+    @ToolbarContentBuilder
+    private var settingsToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape")
+            }
+            .accessibilityLabel(LS("nav.settings"))
+        }
+    }
+
+    private var settingsSheet: some View {
+        NavigationStack {
+            SettingsView()
+                .navigationTitle(LS("nav.settings"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(LS("lyrics.done")) { showSettings = false }
+                    }
+                }
+        }
     }
 
     /// The player, raised over whatever you were doing.
@@ -630,83 +688,29 @@ struct RootView: View {
         .presentationDragIndicator(.visible)
     }
 
+    /// Which of the four tabs an arbitrary destination belongs to.
+    ///
+    /// The command palette can ask for any of the 29 `SidebarItem`s by name, and
+    /// a `TabView` selection with no matching tag renders a BLANK tab — so every
+    /// item has to resolve to one of the four. `.nowPlaying` and `.settings`
+    /// never reach here: `go(to:)` turns those into sheets.
     private var iOSTabSelection: Binding<SidebarItem> {
-        let createItems: Set<SidebarItem> = [.generate, .ask, .recommend, .queue, .playlists, .bookmarks]
-        let exploreItems: Set<SidebarItem> = [.discover, .discovery, .radios, .stationsHub, .dj, .djModes, .journeys, .djSet, .liveDJ, .recent, .fingerprint, .musicMap, .songPaths, .alchemy, .sonicSearch, .sonicLab, .multitag, .taste, .tasteHub, .yearInReview]
+        let searchItems: Set<SidebarItem> = [.sonicSearch, .ask]
+        let exploreItems: Set<SidebarItem> = [.discover, .discovery]
+        let stationItems: Set<SidebarItem> = [
+            .stationsHub, .radios, .journeys, .djModes, .generate, .recommend
+        ]
         return Binding(
             get: {
-                if createItems.contains(selection) { return .generate }
+                if searchItems.contains(selection) { return .sonicSearch }
                 if exploreItems.contains(selection) { return .discovery }
-                // No Now Playing tab any more — it's a sheet. A `.nowPlaying`
-                // selection can still arrive from a restored preference written
-                // by an older build, and a TabView selection with no matching tag
-                // renders a BLANK tab, so map it onto a real one.
-                if selection == .nowPlaying { return .library }
-                return selection
+                if stationItems.contains(selection) { return .stationsHub }
+                // Everything else — the library itself, playlists, bookmarks,
+                // the queue, and every Lab tool — hangs off the library tab.
+                return .library
             },
             set: { selection = $0 }
         )
-    }
-
-    @ViewBuilder
-    private var iOSCreateHub: some View {
-        List {
-            Section(LS("root.sectionAICuration")) {
-                NavigationLink { CreateHubView().navigationTitle(LS("section.create")).navigationBarTitleDisplayMode(.inline) } label: {
-                    Label(LS("root.createHubLabel"), systemImage: SidebarItem.generate.icon)
-                }
-            }
-            Section(LS("section.playback")) {
-                NavigationLink { QueueView().navigationTitle(LS("nav.queue")).navigationBarTitleDisplayMode(.inline) } label: {
-                    Label(LS("nav.queue"), systemImage: SidebarItem.queue.icon)
-                }
-                NavigationLink { PlaylistsView().navigationTitle(LS("nav.playlists")).navigationBarTitleDisplayMode(.inline) } label: {
-                    Label(LS("root.savedPlaylists"), systemImage: SidebarItem.playlists.icon)
-                }
-                NavigationLink { BookmarksView() } label: {
-                    Label(LS("root.savedForLater"), systemImage: SidebarItem.bookmarks.icon)
-                }
-            }
-        }
-        .navigationTitle(LS("section.create"))
-        .navigationBarTitleDisplayMode(.large)
-    }
-
-    @ViewBuilder
-    private var iOSExploreHub: some View {
-        List {
-            Section(LS("section.explore")) {
-                NavigationLink { DiscoverHubView().navigationTitle(LS("section.explore")).navigationBarTitleDisplayMode(.large) } label: {
-                    Label(LS("section.explore"), systemImage: SidebarItem.discovery.icon)
-                }
-            }
-            Section(LS("section.stations")) {
-                NavigationLink { StationsHubView().navigationTitle(LS("section.stations")).navigationBarTitleDisplayMode(.large) } label: {
-                    Label(LS("root.stationsHubLabel"), systemImage: SidebarItem.stationsHub.icon)
-                }
-                NavigationLink { DJView().navigationTitle("DJ").navigationBarTitleDisplayMode(.large) } label: {
-                    Label("DJ (set · live)", systemImage: SidebarItem.dj.icon)
-                }
-            }
-            Section(LS("root.sectionSonicTools")) {
-                NavigationLink { SonicLabView().navigationTitle("Sonic Lab").navigationBarTitleDisplayMode(.large) } label: {
-                    Label("Sonic Lab", systemImage: SidebarItem.sonicLab.icon)
-                }
-                NavigationLink { MusicMapView().navigationTitle("Music Map").navigationBarTitleDisplayMode(.large) } label: {
-                    Label("Music Map", systemImage: SidebarItem.musicMap.icon)
-                }
-                NavigationLink { MultitagView() } label: {
-                    Label("Multitag", systemImage: SidebarItem.multitag.icon)
-                }
-            }
-            Section(LS("section.you")) {
-                NavigationLink { TasteHubView().navigationTitle(LS("nav.tasteHub")).navigationBarTitleDisplayMode(.large) } label: {
-                    Label(LS("root.tasteHubLabel"), systemImage: SidebarItem.tasteHub.icon)
-                }
-            }
-        }
-        .navigationTitle(LS("section.explore"))
-        .navigationBarTitleDisplayMode(.large)
     }
     #endif
 
@@ -724,7 +728,9 @@ struct RootView: View {
         case .djSet, .liveDJ, .dj: DJView()
         case .stationsHub, .radios, .journeys, .djModes: StationsHubView()
         case .musicMap:    MusicMapView()
-        case .songPaths, .alchemy, .sonicSearch, .sonicLab: SonicLabView()
+        case .songPaths, .alchemy, .sonicLab: SonicLabView()
+        case .sonicSearch: SearchView()
+        case .lab:         LabView()
         case .multitag:    MultitagView()
         case .discover, .discovery: DiscoverHubView()
         case .fingerprint, .recent, .taste, .tasteHub, .yearInReview: TasteHubView()

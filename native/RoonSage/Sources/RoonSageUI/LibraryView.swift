@@ -3,7 +3,19 @@ import SwiftUI
 
 @MainActor
 public struct LibraryView: View {
-    public init() {}
+    /// Search-first variant, used by the Zoek tab.
+    ///
+    /// The combined artist/album/track search already lives here (readiness P7),
+    /// wired to `UnifiedSearch`, the "toon alles" drill-down and the sonic
+    /// hand-off. Giving the search tab its own copy of that would have been a
+    /// second implementation to keep in step — the exact mistake the two Now
+    /// Playing screens were. So the tab reuses this view and only asks it to
+    /// open on the search box instead of on the overview.
+    private let searchOnly: Bool
+
+    public init() { self.searchOnly = false }
+    public init(searchOnly: Bool) { self.searchOnly = searchOnly }
+
     @Environment(RoonClient.self) private var client
     @State private var searchText = ""
     @State private var selectedTag: String?
@@ -130,7 +142,10 @@ public struct LibraryView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             VStack(spacing: 0) {
                 if client.isSyncing { SyncProgressBanner() }
-                modePicker
+                // On the search tab the picker is chrome you didn't ask for —
+                // until "toon alles" drills into a full list, when it becomes
+                // the way back to the combined result.
+                if !searchOnly || viewMode != .overview { modePicker }
                 if viewMode == .tracks, !tags.isEmpty { tagChips }
             }
             .background(.bar)
@@ -287,10 +302,24 @@ public struct LibraryView: View {
         switch viewMode {
         // Searching from the overview no longer throws you into the track list:
         // the overview IS the combined result now (P7).
-        case .overview: if isSearchActive { unifiedResults } else { overviewContent }
+        case .overview:
+            if isSearchActive { unifiedResults }
+            else if searchOnly { searchIdle }
+            else { overviewContent }
         case .tracks:  tracksContent
         case .albums:  albumsContent
         case .artists: artistsContent
+        }
+    }
+
+    /// What the search tab shows before you've typed anything. Deliberately not
+    /// the library overview: that's the Bibliotheek tab, and repeating it here
+    /// would make the two tabs look like the same screen.
+    private var searchIdle: some View {
+        ContentUnavailableView {
+            Label(LS("search.idleTitle"), systemImage: "magnifyingglass")
+        } description: {
+            LT("search.idleBody")
         }
     }
 
@@ -963,6 +992,14 @@ public struct LibraryView: View {
                             String(format: LS("downloads.librarySubtitle"), client.offlineKeys.count),
                             "arrow.down.circle") { DownloadsView() }.plainCardRow()
                 }
+                // Playlists and bookmarks used to hang under the "Maak" tab —
+                // a list that linked to a hub. They're collections, so they
+                // belong with the rest of your music, in the same navCard shape
+                // the downloads already use.
+                navCard(LS("root.savedPlaylists"), LS("library.playlistsSubtitle"),
+                        SidebarItem.playlists.icon) { PlaylistsView() }.plainCardRow()
+                navCard(LS("root.savedForLater"), LS("library.bookmarksSubtitle"),
+                        SidebarItem.bookmarks.icon) { BookmarksView() }.plainCardRow()
                 navCard(LS("library.discoverWeeklyTitle"),
                         LS("library.discoverWeeklySubtitle"),
                         "sparkles") { DiscoverWeeklyView() }.plainCardRow()
@@ -970,6 +1007,10 @@ public struct LibraryView: View {
                         "dot.radiowaves.left.and.right") { CustomRadioView() }.plainCardRow()
                 navCard(LS("nav.recommend"), LS("library.recommendSubtitle"),
                         "wand.and.stars") { RecommendView() }.plainCardRow()
+                // Last, because it's the one you open on purpose rather than
+                // while looking for something to play.
+                navCard(LS("nav.lab"), LS("library.labSubtitle"),
+                        "flask") { LabView() }.plainCardRow()
             } else if !overviewLoaded {
                 SkeletonRows().plainCardRow()
             } else {

@@ -237,10 +237,16 @@ automatiseren is — het bureaublad heeft geen Screen-Recording-TCC):
 | Tikken van koude start tot muziek | 3 (Bibliotheek-tab → item → play) vanaf een leeg spelerscherm | **≤ 2**, en het eerste scherm toont al speelbare rijen |
 | Tikken van bladeren naar de speler en terug | 2 + verloren scrollpositie | **2, context behouden** |
 | Tikken naar de wachtrij | onbekend (blinde veeg) | **1 vanuit de speler** |
-| Verzonnen eigennamen in het navigatiepad | 9 (Sonic Lab, Music Map, Sonic DNA, Song Paths, Alchemy, Multitag, Journeys, DJ-modi, Ontdek Wekelijks) | **1** (Lab), de rest pas ín Lab |
-| Bestemmingen in de tabbalk | 5, waarvan 3 kastjes | **4 echte** |
+| Verzonnen eigennamen in het navigatiepad | 9 (Sonic Lab, Music Map, Sonic DNA, Song Paths, Alchemy, Multitag, Journeys, DJ-modi, Ontdek Wekelijks) | **0 in de tabbalk** (Bibliotheek · Zoek · Ontdek · Stations); Lab is één kaart, en daarbinnen krijgt elk gereedschap een regel gewone taal — gehaald (U3) |
+| Bestemmingen in de tabbalk | 5, waarvan 3 kastjes | **4 echte** — gehaald (U3) |
 | Regels Nu-speelt-code | 1.421 in 2 bestanden | **< 900 in 1** — gehaald: 704 (U1) |
 | Secties in het eerste instellingenscherm | 21 | **≤ 10 per scherm, 2 schermen** |
+
+**Eén maat is bij de uitvoering geschrapt: "tikken naar Sonic Search".** Dat was
+2 en werd 2 — de winst zat nooit in het aantal tikken maar in wat je onderweg
+moest wéten. Een tabbalk waarin twee van de vijf knoppen een lijst openen die
+naar een hub linkt is furniture, geen navigatie; dát is wat weg is. De maat is
+vervangen door "verzonnen eigennamen in het navigatiepad".
 
 Plus wat alleen op een toestel kan en dus expliciet openblijft: of de
 blad-overgang soepel is met de art-crossfade eronder, of de veeggebaren botsen
@@ -319,7 +325,26 @@ door. Los uit te zoeken; het raakt P9 (half-offline zichtbaar maken).
       Engelse telefoon.** `LS("Opnieuw verbinden met \(saved)")` interpoleerde de
       host ín de sleutel, dus die kon nooit oplossen en viel terug op de
       Nederlandse literal. Twee sleutels erbij, catalogus 844 → 846.
-- [ ] Batch 3 — U3 + U10 + U11
+- [x] Batch 3 — U3 + U10 + U11 · v1.10.266 / ios-v1.7.232.
+      **Vier tabs, en ze landen alle vier op inhoud:** Bibliotheek · Zoek ·
+      Ontdek · Stations. `iOSCreateHub` en `iOSExploreHub` — de twee `List`s die
+      alleen naar een hub linkten — zijn weg; hun hubs zijn nu zélf de tab.
+      Instellingen verhuist naar een tandwiel op Bibliotheek en een blad, net als
+      de speler; `go(to:)` vangt `.settings` op dezelfde plek af als
+      `.nowPlaying`. **Zoek is een eigen tab** met drie manieren: Bibliotheek ·
+      Sonisch · Vraag het.
+      **Geen tweede zoekimplementatie:** de gecombineerde artiest/album/track-zoek
+      (P7) staat in `LibraryView`, inclusief de "toon alles"-doorstap en de
+      sonische doorgeefrij. `LibraryView(searchOnly:)` hergebruikt dat en verbergt
+      alleen de moduskiezer tot een doorstap hem nodig maakt — een eigen kopie
+      zou precies de fout van de twee spelers herhalen.
+      **Genereer** zit bij Stations (alle vier beantwoorden "zet iets op", ze
+      verschillen alleen in eindeloos versus eindig). **Lab** (Sonic Lab, Music
+      Map, Multitag, DJ, smaak) is één kaart op het bibliotheekoverzicht, met
+      een regel gewone taal per gereedschap. Playlists en Bewaard staan daar nu
+      ook, in dezelfde kaartvorm als Gedownload.
+      Sidebar 29 items → **11**, met dezelfde vijf woorden als de telefoon.
+      Catalogus 846 → 854 (14 nieuw, 6 wezen van de gesloopte kastjes weg).
 - [ ] Batch 4 — U4 + U5
 - [ ] Batch 5 — U7
 - [ ] Batch 6 — U8 + U9

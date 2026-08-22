@@ -32,10 +32,23 @@
 "nav.tasteHub"     = "Taste";
 "nav.yearInReview" = "Year in Review";
 "nav.settings"     = "Settings";
+"nav.lab"                     = "Lab";
+"nav.search"                  = "Search";
+"search.modePickerTitle"      = "Way of searching";
+"search.idleTitle"            = "Search your music";
+"search.idleBody"             = "Type an artist, album or title. Or switch to Sonic and describe how it should sound.";
+"lab.sectionSonic"            = "Sonic tools";
+"lab.sonicLabSubtitle"        = "Search by sound, blend two tracks, build a bridge";
+"lab.musicMapSubtitle"        = "Your library as a map of sounds";
+"lab.multitagSubtitle"        = "Several tags at once, with and/or";
+"lab.djSubtitle"              = "Harmonic mixing on BPM and key";
+"lab.tasteSubtitle"           = "Your taste profile, history and year in review";
+"library.playlistsSubtitle"   = "What you saved yourself";
+"library.bookmarksSubtitle"   = "Listen later";
+"library.labSubtitle"         = "Music Map, Sonic DNA, Multitag, DJ";
 
 /* Sidebar sections */
 "section.playback" = "Play";
-"section.create"   = "Create";
 "section.stations" = "Stations";
 "section.explore"  = "Explore";
 "section.you"      = "You";
@@ -701,7 +714,6 @@
 "root.chooseZoneHelp"     = "Choose a zone or this device";
 "root.commandPalette"     = "Command palette";
 "root.commandPaletteHelp" = "Command palette (⌘K)";
-"root.createHubLabel"     = "Create (generate · quick · albums)";
 "root.discoverWeekly"     = "Discover Weekly";
 "root.nextTrack"          = "Next track";
 "root.none"               = "none";
@@ -710,10 +722,6 @@
 "root.previousTrack"      = "Previous track";
 "root.savedForLater"      = "Saved for later";
 "root.savedPlaylists"     = "Saved playlists";
-"root.sectionAICuration"  = "AI curation";
-"root.sectionSonicTools"  = "Sonic tools";
-"root.stationsHubLabel"   = "Stations (radios · DJ modes · journeys)";
-"root.tasteHubLabel"      = "Taste (DNA · profile · history · year)";
 
 /* shareCard */
 "shareCard.shareAsImage" = "Share as image";

@@ -325,12 +325,15 @@ struct CommandPaletteView: View {
         }
 
         // Navigation to primary destinations (consolidated hubs)
+        // Mirrors the four tabs plus what hangs off them, so ⌘K speaks the same
+        // vocabulary as the tab bar. This is where the depth lives now that the
+        // bar carries four destinations instead of five cupboards.
         let primaryItems: [SidebarItem] = [
-            .nowPlaying, .queue, .library, .bookmarks,
-            .generate, .playlists,
-            .stationsHub, .dj,
-            .discovery, .sonicLab, .musicMap, .multitag,
-            .tasteHub, .settings
+            .nowPlaying, .queue, .library, .playlists, .bookmarks,
+            .sonicSearch, .ask,
+            .discovery, .stationsHub, .generate, .dj,
+            .lab, .sonicLab, .musicMap, .multitag, .tasteHub,
+            .settings
         ]
         for item in primaryItems {
             out.append(PaletteCommand(
