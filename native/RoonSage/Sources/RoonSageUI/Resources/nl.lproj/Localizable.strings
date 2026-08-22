@@ -498,26 +498,7 @@
 "liveDJ.tapOrbit"       = "Tik op een bol om een overgang te kiezen.";
 
 /* localNowPlaying */
-"localNowPlaying.deviceNounDevice"  = "dit apparaat";
-"localNowPlaying.more" = "Meer";
-"localNowPlaying.nothingPlaying"    = "Niets aan het spelen";
-"localNowPlaying.sonicallySimilar" = "Sonisch vergelijkbaar";
 "localNowPlaying.systemVolume" = "Volume";
-"localNowPlaying.upNext"            = "HIERNA";
-"localNowPlaying.deviceNounMac"     = "deze Mac";
-"localNowPlaying.dislike"           = "Vind ik niet leuk — sla over en leer ervan";
-"localNowPlaying.like"              = "Vind ik leuk";
-"localNowPlaying.lyrics"            = "Songtekst";
-"localNowPlaying.mute"              = "Dempen";
-"localNowPlaying.nextTrack"         = "Volgende track";
-"localNowPlaying.off"               = "uit";
-"localNowPlaying.on"                = "aan";
-"localNowPlaying.pause"             = "Pauzeer";
-"localNowPlaying.play"              = "Speel af";
-"localNowPlaying.playbackPosition"  = "Afspeelpositie";
-"localNowPlaying.previousTrack"     = "Vorige track";
-"localNowPlaying.tapToContinue"     = "Tik om door te spelen";
-"localNowPlaying.unmute"            = "Dempen opheffen";
 
 
 /* logConsole */
@@ -577,6 +558,9 @@
 "nowPlaying.startPlaybackHint" = "Start iets in Roon, of kies dit apparaat als uitvoer.";
 "nowPlaying.upNext"           = "HIERNA";
 "nowPlaying.keepPlayingHint"  = "Tik om door te spelen";
+"nowPlaying.more"             = "Meer";
+"nowPlaying.upNextAccessibility" = "Hierna: %@";
+"nowPlaying.blockedSummary"   = "%1$d van %2$d speelbaar hier · %3$d Qobuz/stream overgeslagen";
 "nowPlaying.like"             = "Vind ik leuk";
 "nowPlaying.lyrics"           = "Songtekst";
 "nowPlaying.makePlaylist"     = "Maak een playlist";
@@ -725,7 +709,6 @@
 "root.savedForLater"      = "Bewaard voor later";
 "root.savedPlaylists"     = "Bewaarde playlists";
 "root.sectionAICuration"  = "AI-curatie";
-"root.sectionDiscovering" = "Ontdekken";
 "root.sectionSonicTools"  = "Sonic-tools";
 "root.stationsHubLabel"   = "Stations (radio's · DJ-modi · journeys)";
 "root.tasteHubLabel"      = "Smaak (DNA · profiel · historie · jaar)";

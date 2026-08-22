@@ -498,26 +498,7 @@
 "liveDJ.tapOrbit"       = "Tap an orbit to pick a transition.";
 
 /* localNowPlaying */
-"localNowPlaying.deviceNounDevice"  = "this device";
-"localNowPlaying.more" = "More";
-"localNowPlaying.nothingPlaying"    = "Nothing playing";
-"localNowPlaying.sonicallySimilar" = "Sonically similar";
 "localNowPlaying.systemVolume" = "Volume";
-"localNowPlaying.upNext"            = "UP NEXT";
-"localNowPlaying.deviceNounMac"     = "this Mac";
-"localNowPlaying.dislike"           = "Dislike — skip it and learn from it";
-"localNowPlaying.like"              = "Like";
-"localNowPlaying.lyrics"            = "Lyrics";
-"localNowPlaying.mute"              = "Mute";
-"localNowPlaying.nextTrack"         = "Next track";
-"localNowPlaying.off"               = "off";
-"localNowPlaying.on"                = "on";
-"localNowPlaying.pause"             = "Pause";
-"localNowPlaying.play"              = "Play";
-"localNowPlaying.playbackPosition"  = "Playback position";
-"localNowPlaying.previousTrack"     = "Previous track";
-"localNowPlaying.tapToContinue"     = "Tap to keep playing";
-"localNowPlaying.unmute"            = "Unmute";
 
 
 /* logConsole */
@@ -577,6 +558,9 @@
 "nowPlaying.startPlaybackHint" = "Start something in Roon, or choose this device as the output.";
 "nowPlaying.upNext"           = "UP NEXT";
 "nowPlaying.keepPlayingHint"  = "Tap to keep playing";
+"nowPlaying.more"             = "More";
+"nowPlaying.upNextAccessibility" = "Up next: %@";
+"nowPlaying.blockedSummary"   = "%1$d of %2$d playable here · %3$d Qobuz/stream skipped";
 "nowPlaying.like"             = "Like";
 "nowPlaying.lyrics"           = "Lyrics";
 "nowPlaying.makePlaylist"     = "Make a playlist";
@@ -725,7 +709,6 @@
 "root.savedForLater"      = "Saved for later";
 "root.savedPlaylists"     = "Saved playlists";
 "root.sectionAICuration"  = "AI curation";
-"root.sectionDiscovering" = "Discovering";
 "root.sectionSonicTools"  = "Sonic tools";
 "root.stationsHubLabel"   = "Stations (radios · DJ modes · journeys)";
 "root.tasteHubLabel"      = "Taste (DNA · profile · history · year)";
