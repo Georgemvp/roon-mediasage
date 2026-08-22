@@ -134,6 +134,7 @@
 
 /* connect */
 "connect.autoConnect"         = "Automatisch verbinden";
+"connect.retryIn" = "(opnieuw over %ds)";
 "connect.connect"             = "Verbind";
 "connect.coreIPPlaceholder"   = "Roon Core IP";
 "connect.discoverCore"        = "Zoek Roon Core";
@@ -219,9 +220,10 @@
 
 /* dJModes */
 "dJModes.autoPersonaToggle"   = "Persona automatisch kiezen";
+"dJModes.autoplayTitle" = "Gast-DJ · Autoplay";
+"dJModes.autoplayPersonaLabel" = "DJ";
 "dJModes.autoplayDescription" = "Vult de wachtrij automatisch aan zodra die leegloopt.";
 "dJModes.autoplayToggle"      = "Automatisch aanvullen";
-"dJModes.headerBlurb" = "Kies een persona; de DJ bouwt verder op wat er nu speelt.";
 "dJModes.needNowPlaying"      = "Start eerst een nummer — de DJ heeft een vertrekpunt nodig.";
 "dJModes.radioPlaying"        = "Radio speelt";
 "dJModes.stop"  = "Stop";
@@ -382,6 +384,7 @@
 "generate.moveDown"           = "Omlaag";
 "generate.moveUp"             = "Omhoog";
 "generate.namePlaceholder"    = "Naam playlist";
+"generate.templateA11y" = "%1$@, %2$d tracks";
 "generate.navTitle"           = "Playlist genereren";
 "generate.noZone"             = "Kies eerst een zone of dit apparaat.";
 "generate.none"               = "Geen";
@@ -390,7 +393,6 @@
 "generate.playOn"             = "Speel op";
 "generate.playtime"           = "Speelduur";
 "generate.promptPlaceholder"  = "Beschrijf de sfeer, het genre of de gelegenheid… bijv. “warme jazz voor een regenachtige zondagochtend”";
-"generate.promptSection"      = "Wat voor playlist?";
 "generate.qobuzFailed"        = "Bewaren in Qobuz mislukt — controleer je account in Instellingen.";
 "generate.qobuzHelp"          = "Bewaar deze playlist ook in je Qobuz-account";
 "generate.qobuzSaving"        = "Bewaren in Qobuz…";
@@ -601,6 +603,8 @@
 "nowPlaying.wallDisplay"      = "Wanddisplay";
 
 /* nowPlayingBar */
+"nowPlayingBar.a11yLocal" = "Lokaal afspelen op %1$@: %2$@. Tik om Nu speelt te openen.";
+"nowPlayingBar.a11yZone" = "Speelt in %1$@: %2$@. Tik om Nu speelt te openen.";
 "nowPlayingBar.nextTrack"  = "Volgende track";
 "nowPlayingBar.pause"      = "Pauzeer";
 "nowPlayingBar.play"       = "Speel af";
@@ -663,6 +667,11 @@
 "playlists.showTracks"            = "Toon tracks";
 
 /* queue */
+"queue.trackCountOne" = "%d nummer";
+"queue.trackCountMany" = "%d nummers";
+"queue.durationHM" = "%1$d u %2$d m";
+"queue.durationM" = "%d m";
+"queue.remaining" = "nog %d";
 "queue.cancel"                  = "Annuleer";
 "queue.clearUpcoming"           = "Wachtrij leegmaken";
 "queue.clearUpcomingHelp"       = "Verwijder alles ná het huidige nummer";
@@ -729,6 +738,8 @@
 /* shelves */
 
 /* similarTracks */
+"shelf.playTitle" = "Speel %1$@";
+"shelf.playTitleByArtist" = "Speel %1$@ van %2$@";
 "similarTracks.done"              = "Gereed";
 "similarTracks.navTitle"          = "Vergelijkbaar";
 "similarTracks.noMatchDescription" = "Geen vergelijkbare tracks gevonden — deze is nog niet geanalyseerd.";
@@ -774,10 +785,18 @@
 "sonicFingerprint.computingTitle" = "Je sonische DNA berekenen…";
 
 /* sonicJourneys */
+"sonicJourneys.albumRadio" = "Album Radio";
+"sonicJourneys.timeMachine" = "Time Machine";
+"sonicJourneys.bridge" = "The Bridge";
+"sonicJourneys.browseAlbums" = "Kies een album";
+"sonicJourneys.pickTwoTracks" = "Kies twee nummers";
+"sonicJourneys.length" = "Lengte: %d tracks";
+"sonicJourneys.started" = "Tijdreis gestart — %d tracks van oud naar nieuw.";
+"sonicJourneys.qobuzSynced" = "Op Qobuz gezet als ‘%@’.";
+"sonicJourneys.needOutput" = "Kies eerst waar het moet spelen — dit apparaat of een Roon-zone.";
 "sonicJourneys.albumRadioDesc"   = "Begint bij een album en dwaalt daar geleidelijk vanaf.";
 "sonicJourneys.bridgeDesc"       = "Verbindt twee smaken die je zelden samen hoort.";
 "sonicJourneys.building"         = "Bezig…";
-"sonicJourneys.headerSubtitle"   = "Reizen door je bibliotheek, elk met een ander vertrekpunt.";
 "sonicJourneys.noYearTracks"     = "Geen tracks met een jaartal gevonden — tag of analyseer eerst meer muziek.";
 "sonicJourneys.noYearTracksSync" = "Geen tracks met een jaartal gevonden om te synchroniseren.";
 "sonicJourneys.qobuzDescription" = "Een reis van oud naar nieuw, samengesteld in RoonSage.";
@@ -796,7 +815,37 @@
 /* sonicRadio */
 "sonicRadio.myRadiosSubtitle" = "Stations die je zelf hebt bewaard.";
 "sonicRadio.myRadiosTitle" = "Mijn radio's";
+"radioCategory.artist" = "Artiest";
+"radioCategory.genre" = "Genre";
+"radioCategory.mood" = "Sfeer";
+"radioCategory.activity" = "Activiteit";
+"radioCategory.decade" = "Decennium";
+"radioCategory.sonic" = "Buurten";
+"radioCategory.recent" = "Recent";
 "sonicRadio.navTitle"    = "Radio's";
+"sonicRadio.adventurousness" = "Avontuurlijkheid";
+"sonicRadio.dialFamiliar" = "Vertrouwd";
+"sonicRadio.dialExploring" = "Op ontdekking";
+"sonicRadio.hideDisliked" = "Verberg tracks met duim-omlaag volledig";
+"sonicRadio.dialMostlyKnown" = "Vooral bekend";
+"sonicRadio.dialLightExploring" = "Lichte verkenning";
+"sonicRadio.dialAdventurous" = "Verkennend";
+"sonicRadio.playing" = "Radio speelt";
+"sonicRadio.emptyTitle" = "Nog geen radio's";
+"sonicRadio.emptyBody" = "Luister wat muziek en zorg dat je bibliotheek geanalyseerd is — dan verschijnen hier dagelijks stations rond je favoriete artiesten.";
+"sonicRadio.qobuzTitle" = "AI-radio's op Qobuz";
+"sonicRadio.qobuzBody" = "Alle radio's met een AI-titel + beschrijving die nu als Qobuz-playlists staan, over alle categorieën heen — continu ververst. Tik een kaart aan voor de tracklijst.";
+"sonicRadio.qobuzNotConfigured" = "Qobuz is niet ingesteld — voeg je inloggegevens toe bij Instellingen om te kunnen synchroniseren.";
+"sonicRadio.noLLM" = "Geen LLM ingesteld — radio's krijgen nette standaardtitels in plaats van AI-titels.";
+"sonicRadio.syncing" = "Synchroniseren…";
+"sonicRadio.qobuzEmpty" = "Nog geen AI-radio's op Qobuz — zorg dat je bibliotheek geanalyseerd is en synchroniseer een selectie (Analyzer → Instellingen → Radio's).";
+"sonicRadio.tracksSection" = "Tracks";
+"sonicRadio.done" = "Klaar";
+"sonicRadio.syncNotConfigured" = "Qobuz is niet ingesteld — vul je inloggegevens in bij Instellingen.";
+"sonicRadio.syncNothing" = "Nog geen radio's om te synchroniseren — luister wat muziek en zorg dat je bibliotheek geanalyseerd is.";
+"sonicRadio.syncFailed" = "Synchroniseren mislukt — controleer je Qobuz-instellingen.";
+"sonicRadio.trackCountLine" = "Sonische radio · %d tracks";
+"sonicRadio.syncToQobuz" = "Sync %@-radio's naar Qobuz";
 "sonicRadio.refreshHelp" = "Ververs de radio's van vandaag";
 
 /* sonicSearch */
@@ -817,7 +866,12 @@
 "state.retry"      = "Opnieuw proberen";
 
 /* stationsHub */
+"stationsHub.radiosBlurb" = "Eindeloze stations, elke dag vers uit je eigen bibliotheek.";
+"stationsHub.djModesBlurb" = "Een gast-DJ neemt over vanaf het nummer dat nu speelt.";
+"stationsHub.journeysBlurb" = "Reizen door je collectie, elk met een ander vertrekpunt.";
+"stationsHub.generateBlurb" = "Beschrijf wat je wilt horen; je krijgt een afgeronde playlist.";
 "stationsHub.djModes" = "DJ-modi";
+"stationsHub.journeys" = "Journeys";
 "stationsHub.mode"    = "Modus";
 "stationsHub.radios"  = "Radio's";
 
@@ -977,3 +1031,76 @@
 "settings.tokenSaved" = "Token bewaard";
 "settings.discogsHelp" = "Schakelt de \"Discogs\"-bron in Ontdekkingen in: artiesten op hetzelfde platenlabel als artiesten die je veel speelt. Token aanmaken via discogs.com → instellingen → Developers.";
 "settings.loudnessHelp" = "Egaliseert het volume tussen tracks op dit apparaat op basis van de gemeten LUFS-loudness (doel −14 LUFS). “Per album” behoudt de dynamiek binnen een album. Werkt alleen bij lokaal afspelen; Roon-zones regelen dit zelf.";
+
+// Playlist-sjablonen (GenerateView) — id's zijn stabiel en gegenereerd.
+"playlistTemplate.friday-night-chill" = "Vrijdagavond chill";
+"playlistTemplate.sunday-morning" = "Zondagochtend";
+"playlistTemplate.rainy-day" = "Regendag";
+"playlistTemplate.melancholic-evening" = "Melancholische avond";
+"playlistTemplate.sunny-optimism" = "Zonnig optimisme";
+"playlistTemplate.cozy-autumn" = "Gezellige herfst";
+"playlistTemplate.midnight-drive" = "Middernachtrit";
+"playlistTemplate.golden-hour" = "Gouden uur";
+"playlistTemplate.euphoric-high" = "Euforie";
+"playlistTemplate.introspective" = "Introspectief";
+"playlistTemplate.romantic-mood" = "Romantische sfeer";
+"playlistTemplate.bittersweet" = "Bitterzoet";
+"playlistTemplate.deep-focus" = "Diepe focus";
+"playlistTemplate.workout-energy" = "Workout-energie";
+"playlistTemplate.road-trip" = "Roadtrip";
+"playlistTemplate.dinner-party" = "Etentje";
+"playlistTemplate.cooking-session" = "Koken";
+"playlistTemplate.studying-hard" = "Hard studeren";
+"playlistTemplate.yoga-flow" = "Yoga-flow";
+"playlistTemplate.house-cleaning" = "Schoonmaken";
+"playlistTemplate.reading-time" = "Leestijd";
+"playlistTemplate.late-coding" = "Laat coderen";
+"playlistTemplate.date-night" = "Date-avond";
+"playlistTemplate.morning-coffee" = "Ochtendkoffie";
+"playlistTemplate.lunch-break" = "Lunchpauze";
+"playlistTemplate.afternoon-pickup" = "Middagboost";
+"playlistTemplate.sunset-drive" = "Zonsondergangrit";
+"playlistTemplate.late-night-lounge" = "Late-avond lounge";
+"playlistTemplate.3am-thoughts" = "Gedachten om 3 uur";
+"playlistTemplate.90s-nostalgia" = "90's-nostalgie";
+"playlistTemplate.50s-rock-roll" = "50's rock-'n-roll";
+"playlistTemplate.60s-psychedelic" = "60's psychedelica";
+"playlistTemplate.70s-soul-funk" = "70's soul & funk";
+"playlistTemplate.80s-synthwave" = "80's synthwave";
+"playlistTemplate.2000s-indie" = "2000's indie";
+"playlistTemplate.2010s-pop" = "2010's pop";
+"playlistTemplate.late-night-jazz" = "Late-avond jazz";
+"playlistTemplate.electronic-trip" = "Elektronische trip";
+"playlistTemplate.hip-hop-classics" = "Hiphop-klassiekers";
+"playlistTemplate.blues-foundations" = "Blues-fundament";
+"playlistTemplate.classical-calm" = "Klassieke rust";
+"playlistTemplate.world-music" = "Wereldmuziek";
+"playlistTemplate.reggae-vibes" = "Reggae-vibes";
+"playlistTemplate.folk-tradition" = "Folktraditie";
+"playlistTemplate.metal-mayhem" = "Metal-mayhem";
+"playlistTemplate.country-roads" = "Country roads";
+"playlistTemplate.bossa-nova-sunset" = "Bossa nova-zonsondergang";
+"playlistTemplate.punk-spirit" = "Punk-spirit";
+"playlistTemplate.house-party" = "Huisfeest";
+"playlistTemplate.bbq-vibes" = "BBQ-vibes";
+"playlistTemplate.quiet-conversation" = "Rustig gesprek";
+"playlistTemplate.family-time" = "Gezinstijd";
+"playlistTemplate.pre-game" = "Voorgloeien";
+"playlistTemplate.winter-warmth" = "Winterwarmte";
+"playlistTemplate.spring-awakening" = "Lente-ontwaken";
+"playlistTemplate.beach-day" = "Stranddag";
+"playlistTemplate.crisp-autumn" = "Frisse herfst";
+"playlistTemplate.holiday-cheer" = "Feestdagen";
+"playlistTemplate.new-discoveries" = "Nieuwe ontdekkingen";
+"playlistTemplate.deep-cuts" = "Verborgen tracks";
+"playlistTemplate.underrated-gems" = "Ondergewaardeerde parels";
+"playlistTemplate.time-machine" = "Tijdmachine";
+"playlistTemplate.genre-bender" = "Genre-bender";
+"playlistCategory.mood" = "Sfeer";
+"playlistCategory.activities" = "Activiteiten";
+"playlistCategory.timeOfDay" = "Dagdeel";
+"playlistCategory.eras" = "Tijdperken";
+"playlistCategory.genres" = "Genres";
+"playlistCategory.social" = "Sociaal";
+"playlistCategory.seasons" = "Seizoenen";
+"playlistCategory.discovery" = "Ontdekking";

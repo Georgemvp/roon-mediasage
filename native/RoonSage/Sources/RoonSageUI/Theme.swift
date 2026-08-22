@@ -126,6 +126,16 @@ extension View {
             .background(.background.secondary, in: RoundedRectangle(cornerRadius: Radius.lg))
     }
 
+    /// A `List` used as a feed of cards directly under a hub's header.
+    ///
+    /// `List` reserves ~35 pt above its first row for a section header that a
+    /// card feed does not have. Under the segmented picker that reads as a hole:
+    /// on Stations it pushed the first card 54 pt down the screen for nothing,
+    /// on a screen whose whole problem was that content started too low.
+    func cardFeedList() -> some View {
+        self.contentMargins(.top, Spacing.xs, for: .scrollContent)
+    }
+
     /// Strips a `List` row's default chrome (background, separator, inset) so a
     /// self-styled card (gradient hero, `.cardStyle()` block, custom shelf) reads
     /// exactly as it would in a plain `VStack` feed — used when `List` is hosting

@@ -53,7 +53,7 @@ final class GenerateModel {
     func apply(_ t: PlaylistTemplate) {
         prompt = t.prompt
         targetCount = [10, 20, 30, 50].min(by: { abs($0 - t.trackCount) < abs($1 - t.trackCount) }) ?? 20
-        playlistName = t.name
+        playlistName = t.displayName
         Haptics.tap()
     }
 
@@ -134,23 +134,27 @@ final class GenerateModel {
         }
     }
 
+    // Route to whatever output is active, not to a Roon zone. These three were
+    // the last verbs in the Stations tab that still required `selectedZone`, so
+    // a generated playlist could be built on this device and then not played on
+    // it. `playToActiveOutput` / `queueToActiveOutput` are what the rest of the
+    // app has used since v1.10.228.
+
     func playAll(client: RoonClient) {
-        guard let z = client.selectedZone?.id, !tracks.isEmpty else { return }
+        guard !tracks.isEmpty else { return }
         Haptics.tap()
         let snapshot = tracks
-        Task { await client.curateTracks(snapshot, zoneID: z) }
+        Task { await client.playToActiveOutput(snapshot) }
     }
 
     func playOne(_ track: TrackRecord, client: RoonClient) {
-        guard let z = client.selectedZone?.id else { return }
         Haptics.tap()
-        Task { await client.curateTracks([track], zoneID: z) }
+        Task { await client.playToActiveOutput([track]) }
     }
 
     func queueOne(_ track: TrackRecord, next: Bool, client: RoonClient) {
-        guard let z = client.selectedZone?.id else { return }
         Haptics.tap()
-        Task { await client.queueTracks([track], next: next, zoneID: z) }
+        Task { await client.queueToActiveOutput([track], next: next) }
     }
 
     func remove(_ track: TrackRecord) {
@@ -213,9 +217,10 @@ public struct GenerateView: View {
                 idleSection
             }
         }
+        .cardFeedList()
         .animation(Motion.standard, value: model.result?.title)
         .animation(Motion.quick, value: model.errorMessage)
-        .navigationTitle(LS("generate.navTitle"))
+        .screenTitle(LS("generate.navTitle"))
         .task {
             if model.prompt.isEmpty, let seed = initialPrompt, !seed.isEmpty { model.prompt = seed }
             await client.ensureFeedbackLoaded()
@@ -231,8 +236,11 @@ public struct GenerateView: View {
 
     // MARK: Form
 
+    /// No section header: the hub's one-line blurb directly above already says
+    /// "describe what you want to hear", and the field's placeholder says it a
+    /// third time. Three labels for one text box.
     private var promptSection: some View {
-        Section(LS("generate.promptSection")) {
+        Section {
             AIPromptField(text: $model.prompt,
                           placeholder: LS("generate.promptPlaceholder"))
                 .listRowInsets(EdgeInsets())
@@ -250,7 +258,7 @@ public struct GenerateView: View {
                             HStack(spacing: Spacing.xs) {
                                 Image(systemName: t.categorySymbol)
                                     .foregroundStyle(Color.roonGold)
-                                Text(t.name).font(.callout).lineLimit(1)
+                                Text(t.displayName).font(.callout).lineLimit(1)
                             }
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.sm)
@@ -659,7 +667,7 @@ private struct TemplatePicker: View {
                             Button {
                                 withAnimation(Motion.quick) { category = cat }
                             } label: {
-                                Text(cat)
+                                Text(PlaylistTemplates.displayName(ofCategory: cat))
                                     .font(.callout.weight(isOn ? .semibold : .regular))
                                     .padding(.horizontal, Spacing.md)
                                     .padding(.vertical, Spacing.sm)
@@ -697,7 +705,7 @@ private struct TemplatePicker: View {
     private func card(_ t: PlaylistTemplate) -> some View {
         VStack(spacing: Spacing.xs) {
             Text(t.icon).font(.system(size: 34))
-            Text(t.name)
+            Text(t.displayName)
                 .font(.callout.weight(.medium))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -712,6 +720,6 @@ private struct TemplatePicker: View {
             RoundedRectangle(cornerRadius: Radius.lg)
                 .strokeBorder(Color.roonGold.opacity(0.15))
         )
-        .accessibilityLabel("\(t.name), \(t.trackCount) tracks")
+        .accessibilityLabel(String(format: LS("generate.templateA11y"), t.displayName, t.trackCount))
     }
 }

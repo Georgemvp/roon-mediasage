@@ -20,47 +20,19 @@ public struct DJModesView: View {
 
     public var body: some View {
         @Bindable var client = client
+        // Personas first. The autoplay block is a *setting* — it decides what
+        // happens when the queue later runs dry — and it stood above the eight
+        // cards that are the actual verb of this screen, which were greyed out
+        // with their explanation stranded underneath it. Now: the reason you
+        // can't start yet, then the personas, then the setting.
         List {
             if let radio = client.activeRadio { activeBanner(radio).plainCardRow() }
 
             ZoneHintBanner().plainCardRow()
 
-            header.plainCardRow()
-
-            // Guest DJ · Autoplay — one persona steers everything.
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                HStack {
-                    Label("Guest DJ · Autoplay", systemImage: "person.wave.2.fill")
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                }
-                LT("dJModes.autoplayDescription")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Toggle(isOn: $client.djAutoplayEnabled) {
-                    LT("dJModes.autoplayToggle").font(.caption)
-                }
-                .toggleStyle(.switch)
-                Toggle(isOn: $client.djAutoplayAutoPersona) {
-                    LT("dJModes.autoPersonaToggle").font(.caption)
-                }
-                .toggleStyle(.switch)
-                .disabled(!client.djAutoplayEnabled)
-                Picker("DJ", selection: $client.selectedDJMode) {
-                    ForEach(DJMode.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.menu)
-                .disabled(client.djAutoplayAutoPersona)
-                Text(client.selectedDJMode.blurb)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .cardStyle()
-            .plainCardRow()
-
             if !canStart {
                 LT("dJModes.needNowPlaying")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .plainCardRow()
             }
@@ -69,23 +41,50 @@ public struct DJModesView: View {
                 ForEach(DJMode.allCases, id: \.self) { personaCard($0) }
             }
             .plainCardRow()
+
+            autoplayCard.plainCardRow()
         }
-        .navigationTitle(LS("dJModes.title"))
+        .cardFeedList()
+        .screenTitle(LS("dJModes.title"))
     }
 
     // MARK: Sections
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Label {
-                LT("dJModes.title").font(.headline)
-            } icon: {
-                Image(systemName: "person.wave.2").foregroundStyle(Color.roonGold)
-            }
-            LT("dJModes.headerBlurb")
-                .font(.subheadline)
+
+    /// Guest DJ · Autoplay — one persona keeps the queue topped up by itself.
+    ///
+    /// The two switches used to be bare `Toggle`s with `.caption` labels stacked
+    /// at `Spacing.xs`; they rendered ON TOP of each other (see `SettingToggle`).
+    private var autoplayCard: some View {
+        @Bindable var client = client
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
+            Label(LS("dJModes.autoplayTitle"), systemImage: "person.wave.2.fill")
+                .font(.subheadline.weight(.semibold))
+            LT("dJModes.autoplayDescription")
+                .font(.caption)
                 .foregroundStyle(.secondary)
+
+            SettingToggle(LS("dJModes.autoplayToggle"), isOn: $client.djAutoplayEnabled)
+
+            SettingToggle(LS("dJModes.autoPersonaToggle"), isOn: $client.djAutoplayAutoPersona)
+                .disabled(!client.djAutoplayEnabled)
+
+            HStack {
+                LT("dJModes.autoplayPersonaLabel").font(.subheadline)
+                Spacer()
+                Picker(LS("dJModes.autoplayPersonaLabel"), selection: $client.selectedDJMode) {
+                    ForEach(DJMode.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .disabled(client.djAutoplayAutoPersona)
+            }
+            Text(client.selectedDJMode.blurb)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .cardStyle()
     }
 
     private func activeBanner(_ radio: RoonClient.RadioStatus) -> some View {

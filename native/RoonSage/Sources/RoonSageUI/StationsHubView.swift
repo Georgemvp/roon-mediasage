@@ -11,7 +11,12 @@ import SwiftUI
 ///   - Genereer — GenerateView (dezelfde vraag, maar met een eindige playlist
 ///                als antwoord in plaats van een eindeloos station)
 ///
-/// De onderliggende views blijven ongewijzigd.
+/// **De kop hoort hier, één keer.** Elk van de vier schermen droeg zijn eigen
+/// icoon + titel + ondertitel, en die titel was letterlijk de naam van het
+/// segment één regel erboven — met de tabbalk erbij stond dezelfde naam drie keer
+/// binnen 100 punten. Dat kostte 112 pt aan chrome voordat er inhoud kwam, op een
+/// scherm waar de stations toch al onder de vouw begonnen. Nu: de kiezer zegt
+/// waar je bent, één regel eronder zegt wat het is, en daarna komt inhoud.
 @MainActor
 public struct StationsHubView: View {
     public init() {}
@@ -19,12 +24,25 @@ public struct StationsHubView: View {
     enum Mode: String, CaseIterable, Identifiable {
         case radios, djModes, journeys, generate
         var id: String { rawValue }
+
         var label: String {
             switch self {
             case .radios:   LS("stationsHub.radios")
             case .djModes:  LS("stationsHub.djModes")
-            case .journeys: "Journeys"
+            case .journeys: LS("stationsHub.journeys")
             case .generate: LS("nav.generate")
+            }
+        }
+
+        /// One line, because the segment name alone doesn't say what "Journeys"
+        /// or "Generate" will do. Deliberately short: it sits above everything
+        /// else on the screen, so every word costs a station tile.
+        var blurb: String {
+            switch self {
+            case .radios:   LS("stationsHub.radiosBlurb")
+            case .djModes:  LS("stationsHub.djModesBlurb")
+            case .journeys: LS("stationsHub.journeysBlurb")
+            case .generate: LS("stationsHub.generateBlurb")
             }
         }
     }
@@ -38,7 +56,16 @@ public struct StationsHubView: View {
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.top, Spacing.sm)
+
+            Text(mode.blurb)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.top, Spacing.xs)
+                .padding(.bottom, Spacing.sm)
+                .accessibilityAddTraits(.isHeader)
 
             switch mode {
             case .radios:   SonicRadioView()
@@ -52,5 +79,8 @@ public struct StationsHubView: View {
             case .generate: GenerateView()
             }
         }
+        // The tab already carries the name; a segment's child must not
+        // rename it out from under us. See `ScreenTitle.swift`.
+        .hubContent()
     }
 }

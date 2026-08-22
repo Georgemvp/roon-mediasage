@@ -31,20 +31,17 @@ public struct SonicRadioView: View {
     public init() {}
 
     public var body: some View {
+        // Stations first. This screen used to open with a header repeating the
+        // segment name, then a link to a DIFFERENT screen, then a slider that
+        // only applies to the next station you start — three blocks, none of
+        // them a station, which pushed the first tile to roughly 600 pt on an
+        // 874 pt phone. You could not see a single station without scrolling.
+        // Now the filter sits directly above what it filters, the stations come
+        // next, and everything you rarely touch has moved below them.
         List {
             if let radio = client.activeRadio { activeBanner(radio).plainCardRow() }
 
             ZoneHintBanner().plainCardRow()
-
-            header.plainCardRow()
-
-            myRadiosLink.plainCardRow()
-
-            djModesLink.plainCardRow()
-
-            journeysLink.plainCardRow()
-
-            adventurousnessTuner.plainCardRow()
 
             categoryPicker.plainCardRow()
 
@@ -58,9 +55,14 @@ public struct SonicRadioView: View {
             }
             .plainCardRow()
 
+            myRadiosLink.plainCardRow()
+
+            adventurousnessTuner.plainCardRow()
+
             qobuzSection.plainCardRow()
         }
-        .navigationTitle(LS("sonicRadio.navTitle"))
+        .cardFeedList()
+        .screenTitle(LS("sonicRadio.navTitle"))
         .toolbar {
             Button {
                 Task { await load(force: true); await loadQobuz(force: true) }
@@ -141,7 +143,6 @@ public struct SonicRadioView: View {
                         .lineLimit(2)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
             }
             .contentShape(Rectangle())
         }
@@ -149,80 +150,9 @@ public struct SonicRadioView: View {
         .cardStyle()
     }
 
-    /// Entry point to the Guest-DJ personas (start-from-track + autoplay).
-    private var djModesLink: some View {
-        NavigationLink {
-            DJModesView()
-        } label: {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: "person.wave.2")
-                    .font(.title3)
-                    .foregroundStyle(Color.roonGold)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("DJ-modi").font(.subheadline.weight(.semibold))
-                    Text("Kies een DJ-persona die overneemt vanaf het nummer dat speelt — dichtbij, op avontuur, dezelfde artiest of hetzelfde tijdperk.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .cardStyle()
-    }
 
-    /// Entry point to the Sonic Journeys (Album Radio · Time Machine · The Bridge).
-    private var journeysLink: some View {
-        NavigationLink {
-            SonicJourneysView()
-        } label: {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: "map")
-                    .font(.title3)
-                    .foregroundStyle(Color.roonGold)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Sonic Journeys").font(.subheadline.weight(.semibold))
-                    Text("Reizen door je bibliotheek — Album Radio, een tijdreis van oud naar nieuw, of een sonische brug tussen twee nummers.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .cardStyle()
-    }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Label {
-                Text("Sonische radio's").font(.headline)
-            } icon: {
-                Image(systemName: "dot.radiowaves.left.and.right").foregroundStyle(Color.roonGold)
-            }
-            Text(headerSubtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
 
-    private var headerSubtitle: String {
-        switch category {
-        case .artist:   return "Elke dag verse, eindeloze stations rond de artiesten die je het meest luistert."
-        case .genre:    return "Eindeloze stations per genre uit je bibliotheek."
-        case .mood:     return "Eindeloze stations per sfeer — gekozen op de stemming van je muziek."
-        case .activity: return "Eindeloze stations voor wat je aan het doen bent: workout, focus, chillen en meer."
-        case .decade:   return "Eindeloze stations per decennium, op basis van het releasejaar."
-        case .sonic:    return "Sonische buurten — clusters die je bibliotheek zelf vormt, puur op hoe de muziek klinkt."
-        case .recent:   return "Aanbevelingen uit je bibliotheek, gebouwd rond wat je de laatste tijd hebt geluisterd."
-        }
-    }
 
     /// The "dial" that turns every station from a cosy deep-cut hour into a
     /// voyage — biases the engine toward novelty/diversity and (optionally) hides
@@ -230,7 +160,7 @@ public struct SonicRadioView: View {
     private var adventurousnessTuner: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack {
-                Label("Avontuurlijkheid", systemImage: "slider.horizontal.3")
+                Label(LS("sonicRadio.adventurousness"), systemImage: "slider.horizontal.3")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Text(adventureLabel).font(.caption).foregroundStyle(Color.roonGold)
@@ -239,25 +169,23 @@ public struct SonicRadioView: View {
                 .tint(Color.roonGold)
                 .onChange(of: adventurousness) { client.radioAdventurousness = adventurousness }
             HStack {
-                Text("Vertrouwd").font(.caption2).foregroundStyle(.tertiary)
+                Text(LS("sonicRadio.dialFamiliar")).font(.caption2).foregroundStyle(.tertiary)
                 Spacer()
-                Text("Op ontdekking").font(.caption2).foregroundStyle(.tertiary)
+                Text(LS("sonicRadio.dialExploring")).font(.caption2).foregroundStyle(.tertiary)
             }
-            Toggle(isOn: $hardBan) {
-                Text("Verberg tracks met duim-omlaag volledig").font(.caption)
-            }
-            .toggleStyle(.switch)
-            .onChange(of: hardBan) { client.radioHardBanDisliked = hardBan }
+            SettingToggle(LS("sonicRadio.hideDisliked"), isOn: $hardBan)
+                .padding(.top, Spacing.xs)
+                .onChange(of: hardBan) { client.radioHardBanDisliked = hardBan }
         }
         .cardStyle()
     }
 
     private var adventureLabel: String {
         switch adventurousness {
-        case ..<0.2:  return "Vooral bekend"
-        case ..<0.45: return "Lichte verkenning"
-        case ..<0.7:  return "Verkennend"
-        default:      return "Op ontdekking"
+        case ..<0.2:  return LS("sonicRadio.dialMostlyKnown")
+        case ..<0.45: return LS("sonicRadio.dialLightExploring")
+        case ..<0.7:  return LS("sonicRadio.dialAdventurous")
+        default:      return LS("sonicRadio.dialExploring")
         }
     }
 
@@ -268,7 +196,7 @@ public struct SonicRadioView: View {
                     .font(.title3)
                     .foregroundStyle(Color.roonGold)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Radio speelt").font(.caption).foregroundStyle(.secondary)
+                    Text(LS("sonicRadio.playing")).font(.caption).foregroundStyle(.secondary)
                     Text(radio.artist).font(.headline)
                 }
                 Spacer()
@@ -302,7 +230,7 @@ public struct SonicRadioView: View {
                 Text(radio.artist)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                Text("Sonische radio · \(radio.trackCount) tracks")
+                Text(String(format: LS("sonicRadio.trackCountLine"), radio.trackCount))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -317,9 +245,9 @@ public struct SonicRadioView: View {
         VStack(spacing: Spacing.sm) {
             Image(systemName: "dot.radiowaves.left.and.right")
                 .font(.largeTitle).foregroundStyle(.tertiary)
-            Text("Nog geen radio's")
+            Text(LS("sonicRadio.emptyTitle"))
                 .font(.headline)
-            Text("Luister wat muziek en zorg dat je bibliotheek geanalyseerd is — dan verschijnen hier dagelijks stations rond je favoriete artiesten.")
+            Text(LS("sonicRadio.emptyBody"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -358,29 +286,30 @@ public struct SonicRadioView: View {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack(spacing: Spacing.sm) {
                     Label {
-                        Text("AI-radio's op Qobuz").font(.headline)
+                        Text(LS("sonicRadio.qobuzTitle")).font(.headline)
                     } icon: {
                         Image(systemName: "square.stack.3d.up.fill").foregroundStyle(Color.roonGold)
                     }
                     if isLoadingQobuz { ProgressView().controlSize(.small) }
                 }
-                Text("Alle radio's met een AI-titel + beschrijving die nu als Qobuz-playlists staan, over alle categorieën heen — continu ververst. Tik een kaart aan voor de tracklijst.")
+                Text(LS("sonicRadio.qobuzBody"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
             if !client.qobuzConfigured {
-                warningRow("Qobuz is niet ingesteld — voeg je inloggegevens toe bij Instellingen om te kunnen synchroniseren.")
+                warningRow(LS("sonicRadio.qobuzNotConfigured"))
             }
             if !llmConfigured {
-                warningRow("Geen LLM ingesteld — radio's krijgen nette standaardtitels in plaats van AI-titels.")
+                warningRow(LS("sonicRadio.noLLM"))
             }
 
             HStack(spacing: Spacing.md) {
                 Button {
                     Task { await sync() }
                 } label: {
-                    Label(isSyncing ? "Synchroniseren…" : "Sync \(category.label)-radio's naar Qobuz",
+                    Label(isSyncing ? LS("sonicRadio.syncing")
+                        : String(format: LS("sonicRadio.syncToQobuz"), category.label),
                           systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.borderedProminent)
@@ -413,7 +342,7 @@ public struct SonicRadioView: View {
             } else if isLoadingQobuz {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, Spacing.md)
             } else if qobuzLoaded {
-                Text("Nog geen AI-radio's op Qobuz — zorg dat je bibliotheek geanalyseerd is en synchroniseer een selectie (Analyzer → Instellingen → Radio's).")
+                Text(LS("sonicRadio.qobuzEmpty"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -508,7 +437,7 @@ public struct SonicRadioView: View {
                         .tint(Color.roonGold)
                     }
                 }
-                Section("Tracks") {
+                Section(LS("sonicRadio.tracksSection")) {
                     ForEach(Array(pl.tracks.enumerated()), id: \.offset) { i, t in
                         HStack(spacing: Spacing.sm) {
                             Text("\(i + 1).")
@@ -531,7 +460,7 @@ public struct SonicRadioView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                Button("Klaar") { detailPlaylist = nil }
+                Button(LS("sonicRadio.done")) { detailPlaylist = nil }
             }
         }
         .frame(minWidth: 440, minHeight: 540)
@@ -557,11 +486,11 @@ public struct SonicRadioView: View {
         if count > 0 {
             syncMessage = "\(count) radio('s) gesynchroniseerd naar Qobuz."
         } else if !client.qobuzConfigured {
-            syncMessage = "Qobuz is niet ingesteld — vul je inloggegevens in bij Instellingen."
+            syncMessage = LS("sonicRadio.syncNotConfigured")
         } else if qobuzRadios.isEmpty {
-            syncMessage = "Nog geen radio's om te synchroniseren — luister wat muziek en zorg dat je bibliotheek geanalyseerd is."
+            syncMessage = LS("sonicRadio.syncNothing")
         } else {
-            syncMessage = "Synchroniseren mislukt — controleer je Qobuz-instellingen."
+            syncMessage = LS("sonicRadio.syncFailed")
         }
     }
 }

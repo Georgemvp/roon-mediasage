@@ -6,98 +6,143 @@ import SwiftUI
 ///   • Time Machine — a chronological journey old → new through your library
 ///   • The Bridge   — an A→B path between two tracks (reuses Song Paths)
 ///
-/// Built on `List` + `.plainCardRow()` like `SonicRadioView`/`DJModesView`.
+/// **One card shape for all three.** They used to be three different things:
+/// Album Radio was a block of text with no action at all, Time Machine had a
+/// stepper and two inline buttons, The Bridge was a `NavigationLink` with a
+/// hand-drawn chevron next to the one `List` already draws. Three journeys, three
+/// interaction models, on a screen whose whole promise is that they are variants
+/// of one idea. `journeyCard` gives each of them an icon, a name, one line of
+/// explanation and exactly one primary action.
 @MainActor
 public struct SonicJourneysView: View {
     @Environment(RoonClient.self) private var client
+    @Environment(\.navigateTo) private var navigateTo
 
     @State private var count = 40
     @State private var building = false
     @State private var syncing = false
     @State private var message: String?
+    @State private var showBridge = false
 
     public init() {}
 
     public var body: some View {
         List {
             ZoneHintBanner().plainCardRow()
-            header.plainCardRow()
-            albumSection.plainCardRow()
-            timeMachineSection.plainCardRow()
-            bridgeSection.plainCardRow()
+            albumCard.plainCardRow()
+            timeMachineCard.plainCardRow()
+            bridgeCard.plainCardRow()
         }
-        .navigationTitle("Sonic Journeys")
+        .cardFeedList()
+        .navigationDestination(isPresented: $showBridge) { SongPathsView() }
+        .screenTitle(LS("nav.journeys"))
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Label {
-                Text("Sonic Journeys").font(.headline)
-            } icon: {
-                Image(systemName: "map").foregroundStyle(Color.roonGold)
+    // MARK: - Shared card shape
+
+    /// Icon + name + one line, then whatever the journey needs to start.
+    @ViewBuilder
+    private func journeyCard<Controls: View>(
+        icon: String, title: String, blurb: String,
+        @ViewBuilder controls: () -> Controls
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.md) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(Color.roonGold)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(blurb)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
-            LT("sonicJourneys.headerSubtitle")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: Album Radio (started from the album screen)
-
-    private var albumSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Label("Album Radio", systemImage: "square.stack")
-                .font(.subheadline.weight(.semibold))
-            LT("sonicJourneys.albumRadioDesc")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            controls()
         }
         .cardStyle()
     }
 
-    // MARK: Time Machine (chronological journey)
+    // MARK: - Album Radio
 
-    private var timeMachineSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Label("Time Machine", systemImage: "clock.arrow.circlepath")
-                .font(.subheadline.weight(.semibold))
-            LT("sonicJourneys.timeMachineDesc")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Stepper(LS("Lengte: \(count) tracks"), value: $count, in: 20...80, step: 10)
-                .font(.caption)
-            HStack(spacing: Spacing.sm) {
+    /// Album Radio is started from an album, so this card's action is to take you
+    /// to your albums. It used to be a caption with no affordance at all, sitting
+    /// between two cards that did something — which reads as "broken", not as
+    /// "start this elsewhere".
+    private var albumCard: some View {
+        journeyCard(icon: "square.stack",
+                    title: LS("sonicJourneys.albumRadio"),
+                    blurb: LS("sonicJourneys.albumRadioDesc")) {
+            Button {
+                Haptics.tap()
+                navigateTo(.library)
+            } label: {
+                Label(LS("sonicJourneys.browseAlbums"), systemImage: "square.grid.2x2")
+                    .labelStyle(.titleAndIcon)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    // MARK: - Time Machine
+
+    private var timeMachineCard: some View {
+        journeyCard(icon: "clock.arrow.circlepath",
+                    title: LS("sonicJourneys.timeMachine"),
+                    blurb: LS("sonicJourneys.timeMachineDesc")) {
+            Stepper(value: $count, in: 20...80, step: 10) {
+                Text(String(format: LS("sonicJourneys.length"), count))
+                    .font(.subheadline)
+            }
+
+            Button {
+                startTimeMachine()
+            } label: {
+                Label(building ? LS("sonicJourneys.building") : LS("sonicJourneys.startJourney"),
+                      systemImage: "play.fill")
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.roonGold)
+            // `hasActiveOutput`, not `selectedZone`: this button was dead on the
+            // one output the app defaults to since v1.10.228 — your own phone.
+            .disabled(building || !client.hasActiveOutput)
+
+            if client.qobuzConfigured {
                 Button {
-                    startTimeMachine()
+                    syncTimeMachine()
                 } label: {
-                    Label(building ? LS("sonicJourneys.building") : LS("sonicJourneys.startJourney"), systemImage: "play.fill")
+                    Label(syncing ? LS("sonicJourneys.syncing") : LS("sonicJourneys.syncToQobuz"),
+                          systemImage: "arrow.triangle.2.circlepath")
+                        .labelStyle(.titleAndIcon)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.roonGold)
-                .disabled(building || client.selectedZone == nil)
+                .buttonStyle(.bordered)
+                .disabled(syncing)
+            }
 
-                if client.qobuzConfigured {
-                    Button {
-                        syncTimeMachine()
-                    } label: {
-                        Label(syncing ? LS("sonicJourneys.syncing") : LS("sonicJourneys.syncToQobuz"),
-                              systemImage: "arrow.triangle.2.circlepath")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(syncing)
-                }
+            // A disabled button with no reason next to it reads as a bug.
+            if !client.hasActiveOutput {
+                Text(LS("sonicJourneys.needOutput"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             if let message {
-                Text(message).font(.caption).foregroundStyle(.secondary)
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .cardStyle()
     }
 
     private func startTimeMachine() {
-        guard let zone = client.selectedZone else { return }
         Haptics.tap()
         Task {
             building = true
@@ -107,8 +152,8 @@ public struct SonicJourneysView: View {
                 message = LS("sonicJourneys.noYearTracks")
                 return
             }
-            await client.curateTracks(tracks, zoneID: zone.id)
-            message = LS("Tijdreis gestart — \(tracks.count) tracks van oud naar nieuw.")
+            await client.playToActiveOutput(tracks)
+            message = String(format: LS("sonicJourneys.started"), tracks.count)
         }
     }
 
@@ -127,34 +172,34 @@ public struct SonicJourneysView: View {
                 description: LS("sonicJourneys.qobuzDescription"),
                 tracks: tracks)
             message = ok
-                ? LS("Op Qobuz gezet als ‘\(RoonClient.qobuzPlaylistName(for: "Time Machine"))’.")
+                ? String(format: LS("sonicJourneys.qobuzSynced"),
+                         RoonClient.qobuzPlaylistName(for: "Time Machine"))
                 : LS("sonicJourneys.qobuzSyncFailed")
         }
     }
 
-    // MARK: The Bridge (A→B)
+    // MARK: - The Bridge
 
-    private var bridgeSection: some View {
-        NavigationLink {
-            SongPathsView()
-        } label: {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
-                    .font(.title3)
-                    .foregroundStyle(Color.roonGold)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("The Bridge").font(.subheadline.weight(.semibold))
-                    LT("sonicJourneys.bridgeDesc")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+    /// A `Button` + `navigationDestination`, not a `NavigationLink`.
+    ///
+    /// Inside a `List` a NavigationLink insists on drawing the row's own
+    /// disclosure chevron and ignores `.buttonStyle(.bordered)` on its label, so
+    /// this card's action rendered as bare text with a stray "›" next to it while
+    /// the two cards above it had proper buttons. Driving the push ourselves is
+    /// the only way to make all three look like one screen.
+    private var bridgeCard: some View {
+        journeyCard(icon: "point.topleft.down.curvedto.point.bottomright.up",
+                    title: LS("sonicJourneys.bridge"),
+                    blurb: LS("sonicJourneys.bridgeDesc")) {
+            Button {
+                Haptics.tap()
+                showBridge = true
+            } label: {
+                Label(LS("sonicJourneys.pickTwoTracks"), systemImage: "arrow.right")
+                    .labelStyle(.titleAndIcon)
+                    .frame(maxWidth: .infinity)
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.bordered)
         }
-        .buttonStyle(.plain)
-        .cardStyle()
     }
 }
