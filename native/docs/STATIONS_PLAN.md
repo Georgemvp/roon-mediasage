@@ -284,12 +284,15 @@ eraan)."*
 
 Eén gate maken vereist dus eerst een inhoudelijke beslissing, geen opruimactie.
 
-**Openstaande vraag voor Casper.** Een eigen station met een genre-facet is nu
-*losser* dan het automatische station van dezelfde naam: het laat muziek toe die
-Roon grof als dat genre tagde. Het argument dat de grove bron voor de buckets
-afschoot geldt hier net zo goed. Maar het omzetten verandert wat je opgeslagen
-stations afspelen, dus het is jouw keuze. `StationGateParityTests` legt het
-verschil vast zodat het alleen bewust kan veranderen.
+**Beslist en doorgevoerd (2026-08-22).** De custom-poort leest nu de precieze
+genres, met Roon's grove tag als terugval **alleen voor tracks zonder enig
+precies genre**. Gemeten op de echte bibliotheek voordat dit werd besloten:
+64.038 geanalyseerde tracks, 56.786 met een precies genre, en **785 (1,2 %) met
+alleen een Roon-tag**. Hard gelijktrekken zou juist die 785 laten vallen terwijl
+er geen tegenbewijs voor ze is; de terugval houdt ze binnen en sluit Daft Punk
+alsnog buiten (die hééft precieze genres, dus de terugval raakt hem niet). De
+buckets blijven strenger, en dat is nu ook expliciet: een bucket wordt gebóuwd
+uit precieze genres, dus zijn poort hoeft alleen te bevestigen.
 
 ### Wat W11 wél opleverde
 

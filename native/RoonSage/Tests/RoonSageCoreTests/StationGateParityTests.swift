@@ -3,18 +3,18 @@ import XCTest
 @testable import RoonSageCore
 
 /// The automatic genre stations and a user-composed station with a genre facet
-/// are the same rule on two different sources, **on purpose**.
+/// are one rule on two sources, and they had drifted apart.
 ///
 /// `b5325a9` moved the buckets to `SonicTrack.genres` (MusicBrainz ∪ Deezer)
-/// because Roon's coarse `track_genres` put Daft Punk in a jazz station — and
-/// that same commit says in as many words: "Roon genresByTrackID() blijft
-/// ongemoeid (artist-affiniteit/custom/SonicDNA hangen eraan)."
+/// after Daft Punk turned up in a jazz station, and scoped itself out of the
+/// custom path. So an own station named "jazz" let in exactly what the automatic
+/// one rejects.
 ///
-/// The consequence is that an own station is *looser* than the automatic one of
-/// the same name. That may well be worth changing (the argument that killed the
-/// coarse source for buckets applies here too), but it changes what people's
-/// saved stations play, so it is a decision — not a cleanup. These tests pin the
-/// difference so it can only move deliberately.
+/// The custom gate now prefers the precise genres and falls back to Roon's coarse
+/// tag **only for tracks that have no precise genre at all** — measured on the
+/// real library that is 785 of 64.038 (1,2 %), which have no counter-evidence to
+/// go on. The buckets stay stricter on purpose: a bucket is built FROM precise
+/// genres, so its gate only confirms membership.
 final class StationGateParityTests: XCTestCase {
 
     private func track(id: String, genres: [String], matchKey: String = "mk") -> DatabaseManager.SonicTrack {
@@ -24,34 +24,50 @@ final class StationGateParityTests: XCTestCase {
             moods: [:], genres: genres)
     }
 
-    private let roonSaysJazz = "daft-punk-track"
-
-    func testBothGatesAgreeWhenBothSourcesAgree() {
-        let t = track(id: "x", genres: ["jazz"])
-        let coarse: [String: Set<String>] = ["x": ["jazz"]]
-        XCTAssertTrue(RoonClient.bucketGate(radioID: "genre:jazz", genres: coarse)?(t) ?? false)
-        XCTAssertTrue(RoonClient.customGate(cfg: RadioConfig(name: "Mijn jazz", genres: ["jazz"]),
-                                            genres: coarse, years: [:], calibration: nil)?(t) ?? false)
+    private func customJazzGate(coarse: [String: Set<String>]) -> ((DatabaseManager.SonicTrack) -> Bool)? {
+        RoonClient.customGate(cfg: RadioConfig(name: "Mijn jazz", genres: ["jazz"]),
+                              genres: coarse, years: [:], calibration: nil)
     }
 
-    func testTheyDivergeExactlyWhereTheSourcesDo() {
-        // Roon calls it jazz; MusicBrainz/Deezer call it electronic.
-        let t = track(id: roonSaysJazz, genres: ["electronic"])
-        let coarse: [String: Set<String>] = [roonSaysJazz: ["jazz"]]
-
-        XCTAssertFalse(RoonClient.bucketGate(radioID: "genre:jazz", genres: coarse)?(t) ?? true,
-                       "de automatische poort leest MB∪Deezer en weert dit")
-        XCTAssertTrue(RoonClient.customGate(cfg: RadioConfig(name: "Mijn jazz", genres: ["jazz"]),
-                                            genres: coarse, years: [:], calibration: nil)?(t) ?? false,
-                      "een eigen station leest Roon's tabel en laat dit toe — bewust, zie b5325a9")
+    func testBothRejectWhatOnlyRoonCallsJazz() {
+        // The case that started it: precise sources say electronic, Roon says
+        // jazz. Both gates must now say no.
+        let daftPunk = track(id: "dp", genres: ["electronic"])
+        let coarse: [String: Set<String>] = ["dp": ["jazz"]]
+        XCTAssertFalse(RoonClient.bucketGate(radioID: "genre:jazz", genres: coarse)?(daftPunk) ?? true)
+        XCTAssertFalse(customJazzGate(coarse: coarse)?(daftPunk) ?? true,
+                       "een eigen station hoort dezelfde grens te trekken")
     }
 
-    func testGenreMatchingIsCaseInsensitiveOnBothSides() {
+    func testBothAcceptAGenuineMatch() {
         let t = track(id: "x", genres: ["jazz"])
-        let coarse: [String: Set<String>] = ["x": ["Jazz"]]
-        XCTAssertTrue(RoonClient.customGate(cfg: RadioConfig(name: "M", genres: ["JAZZ"]),
-                                            genres: coarse, years: [:], calibration: nil)?(t) ?? false)
-        XCTAssertTrue(RoonClient.bucketGate(radioID: "genre:jazz", genres: coarse)?(t) ?? false)
+        XCTAssertTrue(RoonClient.bucketGate(radioID: "genre:jazz")?(t) ?? false)
+        XCTAssertTrue(customJazzGate(coarse: [:])?(t) ?? false)
+    }
+
+    func testTracksWithoutAPreciseGenreFallBackToRoon() {
+        // 785 of 64.038 tracks on the real library. No precise genre exists, so a
+        // coarse tag is the best evidence there is — dropping them would silently
+        // narrow every own station.
+        let unknown = track(id: "u", genres: [])
+        XCTAssertTrue(customJazzGate(coarse: ["u": ["jazz"]])?(unknown) ?? false,
+                      "zonder precies genre telt Roon's tag")
+        XCTAssertFalse(customJazzGate(coarse: ["u": ["rock"]])?(unknown) ?? true,
+                       "maar dan moet die tag wel matchen")
+        XCTAssertFalse(customJazzGate(coarse: [:])?(unknown) ?? true,
+                       "en zonder enige bron valt hij af")
+    }
+
+    func testThePreciseSourceWinsWhenBothExist() {
+        // The fallback must not become a second chance for a track we DO know
+        // about — that would put Daft Punk back in jazz.
+        let t = track(id: "dp", genres: ["electronic"])
+        XCTAssertFalse(customJazzGate(coarse: ["dp": ["jazz"]])?(t) ?? true)
+    }
+
+    func testGenreMatchingIsCaseInsensitiveOnBothPaths() {
+        XCTAssertTrue(customJazzGate(coarse: [:])?(track(id: "x", genres: ["JAZZ"])) ?? false)
+        XCTAssertTrue(customJazzGate(coarse: ["u": ["Jazz"]])?(track(id: "u", genres: [])) ?? false)
     }
 
     func testAFacetlessConfigHasNoGate() {

@@ -63,11 +63,15 @@ het contextmenu). Onderweg bleek ik dáár zelf te dupliceren —
    genresByTrackID() blijft ongemoeid (artist-affiniteit/custom/SonicDNA hangen
    eraan)."* Teruggedraaid; `StationGateParityTests` pint het verschil.
 
-**OPENSTAANDE VRAAG VOOR CASPER:** een eigen station met een genre-facet is nu
-*losser* dan het automatische station van dezelfde naam — het laat muziek toe die
-Roon grof als dat genre tagde. Het argument dat die grove bron voor de buckets
-afschoot geldt hier net zo goed, maar omzetten verandert wat je opgeslagen
-stations afspelen. Zeg het woord en ik trek ze gelijk.
+**DE GENRE-POORT IS GELIJKGETROKKEN — na meting, niet op gevoel** (user: "Doe wat
+slim is"). Een eigen station leest nu de precieze genres (MB ∪ Deezer) met Roon's
+grove tag als terugval **alleen** voor tracks zonder enig precies genre. Eerst
+gemeten op `library.db`: 64.038 geanalyseerd, 56.786 met precies genre, **785
+(1,2 %) met alleen een Roon-tag**. Hard gelijktrekken had precies die 785 laten
+vallen — tracks waar geen tegenbewijs voor bestaat; de terugval houdt ze binnen
+én sluit Daft Punk uit jazz (die hééft precieze genres, dus valt nooit terug).
+Geen enkele bestaande test brak: die bouwen tracks zonder precieze genres en
+volgen dus de terugval-tak.
 
 **Verified: 971 tests 0 failures (was 956) · `swift build -c release` exit 0 ·
 check-localization 999 sleutels, 0 missend / 0 wees · alle drie de UI-tests groen

@@ -109,24 +109,34 @@ extension RoonClient {
         if genreKeys.isEmpty, moodKeys.isEmpty, decades.isEmpty, profiles.isEmpty { return nil }
         return { t in
             if !genreKeys.isEmpty {
-                // Roon's `track_genres` map, DELIBERATELY — not `t.genres`
-                // (MusicBrainz ∪ Deezer) that the automatic genre stations switched
-                // to in b5325a9 ("genre-outliers door grove Roon-gate (Daft Punk in
-                // jazz)"). That commit states the choice explicitly: "Roon
-                // genresByTrackID() blijft ongemoeid (artist-affiniteit/custom/
-                // SonicDNA hangen eraan)."
+                // The precise genres (MusicBrainz ∪ Deezer) decide — and Roon's
+                // coarse `track_genres` is consulted ONLY for tracks that have no
+                // precise genre at all.
                 //
-                // So a user-composed station with a genre facet is looser than the
-                // automatic station of the same name, and that is by design rather
-                // than by accident. Whether it should STAY that way is a separate
-                // question — the argument that killed it for buckets (a coarse tag
-                // lets in music the genre doesn't describe) applies here just as
-                // well, and switching it would change what people's saved stations
-                // play. Flagged in native/docs/STATIONS_PLAN.md, not silently
-                // flipped. `StationGateParityTests` pins the difference so it can
-                // only change on purpose.
-                let g = genres[t.id] ?? []
-                if !g.contains(where: { genreKeys.contains($0.lowercased()) }) { return false }
+                // Until now this read the coarse map exclusively, so an own
+                // station named "jazz" let in what the automatic `genre:jazz`
+                // station rejects. `b5325a9` switched the buckets after finding
+                // Daft Punk in a jazz station, and scoped itself out of the custom
+                // path ("Roon genresByTrackID() blijft ongemoeid"). That was a
+                // scope line, not a reason: the same music is equally wrong in a
+                // station you named yourself.
+                //
+                // Straight parity would drop the tracks we know nothing precise
+                // about. Measured on the real library (2026-08-22): 64.038
+                // analyzed tracks, 56.786 with a precise genre, and **785 (1,2 %)
+                // with only a Roon tag**. Those 785 have no counter-evidence — a
+                // coarse tag is the best we have — so they keep passing. Daft Punk
+                // does NOT benefit: it has precise genres, so the fallback never
+                // applies to it.
+                //
+                // The buckets stay stricter on purpose: a bucket is BUILT from
+                // precise genres, so its gate only has to confirm membership.
+                if !t.genres.isEmpty {
+                    if !t.genres.contains(where: { genreKeys.contains($0.lowercased()) }) { return false }
+                } else {
+                    let coarse = genres[t.id] ?? []
+                    if !coarse.contains(where: { genreKeys.contains($0.lowercased()) }) { return false }
+                }
             }
             if !moodKeys.isEmpty {
                 let ok = moodKeys.contains {
