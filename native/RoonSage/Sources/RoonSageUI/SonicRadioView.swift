@@ -9,6 +9,7 @@ import SwiftUI
 @MainActor
 public struct SonicRadioView: View {
     @Environment(RoonClient.self) private var client
+    @Environment(\.navigateTo) private var navigateTo
     @State private var category: RoonClient.RadioCategory = .artist
     @State private var radios: [RoonClient.SonicRadio] = []
     @State private var isLoading = false
@@ -25,6 +26,7 @@ public struct SonicRadioView: View {
     @State private var isSyncing = false
     @State private var syncMessage: String?
     @State private var detailPlaylist: RoonClient.SonicRadioPlaylist?
+    @State private var showQobuzMirror = false
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: Spacing.md)]
 
@@ -55,11 +57,13 @@ public struct SonicRadioView: View {
             }
             .plainCardRow()
 
+            albumRadioCard.plainCardRow()
+
             myRadiosLink.plainCardRow()
 
             adventurousnessTuner.plainCardRow()
 
-            qobuzSection
+            qobuzSummary
                 .task { await loadQobuz(force: false) }
                 .plainCardRow()
         }
@@ -88,6 +92,11 @@ public struct SonicRadioView: View {
             Task { await load(force: true) }
         }
         .sheet(item: $detailPlaylist) { playlistDetailSheet($0) }
+        .navigationDestination(isPresented: $showQobuzMirror) {
+            List { qobuzSection.plainCardRow() }
+                .cardFeedList()
+                .navigationTitle(LS("sonicRadio.qobuzTitle"))
+        }
     }
 
     /// Switches both sections between Artiest · Genre · Sfeer · Activiteit · Decennium.
@@ -125,6 +134,39 @@ public struct SonicRadioView: View {
     }
 
     // MARK: Sections
+
+    /// Album Radio — an endless station grown around one album.
+    ///
+    /// Lives with the stations because that is what it is. It used to be one of
+    /// three "journeys", between Time Machine and The Bridge, which both END —
+    /// so the screen presented a station and two playlists as the same kind of
+    /// thing. You start this one from an album, so the card's action takes you
+    /// to your albums.
+    private var albumRadioCard: some View {
+        HStack(spacing: Spacing.md) {
+            Image(systemName: "square.stack")
+                .font(.title3)
+                .foregroundStyle(Color.roonGold)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(LS("sonicJourneys.albumRadio")).font(.subheadline.weight(.semibold))
+                Text(LS("sonicJourneys.albumRadioDesc"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: Spacing.sm)
+            Button {
+                Haptics.tap()
+                navigateTo(.library)
+            } label: {
+                Text(LS("sonicJourneys.browseAlbums")).font(.subheadline)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+        }
+        .cardStyle()
+    }
 
     /// Entry point to the user-composed radios (create/edit/enable/sync). Pushed
     /// within the current navigation stack so both Mac and iOS reach it.
@@ -299,14 +341,47 @@ public struct SonicRadioView: View {
     }
 
     @ViewBuilder
-    /// The Qobuz mirror.
+    /// The Qobuz mirror, folded into one line.
     ///
-    /// Its `.task` hangs on the SECTION, not on the screen. `/ai-radios` measures
-    /// 6,08 s cold and 0,91 s warm against a real library, and as a screen-level
-    /// task it paid that on every single appearance of Radio's — for a block that
-    /// lives below the stations, the "my radios" card and the dial. Inside a
-    /// `List` the row is only created when it scrolls into range, so now you pay
-    /// for it when you actually look at it.
+    /// It used to be a full second grid at the bottom of this screen: the same
+    /// artists as the stations above it, under different (AI-generated) names,
+    /// with their own sync button and warnings. Two lists of the same music on
+    /// one screen, and nothing said they were the same music. Now: one line that
+    /// says how many are mirrored, and the whole thing one tap away.
+    private var qobuzSummary: some View {
+        Button {
+            Haptics.tap()
+            showQobuzMirror = true
+        } label: {
+            HStack(spacing: Spacing.md) {
+                Image(systemName: "square.stack.3d.up.fill")
+                    .font(.title3)
+                    .foregroundStyle(Color.roonGold)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(LS("sonicRadio.qobuzTitle")).font(.subheadline.weight(.semibold))
+                    Text(qobuzSummaryLine)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                if isLoadingQobuz { ProgressView().controlSize(.small) }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .cardStyle()
+    }
+
+    private var qobuzSummaryLine: String {
+        if !client.qobuzConfigured { return LS("sonicRadio.qobuzNotConfigured") }
+        if !qobuzLoaded && qobuzRadios.isEmpty { return LS("sonicRadio.qobuzLoading") }
+        if qobuzRadios.isEmpty { return LS("sonicRadio.qobuzNoneYet") }
+        return String(format: LS("sonicRadio.qobuzCount"), qobuzRadios.count)
+    }
+
+    /// The full mirror — pushed, so it costs a tap instead of half the screen.
     private var qobuzSection: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             VStack(alignment: .leading, spacing: Spacing.xs) {

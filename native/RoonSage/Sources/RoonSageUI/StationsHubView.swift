@@ -21,6 +21,9 @@ import SwiftUI
 public struct StationsHubView: View {
     public init() {}
 
+    /// The four segments, named after what they *hold*, not after the engine
+    /// that fills them. Everything endless is a "station"; the two finite
+    /// journeys sit together; making a finished playlist is its own verb.
     enum Mode: String, CaseIterable, Identifiable {
         case radios, djModes, journeys, generate
         var id: String { rawValue }

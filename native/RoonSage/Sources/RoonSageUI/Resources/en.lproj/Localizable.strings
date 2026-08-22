@@ -814,7 +814,7 @@
 
 /* sonicRadio */
 "sonicRadio.myRadiosSubtitle" = "Stations you saved yourself.";
-"sonicRadio.myRadiosTitle" = "My radios";
+"sonicRadio.myRadiosTitle" = "Your own stations";
 "radioCategory.artist" = "Artist";
 "radioCategory.genre" = "Genre";
 "radioCategory.mood" = "Mood";
@@ -835,7 +835,10 @@
 "sonicRadio.playing" = "Radio playing";
 "sonicRadio.emptyTitle" = "No radios yet";
 "sonicRadio.emptyBody" = "Listen to some music and make sure your library is analysed — stations around your favourite artists then appear here every day.";
-"sonicRadio.qobuzTitle" = "AI radios on Qobuz";
+"sonicRadio.qobuzLoading" = "Loading…";
+"sonicRadio.qobuzNoneYet" = "No stations mirrored yet. Tap to sync.";
+"sonicRadio.qobuzCount" = "%d stations are mirrored as Qobuz playlists.";
+"sonicRadio.qobuzTitle" = "Mirrored to Qobuz";
 "sonicRadio.qobuzBody" = "Every radio with an AI title and description that currently exists as a Qobuz playlist, across all categories — continuously refreshed. Tap a card for its track list.";
 "sonicRadio.qobuzNotConfigured" = "Qobuz isn't set up — add your credentials in Settings to be able to sync.";
 "sonicRadio.noLLM" = "No LLM configured — radios get tidy default titles instead of AI ones.";
@@ -870,12 +873,12 @@
 /* stationsHub */
 "stationsHub.radiosBlurb" = "Endless stations, fresh from your own library every day.";
 "stationsHub.djModesBlurb" = "A guest DJ takes over from the track playing now.";
-"stationsHub.journeysBlurb" = "Journeys through your collection, each with its own starting point.";
+"stationsHub.journeysBlurb" = "Two journeys with a beginning and an end.";
 "stationsHub.generateBlurb" = "Describe what you want to hear; you get a finished playlist.";
-"stationsHub.djModes" = "DJ modes";
+"stationsHub.djModes" = "Guest DJ";
 "stationsHub.journeys" = "Journeys";
 "stationsHub.mode"    = "Mode";
-"stationsHub.radios"  = "Radios";
+"stationsHub.radios" = "For you";
 
 /* tasteHub */
 "tasteHub.modeHistory" = "History";

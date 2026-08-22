@@ -1,10 +1,14 @@
 import RoonSageCore
 import SwiftUI
 
-/// "Sonic Journeys" — the three Plexamp-style station types, renamed:
-///   • Album Radio  — an endless station around an album (started from the album screen)
+/// The two **finite** journeys:
 ///   • Time Machine — a chronological journey old → new through your library
 ///   • The Bridge   — an A→B path between two tracks (reuses Song Paths)
+///
+/// Album Radio used to sit here as a third card, and that was a category error:
+/// it never ends. A screen that presents "endless" and "has a last track" as
+/// three equal cards teaches you nothing about which is which. It moved to the
+/// stations, where everything else that runs forever lives.
 ///
 /// **One card shape for all three.** They used to be three different things:
 /// Album Radio was a block of text with no action at all, Time Machine had a
@@ -16,7 +20,6 @@ import SwiftUI
 @MainActor
 public struct SonicJourneysView: View {
     @Environment(RoonClient.self) private var client
-    @Environment(\.navigateTo) private var navigateTo
 
     @State private var count = 40
     @State private var building = false
@@ -29,7 +32,6 @@ public struct SonicJourneysView: View {
     public var body: some View {
         List {
             ZoneHintBanner().plainCardRow()
-            albumCard.plainCardRow()
             timeMachineCard.plainCardRow()
             bridgeCard.plainCardRow()
         }
@@ -64,28 +66,6 @@ public struct SonicJourneysView: View {
             controls()
         }
         .cardStyle()
-    }
-
-    // MARK: - Album Radio
-
-    /// Album Radio is started from an album, so this card's action is to take you
-    /// to your albums. It used to be a caption with no affordance at all, sitting
-    /// between two cards that did something — which reads as "broken", not as
-    /// "start this elsewhere".
-    private var albumCard: some View {
-        journeyCard(icon: "square.stack",
-                    title: LS("sonicJourneys.albumRadio"),
-                    blurb: LS("sonicJourneys.albumRadioDesc")) {
-            Button {
-                Haptics.tap()
-                navigateTo(.library)
-            } label: {
-                Label(LS("sonicJourneys.browseAlbums"), systemImage: "square.grid.2x2")
-                    .labelStyle(.titleAndIcon)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-        }
     }
 
     // MARK: - Time Machine

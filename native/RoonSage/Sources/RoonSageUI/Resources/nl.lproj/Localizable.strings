@@ -814,7 +814,7 @@
 
 /* sonicRadio */
 "sonicRadio.myRadiosSubtitle" = "Stations die je zelf hebt bewaard.";
-"sonicRadio.myRadiosTitle" = "Mijn radio's";
+"sonicRadio.myRadiosTitle" = "Eigen stations";
 "radioCategory.artist" = "Artiest";
 "radioCategory.genre" = "Genre";
 "radioCategory.mood" = "Sfeer";
@@ -835,7 +835,10 @@
 "sonicRadio.playing" = "Radio speelt";
 "sonicRadio.emptyTitle" = "Nog geen radio's";
 "sonicRadio.emptyBody" = "Luister wat muziek en zorg dat je bibliotheek geanalyseerd is — dan verschijnen hier dagelijks stations rond je favoriete artiesten.";
-"sonicRadio.qobuzTitle" = "AI-radio's op Qobuz";
+"sonicRadio.qobuzLoading" = "Ophalen…";
+"sonicRadio.qobuzNoneYet" = "Nog geen stations op Qobuz gezet. Tik om te synchroniseren.";
+"sonicRadio.qobuzCount" = "%d stations staan als playlist op Qobuz.";
+"sonicRadio.qobuzTitle" = "Op Qobuz gezet";
 "sonicRadio.qobuzBody" = "Alle radio's met een AI-titel + beschrijving die nu als Qobuz-playlists staan, over alle categorieën heen — continu ververst. Tik een kaart aan voor de tracklijst.";
 "sonicRadio.qobuzNotConfigured" = "Qobuz is niet ingesteld — voeg je inloggegevens toe bij Instellingen om te kunnen synchroniseren.";
 "sonicRadio.noLLM" = "Geen LLM ingesteld — radio's krijgen nette standaardtitels in plaats van AI-titels.";
@@ -869,13 +872,13 @@
 
 /* stationsHub */
 "stationsHub.radiosBlurb" = "Eindeloze stations, elke dag vers uit je eigen bibliotheek.";
-"stationsHub.djModesBlurb" = "Een gast-DJ neemt over vanaf het nummer dat nu speelt.";
-"stationsHub.journeysBlurb" = "Reizen door je collectie, elk met een ander vertrekpunt.";
+"stationsHub.djModesBlurb" = "Een gast-DJ neemt het over vanaf het nummer dat nu speelt.";
+"stationsHub.journeysBlurb" = "Twee reizen met een begin en een eind.";
 "stationsHub.generateBlurb" = "Beschrijf wat je wilt horen; je krijgt een afgeronde playlist.";
-"stationsHub.djModes" = "DJ-modi";
-"stationsHub.journeys" = "Journeys";
+"stationsHub.djModes" = "Gast-DJ";
+"stationsHub.journeys" = "Reizen";
 "stationsHub.mode"    = "Modus";
-"stationsHub.radios"  = "Radio's";
+"stationsHub.radios" = "Voor jou";
 
 /* tasteHub */
 "tasteHub.modeHistory" = "Historie";
