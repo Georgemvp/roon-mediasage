@@ -7,10 +7,11 @@ Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst geshipt: v1.10.271 / ios-v1.7.237 / analyzer-v1.1.201 (getagd, alle vier
-workflows groen; de analyzer draait sinds 22-08 17:08 als v1.1.201 op de mini,
-via de CI-DMG). `native/RoonSage/Package.swift` staat bewust ongecommit — zie
-het tweede item onder ## Done.
+Laatst geshipt: v1.10.273 / ios-v1.7.239 / analyzer-v1.1.203 (getagd 22-08 21:08,
+alle vier workflows groen). De mini draait nog analyzer-v1.1.202: die DMG is een
+artefact, geen uitrol — installeren is de handmatige bootout → installeren →
+bootstrap. `native/RoonSage/Package.swift` staat bewust ongecommit — zie het
+tweede item onder ## Done.
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 ═══════════════════════════════════════════════════════════════════ -->
@@ -23,11 +24,11 @@ NU (2026-08-22, nacht): **DE BIBLIOTHEEK-VIEW — SNELLER EN DUIDELIJKER.**
 (user: "Verbeter de bibliotheek view van RoonSage iOS zodat het duidelijker is
 en sneller" + "geen simulator, ik ga slapen".) Dus **code-only geverifieerd**:
 `swift build` schoon, **973 tests 0 fouten**, check-localization 1033 sleutels /
-0 missend / 0 wees, interpolatiesleutels 63 → 61. **Gecommit op main, NIET
-gepusht en NIET getagd** — een tag stuurt de analyzer via de CI-DMG naar de mini
-en dat hoort niet ongezien 's nachts te gebeuren. Ronde A uit de UX-audit zat
-nog ongecommit in de werkmap en is meegegaan; `Package.swift` blijft bewust
-buiten de commit.
+0 missend / 0 wees, interpolatiesleutels 63 → 61. **GESHIPT (2026-08-22 21:08):
+`v1.10.273` / `ios-v1.7.239` / `analyzer-v1.1.203`, alle vier workflows groen**
+(commit `373f24b`). De mini blijft op analyzer-v1.1.202 draaien: de tag levert
+een DMG, geen uitrol. Ronde A uit de UX-audit zat nog ongecommit in de werkmap
+en is meegegaan; `Package.swift` blijft bewust buiten de commit.
 
 **Sneller — vier ingrepen, allemaal werk dat nergens heen ging.**
 1. **`.onAppear` deed `reload()`.** Elke tabwissel — en elke terugkeer uit een
