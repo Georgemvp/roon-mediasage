@@ -52,6 +52,7 @@ public struct SettingsView: View {
     @AppStorage("themePreset") private var themePreset: ThemePreset = .custom
     @AppStorage("themeMode") private var themeMode: ThemeMode = .system
     @AppStorage("accentChoice") private var accent: AccentChoice = .gold
+    @AppStorage("library_show_sonic_details") private var showSonicDetails = false
     @AppStorage("ambientIntensity") private var ambientIntensity: Double = 1.0
     @AppStorage("ambientWallpaper") private var ambientWallpaper: Bool = false
     @AppStorage("appLanguage") private var appLanguage: LocalePreference = .system
@@ -167,6 +168,13 @@ public struct SettingsView: View {
                     }
                 }
                 Toggle(LS("settings.visualizerNowPlaying"), isOn: $showVisualizer)
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle(LS("settings.sonicDetailsInLists"), isOn: $showSonicDetails)
+                    Text(LS("settings.sonicDetailsHelp"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Picker(LS("settings.language"), selection: $appLanguage) {
                     ForEach(LocalePreference.allCases) { Text($0.label).tag($0) }
                 }

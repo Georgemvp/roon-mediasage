@@ -43,6 +43,12 @@
 "lab.multitagSubtitle"        = "Meerdere tags tegelijk, met en/of";
 "lab.djSubtitle"              = "Harmonisch mixen op BPM en toonsoort";
 "lab.tasteSubtitle"           = "Je smaakprofiel, historie en jaaroverzicht";
+"library.selectTracks" = "Selecteer nummers";
+"library.moreActions" = "Meer acties";
+"library.albumCountOne" = "%d album";
+"library.albumCountMany" = "%d albums";
+"library.trackCountOne" = "%d nummer";
+"library.trackCountMany" = "%d nummers";
 "library.playlistsSubtitle"   = "Wat je zelf hebt bewaard";
 "library.bookmarksSubtitle"   = "Later luisteren";
 "library.labSubtitle"         = "Music Map, Sonic DNA, Multitag, DJ";
@@ -56,6 +62,8 @@
 
 /* Settings / language */
 "lang.system"       = "Systeem";
+"settings.sonicDetailsInLists" = "BPM en toonsoort in lijsten";
+"settings.sonicDetailsHelp" = "Toont het tempo en de Camelot-toonsoort bij elk nummer in je bibliotheek. Handig als je mixt; zonder is de lijst rustiger en passen er meer nummers op het scherm.";
 "settings.language" = "Taal";
 
 /* Bewaard (bookmarks) */
@@ -432,21 +440,16 @@
 "library.cancel"                 = "Annuleer";
 "library.chooseZoneFirst"        = "Kies eerst een zone of apparaat";
 "library.clear"                  = "Wis";
-"library.closeSelection"         = "Selectie sluiten";
 "library.connectFirst"           = "Maak eerst verbinding met de server.";
 "library.decades"                = "Decennia";
-"library.discoverWeeklySubtitle" = "Verse ontdekkingen uit je eigen bibliotheek — elke week vernieuwd.";
-"library.discoverWeeklyTitle"    = "Ontdek Wekelijks";
 "library.done"                   = "Klaar";
 "library.favoritesOnly"          = "Alleen favorieten";
 "library.forgottenFavorites"     = "Vergeten favorieten";
 "library.genres"                 = "Genres";
 "library.modeOverview"           = "Overzicht";
 "library.mood"                   = "Sfeer";
-"library.myRadiosSubtitle"       = "Jouw zelf samengestelde sonic radio's.";
-"library.myRadiosTitle"          = "Mijn radio's";
 "library.noLibraryYet"           = "Nog geen bibliotheek";
-"library.noMatchingTracks"       = "Geen passende tracks";
+"library.noMatchingTracks"       = "Geen passende nummers";
 "library.notConnected"           = "Niet verbonden";
 "library.play"                   = "Speel";
 "library.playAll"                = "Speel alle";
@@ -467,9 +470,6 @@
 "search.trySonic"                = "Zoek sonisch naar “%@”";
 "library.select"                 = "Selecteer";
 "library.selectMultiple"         = "Selecteer meerdere";
-"library.selectMultipleAlbums"   = "Selecteer meerdere albums";
-"library.selectMultipleTracks"   = "Selecteer meerdere tracks";
-"library.showAll"                = "Toon alles";
 "library.sonicallySimilar"       = "Sonisch vergelijkbaar";
 "library.sort"                   = "Sorteer";
 "library.sortAlbum"              = "Album";
@@ -478,13 +478,26 @@
 "library.sortRandom"             = "Willekeurig";
 "library.sortRecentlyPlayed"     = "Recent gespeeld";
 "library.sortTitle"              = "Titel";
-"library.sortTracksHelp"         = "Sorteer tracks";
 "library.sortYear"               = "Jaar";
 "library.syncLibrary"            = "Synchroniseer bibliotheek";
 "library.syncThenSearch"         = "Synchroniseer je bibliotheek en zoek opnieuw.";
 "library.syncToFillOverview"     = "Synchroniseer je bibliotheek om dit overzicht te vullen.";
-"library.tracks"                 = "Tracks";
-"library.titleWithCount"      = "Bibliotheek (%d tracks)";
+"library.tracks"                 = "Nummers";
+"library.titleWithCount"      = "Bibliotheek (%d nummers)";
+"library.collection"             = "Jouw verzameling";
+"library.noAlbums"               = "Geen albums";
+"library.noAlbumsFor"            = "Geen albums voor “%@”.";
+"library.noArtists"              = "Geen artiesten";
+"library.noArtistsFor"           = "Geen artiesten voor “%@”.";
+"library.noFavoriteAlbums"       = "Zet een ster bij een album om het hier terug te vinden.";
+"library.noFavoriteArtists"      = "Zet een ster bij een artiest om die hier terug te vinden.";
+"library.noFavoritesTitle"       = "Nog geen favorieten";
+"library.noTracksWithTag"        = "Geen nummers met sfeer “%@”.";
+"library.saveSelectionMany"      = "Bewaar %d geselecteerde nummers als lokale playlist.";
+"library.saveSelectionOne"       = "Bewaar %d geselecteerd nummer als lokale playlist.";
+"library.selectedCount"          = "%d geselecteerd";
+"library.sortedBy"               = "Sorteer: %@";
+"library.syncYourLibrary"        = "Synchroniseer je bibliotheek.";
 
 /* libraryDetail */
 "libraryDetail.aboutAlbum"       = "Over dit album";
@@ -811,7 +824,7 @@
 "sonicLab.modeBridge"      = "Brug";
 "sonicLab.modeMix"         = "Mix";
 "sonicLab.modePickerTitle" = "Modus";
-"sonicLab.modeSearch"      = "Zoek";
+"sonicLab.modeSearch" = "Sonisch";
 
 /* sonicRadio */
 "sonicRadio.myRadiosSubtitle" = "Stations die je zelf hebt bewaard.";
@@ -921,6 +934,10 @@
 "offline.useOffline" = "Offline gebruiken";
 
 /* Core-laag: foutmeldingen die RoonSageCore zelf maakt (zie CoreStrings.swift) */
+"core.error.offlineFeature" = "Dit werkt alleen met verbinding met je server. Je bibliotheek en downloads blijven wel gewoon spelen.";
+"core.error.serverStatus" = "De server antwoordde met een fout (%d). Probeer het zo opnieuw.";
+"core.error.transport" = "Kon de server niet bereiken: %@";
+"core.error.badResponse" = "Het antwoord van de server kon niet worden gelezen.";
 "core.error.actionFailed" = "%@ mislukt: %@";
 "core.error.actionNoConnection" = "%@ mislukt — geen verbinding met Roon.";
 "core.error.albumRadioNoLibrary" = "Album-radio mislukt — geen bibliotheek beschikbaar.";
@@ -1118,3 +1135,22 @@
 "playlistCategory.social" = "Sociaal";
 "playlistCategory.seasons" = "Seizoenen";
 "playlistCategory.discovery" = "Ontdekking";
+
+// Uiterlijk-pickers (Appearance.swift)
+"appearance.system" = "Systeem";
+"appearance.light" = "Licht";
+"appearance.dark" = "Donker";
+"appearance.gold" = "Goud";
+"appearance.amber" = "Amber";
+"appearance.blue" = "Blauw";
+"appearance.indigo" = "Indigo";
+"appearance.teal" = "Teal";
+"appearance.green" = "Groen";
+"appearance.pink" = "Roze";
+"appearance.custom" = "Aangepast";
+"appearance.midnight" = "Middernacht";
+"appearance.ocean" = "Oceaan";
+"appearance.forest" = "Woud";
+"appearance.mocha" = "Mokka";
+"appearance.sunset" = "Zonsondergang";
+"appearance.latte" = "Latte";

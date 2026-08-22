@@ -79,7 +79,10 @@ public struct ErrorStateView: View {
 
     public var body: some View {
         ContentUnavailableView {
-            Label("Er ging iets mis", systemImage: "exclamationmark.triangle")
+            // Was a bare literal while the other error surface in this same file
+            // (line 47) already used the key — so one of the two spoke Dutch on an
+            // English phone, with a translated button underneath it.
+            Label(LS("state.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {

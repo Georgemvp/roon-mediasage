@@ -169,7 +169,9 @@ struct AlbumDetailView: View {
     private var subtitle: String {
         var parts: [String] = []
         if let y = album.year { parts.append(String(y)) }
-        parts.append(LS("\(album.trackCount) nummers"))
+        parts.append(album.trackCount == 1
+            ? String(format: LS("library.trackCountOne"), album.trackCount)
+            : String(format: LS("library.trackCountMany"), album.trackCount))
         return parts.joined(separator: " · ")
     }
 
@@ -218,7 +220,7 @@ struct ArtistDetailView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(artist.name).font(.title2.bold())
-                        Text("\(artist.albumCount) albums · \(artist.trackCount) nummers")
+                        Text(LibraryView.artistSummary(albums: artist.albumCount, tracks: artist.trackCount))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()

@@ -19,6 +19,102 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+NU (2026-08-22, nacht): **DE BIBLIOTHEEK-VIEW — SNELLER EN DUIDELIJKER.**
+(user: "Verbeter de bibliotheek view van RoonSage iOS zodat het duidelijker is
+en sneller" + "geen simulator, ik ga slapen".) Dus **code-only geverifieerd**:
+`swift build` schoon, **973 tests 0 fouten**, check-localization 1033 sleutels /
+0 missend / 0 wees, interpolatiesleutels 63 → 61. **Gecommit op main, NIET
+gepusht en NIET getagd** — een tag stuurt de analyzer via de CI-DMG naar de mini
+en dat hoort niet ongezien 's nachts te gebeuren. Ronde A uit de UX-audit zat
+nog ongecommit in de werkmap en is meegegaan; `Package.swift` blijft bewust
+buiten de commit.
+
+**Sneller — vier ingrepen, allemaal werk dat nergens heen ging.**
+1. **`.onAppear` deed `reload()`.** Elke tabwissel — en elke terugkeer uit een
+   album- of artiestenscherm — gooide de overzichtsgegevens weg (zeven query's,
+   op een thin client evenveel netwerkrondes) én álle geladen trackpagina's mét
+   je scrollpositie. De bibliotheek verandert alleen bij een resync, en
+   `onChange(of: client.trackCount)` ving dat al af. Nu houdt `loadedModes` bij
+   welke modus data heeft voor de huidige zoekterm; `appear()` laadt alleen wat
+   ontbreekt. Zelfde ingreep als W1 op de stationslijst.
+2. **`Array(x.enumerated())` in de drie lijsten.** Een volledige kopie van de
+   lijst (tuples, dus geen COW) bij élke body-evaluatie — toetsaanslag,
+   selectie, synctik — puur om te weten welke rijen bijna onderaan zijn. De
+   laatste acht id's beantwoorden diezelfde vraag in acht elementen.
+3. **Het overzicht vroeg 300 rijen om er 15 te tonen** (`browseTracks` default),
+   en `libraryDurationSeconds()` — een SUM over de hele feature-tabel — werd bij
+   elke opening opgehaald in een `@State` die géén view leest. Weg.
+4. **Pull-to-refresh haalde `topTags(limit:28)` op in élke modus**, ook op de
+   albumgrid die geen tags toont; dat scant en JSON-parset de feature-tabel.
+   Nu alleen waar de chips staan. Plus: de Zoek-tab herhaalt zijn zoekopdracht
+   niet meer bij elke verschijning (`unifiedQuery`).
+
+**Duidelijker — vijf ingrepen.**
+1. **De sorteervolgorde en het favorietenfilter waren onzichtbaar geworden.**
+   Ronde A vouwde vier toolbars tot één ellips-menu — dat repareerde de titel,
+   maar verstopte juist de twee instellingen die bepalen wát je ziet: je kon een
+   korte bibliotheek niet van een gefilterde onderscheiden. Nu chips ónder de
+   modusknoppen (`browseBar`), die hun eigen stand tonen en in één tik omzetten,
+   in dezelfde strook als de tagfilters. Het menu houdt alleen nog "selecteer
+   meerdere" over — en Artiesten heeft daardoor helemáál geen menu meer.
+2. **"Alleen favorieten" loog.** Het filter draait client-side over de geladen
+   pagina's, en paginering *pauzeerde* zolang het aanstond: het betekende dus
+   "je favorieten onder de eerste 120 albums", zonder enig teken dat er meer
+   was. Aanzetten laadt nu eerst de rest van de catalogus (`fillAllPages`,
+   dubbel begrensd op groei én paginacap).
+3. **Lege grids gaven het verkeerde advies.** "Geen albums — synchroniseer je
+   bibliotheek" stond er ook als het echte antwoord "je hebt nog niets een ster
+   gegeven" was: advies om precies het enige te doen dat niet helpt. Drie
+   redenen, drie teksten.
+4. **Acht Nederlandse/Engelse literals** in een verder vertaald scherm: beide
+   selectiebalken, de bewaar-als-playlist-melding, de lege-tagtekst, "Start
+   Sonic Radio", "Info", en de artiestregel die zijn eigen meervoud-s bouwde
+   náást `artistSummary`, dat het al via de catalogus zei.
+5. **Eén naam per ding:** NL zei in hetzelfde scherm "Tracks" (modusknop,
+   zoeksectie) én "nummers" (artiestregel, meervoudsleutels).
+   `library.tracks` = "Nummers", en de titel/lege staat mee. Plus de vijf
+   navigatiekaarten onderaan (~450 pt meubilair, §2.6 van de audit) tot één
+   sectie "Jouw verzameling" met halfbrede tegels: zelfde vijf bestemmingen,
+   zelfde ondertitels, ruim de helft van de hoogte.
+
+**Onderweg opgeruimd:** `albumShelf`/`albumCover` in `LibraryView` waren dood
+(DiscoveryView heeft eigen exemplaren), en twee doc-comments beweerden dat
+BPM+toonsoort "ON by default" staan terwijl code én instelling `false` zijn —
+het soort comment waar je naar handelt en dan op zit te debuggen.
+
+**Nog te doen op dit onderdeel:** het echte prestatiebewijs ontbreekt nog, want
+alles hierboven is beredeneerd op een demo-seed van 15 tracks. De audit noemde
+dat zelf al als volgende stap: een seed van tienduizenden rijen, en dán meten
+(§3, "Niet gemeten en wel belangrijk").
+
+---
+
+AFGEBROKEN 22-08 22:20 — Casper ging slapen; de sessie is met SIGTERM gestopt
+vanuit de mediastack-chat, en de simulator `RoonSage-UX` is afgesloten en
+verwijderd (4,9 GB terug; het harnas maakt hem zelf opnieuw aan).
+
+**Waar hij stond.** Na de diepe UX-audit (`native/docs/UX_AUDIT_2026_08_22.md`,
+31 schermafdrukken, commit `1cf6f03`) liep hij de vier fixronden af. Ronde A
+("één naam per ding") was bezig; de laatste bewerking draaide de trackregel om,
+omdat BPM+key naast de albumnaam de artiest afkapte, en verhuisde "Edit" naar het
+contextmenu.
+
+**Ongecommit op main** (9 bestanden, niets gepusht — `Package.swift` staat
+bewust ongecommit, zie ## Done):
+`Package.swift` · `RoonSageCore/RoonClient+Discovery.swift` ·
+`RoonSageUI/{Appearance,LibraryDetailViews,LibraryView,SettingsView,StateViews}.swift` ·
+`Resources/{nl,en}.lproj/Localizable.strings`
+De laatste volledige testrun (973 tests, 0 fouten) was vóór deze bewerkingen —
+**eerst `swift build && swift test` opnieuw** voordat je verder gaat.
+
+**Openstaand uit de laatste opdracht ("audit ook in online modus"):** dat lukte
+niet. Er is geen pair-route, goedkeuren gaat via de analyzer-GUI die op afstand
+niet werkt, en de simulator-keychain is versleuteld — al het auditbeeld is dus
+offline met 15 demo-tracks. Twee onbevestigde vondsten uit die ronde: er zijn
+twee foutweergaven waarvan één onvertaald, en de app doet server-requests terwijl
+hij zichzelf offline noemt (een Nederlandse melding met een Engelse knop die een
+HTTP-401 toont terwijl er niets verbonden is).
+
 NU (2026-08-22, avond): **HET STATIONS-PLAN UITGEVOERD — fase 1 t/m 3 compleet,
 fase 4 deels; W11/W13 bewust gestopt.** (user: "Begin maar, doe alles.")
 Geshipt in vijf commits, `native/docs/STATIONS_PLAN.md` §5b houdt de stand bij.

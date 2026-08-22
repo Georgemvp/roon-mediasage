@@ -43,6 +43,12 @@
 "lab.multitagSubtitle"        = "Several tags at once, with and/or";
 "lab.djSubtitle"              = "Harmonic mixing on BPM and key";
 "lab.tasteSubtitle"           = "Your taste profile, history and year in review";
+"library.selectTracks" = "Select tracks";
+"library.moreActions" = "More actions";
+"library.albumCountOne" = "%d album";
+"library.albumCountMany" = "%d albums";
+"library.trackCountOne" = "%d track";
+"library.trackCountMany" = "%d tracks";
 "library.playlistsSubtitle"   = "What you saved yourself";
 "library.bookmarksSubtitle"   = "Listen later";
 "library.labSubtitle"         = "Music Map, Sonic DNA, Multitag, DJ";
@@ -56,6 +62,8 @@
 
 /* Settings / language */
 "lang.system"       = "System";
+"settings.sonicDetailsInLists" = "BPM and key in lists";
+"settings.sonicDetailsHelp" = "Shows the tempo and Camelot key on every track in your library. Useful if you beatmatch; without it the list is calmer and fits more tracks on screen.";
 "settings.language" = "Language";
 
 /* Saved (bookmarks) */
@@ -432,19 +440,14 @@
 "library.cancel"                 = "Cancel";
 "library.chooseZoneFirst"        = "Choose a zone or device first";
 "library.clear"                  = "Clear";
-"library.closeSelection"         = "Close selection";
 "library.connectFirst"           = "Connect to the server first.";
 "library.decades"                = "Decades";
-"library.discoverWeeklySubtitle" = "Fresh discoveries from your own library — refreshed every week.";
-"library.discoverWeeklyTitle"    = "Discover Weekly";
 "library.done"                   = "Done";
 "library.favoritesOnly"          = "Favourites only";
 "library.forgottenFavorites"     = "Forgotten favourites";
 "library.genres"                 = "Genres";
 "library.modeOverview"           = "Overview";
 "library.mood"                   = "Mood";
-"library.myRadiosSubtitle"       = "Your own custom sonic radios.";
-"library.myRadiosTitle"          = "My radios";
 "library.noLibraryYet"           = "No library yet";
 "library.noMatchingTracks"       = "No matching tracks";
 "library.notConnected"           = "Not connected";
@@ -467,9 +470,6 @@
 "search.trySonic"                = "Search sonically for “%@”";
 "library.select"                 = "Select";
 "library.selectMultiple"         = "Select multiple";
-"library.selectMultipleAlbums"   = "Select multiple albums";
-"library.selectMultipleTracks"   = "Select multiple tracks";
-"library.showAll"                = "Show all";
 "library.sonicallySimilar"       = "Sonically similar";
 "library.sort"                   = "Sort";
 "library.sortAlbum"              = "Album";
@@ -478,13 +478,26 @@
 "library.sortRandom"             = "Random";
 "library.sortRecentlyPlayed"     = "Recently played";
 "library.sortTitle"              = "Title";
-"library.sortTracksHelp"         = "Sort tracks";
 "library.sortYear"               = "Year";
 "library.syncLibrary"            = "Sync library";
 "library.syncThenSearch"         = "Sync your library and search again.";
 "library.syncToFillOverview"     = "Sync your library to fill this overview.";
 "library.tracks"                 = "Tracks";
 "library.titleWithCount"      = "Library (%d tracks)";
+"library.collection"             = "Your collection";
+"library.noAlbums"               = "No albums";
+"library.noAlbumsFor"            = "No albums for “%@”.";
+"library.noArtists"              = "No artists";
+"library.noArtistsFor"           = "No artists for “%@”.";
+"library.noFavoriteAlbums"       = "Star an album to find it back here.";
+"library.noFavoriteArtists"      = "Star an artist to find them back here.";
+"library.noFavoritesTitle"       = "No favourites yet";
+"library.noTracksWithTag"        = "No tracks with mood “%@”.";
+"library.saveSelectionMany"      = "Save %d selected tracks as a local playlist.";
+"library.saveSelectionOne"       = "Save %d selected track as a local playlist.";
+"library.selectedCount"          = "%d selected";
+"library.sortedBy"               = "Sort: %@";
+"library.syncYourLibrary"        = "Sync your library.";
 
 /* libraryDetail */
 "libraryDetail.aboutAlbum"       = "About this album";
@@ -811,7 +824,7 @@
 "sonicLab.modeBridge"      = "Bridge";
 "sonicLab.modeMix"         = "Mix";
 "sonicLab.modePickerTitle" = "Mode";
-"sonicLab.modeSearch"      = "Search";
+"sonicLab.modeSearch" = "By sound";
 
 /* sonicRadio */
 "sonicRadio.myRadiosSubtitle" = "Stations you saved yourself.";
@@ -921,6 +934,10 @@
 "offline.useOffline" = "Use offline";
 
 /* Core-laag: foutmeldingen die RoonSageCore zelf maakt (zie CoreStrings.swift) */
+"core.error.offlineFeature" = "This needs a connection to your server. Your library and downloads keep playing.";
+"core.error.serverStatus" = "The server returned an error (%d). Try again.";
+"core.error.transport" = "Couldn't reach the server: %@";
+"core.error.badResponse" = "The server's response couldn't be read.";
 "core.error.actionFailed" = "%@ failed: %@";
 "core.error.actionNoConnection" = "%@ failed — not connected to Roon.";
 "core.error.albumRadioNoLibrary" = "Album radio failed — no library available.";
@@ -1118,3 +1135,22 @@
 "playlistCategory.social" = "Social";
 "playlistCategory.seasons" = "Seasons";
 "playlistCategory.discovery" = "Discovery";
+
+// Uiterlijk-pickers (Appearance.swift)
+"appearance.system" = "System";
+"appearance.light" = "Light";
+"appearance.dark" = "Dark";
+"appearance.gold" = "Gold";
+"appearance.amber" = "Amber";
+"appearance.blue" = "Blue";
+"appearance.indigo" = "Indigo";
+"appearance.teal" = "Teal";
+"appearance.green" = "Green";
+"appearance.pink" = "Pink";
+"appearance.custom" = "Custom";
+"appearance.midnight" = "Midnight";
+"appearance.ocean" = "Ocean";
+"appearance.forest" = "Forest";
+"appearance.mocha" = "Mocha";
+"appearance.sunset" = "Sunset";
+"appearance.latte" = "Latte";

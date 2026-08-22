@@ -17,6 +17,11 @@ public struct LibraryView: View {
     public init(searchOnly: Bool) { self.searchOnly = searchOnly }
 
     @Environment(RoonClient.self) private var client
+    // `editMode` is iOS-only; on macOS a List selects without a mode toggle.
+    #if os(iOS)
+    @Environment(\.editMode) private var editMode
+    private var isEditing: Bool { editMode?.wrappedValue.isEditing ?? false }
+    #endif
     @State private var searchText = ""
     @State private var selectedTag: String?
     @State private var tracks: [DatabaseManager.LibraryTrackRow] = []
@@ -30,6 +35,9 @@ public struct LibraryView: View {
     /// Combined artist/album/track results for the overview's search box (P7).
     /// nil = not searching; non-nil and empty = searched, found nothing.
     @State private var unified: RoonClient.SearchResults?
+    /// The query `unified` holds, so re-appearing on the Zoek tab does not run
+    /// the same search again over results that are still on screen.
+    @State private var unifiedQuery: String?
     @State private var sort: SortField = .title
     @State private var viewMode: ViewMode = .overview
     /// Grid filter: only starred albums/artists (LMS "Starred" browse mode).
@@ -49,12 +57,21 @@ public struct LibraryView: View {
     @State private var stats: DatabaseManager.LibraryStats?
     @State private var analyzedTotal = 0
     @State private var analyzedMatched = 0
-    @State private var librarySeconds: Double = 0
     @State private var recentlyAdded: [DatabaseManager.LibraryTrackRow] = []
     @State private var recentPlayed: [DatabaseManager.LibraryTrackRow] = []
     @State private var forgotten: [TrackRecord] = []
     @State private var facets: RoonClient.RadioFacetOptions?
-    @State private var overviewLoaded = false
+
+    /// Which browse modes already hold data for the current query.
+    ///
+    /// `.onAppear` fires on every tab switch, and it used to call `reload()`:
+    /// that reset the overview guard and re-ran its seven queries (a network
+    /// round-trip each on a thin client), *and* threw away every loaded track
+    /// page along with your scroll position. Leaving the tab and coming back
+    /// cost a full reload of a screen that had not changed. The library only
+    /// changes on a resync, and `onChange(of: client.trackCount)` already
+    /// catches that — the same fix W1 made for the stations list.
+    @State private var loadedModes: Set<ViewMode> = []
 
     // Pagination cursors for the browse list + grids (offset = current array count).
     @State private var tracksReachedEnd = false
@@ -146,7 +163,7 @@ public struct LibraryView: View {
                 // until "toon alles" drills into a full list, when it becomes
                 // the way back to the combined result.
                 if !searchOnly || viewMode != .overview { modePicker }
-                if viewMode == .tracks, !tags.isEmpty { tagChips }
+                if viewMode != .overview { browseBar }
             }
             .background(.bar)
         }
@@ -173,35 +190,52 @@ public struct LibraryView: View {
                     ProgressView().controlSize(.small)
                 }
             }
-            if viewMode == .tracks {
+            // ONE toolbar for all four modes, behind a single menu.
+            //
+            // Each mode used to add its own items — a sort Picker on Tracks, a
+            // favourites star on Albums/Artists, a "Select" button on Albums —
+            // and the result was four different toolbars in one screen. On
+            // Tracks and Albums they pushed the title off entirely; on Artists
+            // it read "Library (15 trac…". The mode-specific verbs live in this
+            // menu now, so the row's width no longer depends on which tab you
+            // are on and the title always fits.
+            //
+            // Sorting and the favourites filter are NOT here: folding them into
+            // a menu fixed the title but hid the two things that decide what you
+            // are looking at. They are chips under the picker now (`browseBar`),
+            // which say their state without being opened — so what is left in
+            // here is only the multi-select verb, and Artists needs no menu at all.
+            if hasOverflowMenu {
                 ToolbarItem {
-                    Picker(LS("library.sort"), selection: $sort) {
-                        ForEach(SortField.allCases) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                    .help(LS("library.sortTracksHelp"))
-                }
-            } else if viewMode == .albums || viewMode == .artists {
-                ToolbarItem {
-                    Button {
-                        favoritesOnly.toggle()
+                    Menu {
+                        #if os(iOS)
+                        // `List(selection:)` needs edit mode to allow multi-select
+                        // on touch, otherwise the Speel/Wachtrij/Bewaar bar is
+                        // unreachable. It used to be an `EditButton` pinned to
+                        // `.topBarLeading` — the same slot as the title, which is
+                        // why the Tracks screen had no title at all.
+                        if viewMode == .tracks, !tracks.isEmpty {
+                            Button {
+                                withAnimation { editMode?.wrappedValue = isEditing ? .inactive : .active }
+                            } label: {
+                                Label(isEditing ? LS("library.done") : LS("library.selectTracks"),
+                                      systemImage: "checkmark.circle")
+                            }
+                        }
+                        #endif
+                        if viewMode == .albums, !albums.isEmpty {
+                            Button {
+                                isSelectingAlbums.toggle()
+                                if !isSelectingAlbums { albumSelection.removeAll() }
+                            } label: {
+                                Label(isSelectingAlbums ? LS("library.done") : LS("library.select"),
+                                      systemImage: "checkmark.circle")
+                            }
+                        }
                     } label: {
-                        Image(systemName: favoritesOnly ? "star.fill" : "star")
-                            .foregroundStyle(favoritesOnly ? Color.roonGold : .secondary)
+                        Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel(LS("library.favoritesOnly"))
-                    .help(favoritesOnly ? LS("library.showAll") : LS("library.favoritesOnly"))
-                }
-            }
-            if viewMode == .albums, !visibleAlbums.isEmpty {
-                ToolbarItem {
-                    Button {
-                        isSelectingAlbums.toggle()
-                        if !isSelectingAlbums { albumSelection.removeAll() }
-                    } label: {
-                        isSelectingAlbums ? LT("library.done") : LT("library.select")
-                    }
-                    .help(isSelectingAlbums ? LS("library.closeSelection") : LS("library.selectMultipleAlbums"))
+                    .accessibilityLabel(LS("library.moreActions"))
                 }
             }
             ToolbarItem {
@@ -214,26 +248,23 @@ public struct LibraryView: View {
                     .disabled(!client.connectionState.isConnected)
                 }
             }
-            #if os(iOS)
-            // Without an edit toggle, `List(selection:)` can't enter multi-select
-            // on touch, leaving the Speel/Wachtrij/Bewaar bar unreachable.
-            if viewMode == .tracks, !tracks.isEmpty {
-                ToolbarItem(placement: .topBarLeading) {
-                    EditButton().accessibilityHint(LS("library.selectMultipleTracks"))
-                }
-            }
-            #endif
+
         }
         .onChange(of: searchText) { _, _ in
             // No mode switch any more: the overview shows a combined result of
             // its own, so you can find an album without first knowing to go to
             // the album tab and typing it again.
-            if !isSearchActive { unified = nil }
+            if !isSearchActive { unified = nil; unifiedQuery = nil }
             isSearching = true
             searchTask?.cancel()
             searchTask = Task {
                 try? await Task.sleep(nanoseconds: 250_000_000)
-                if !Task.isCancelled { reloadContent() }
+                guard !Task.isCancelled else { return }
+                // The three browse modes are scoped to the query, so a new one
+                // invalidates them; the overview is not (it hands over to the
+                // combined result), so clearing the box does not re-run it.
+                loadedModes.subtract([.tracks, .albums, .artists])
+                reloadContent()
             }
         }
         .onChange(of: selectedTag) { _, _ in reloadTracks() }
@@ -242,10 +273,15 @@ public struct LibraryView: View {
         .onChange(of: viewMode) { _, _ in
             isSelectingAlbums = false
             albumSelection.removeAll()
-            reloadContent()
+            loadContentIfNeeded()
+        }
+        // The star filter runs over what is loaded, so switching it on has to
+        // finish the catalogue first — see `fillAllPages`.
+        .onChange(of: favoritesOnly) { _, on in
+            if on, viewMode == .albums || viewMode == .artists { Task { await fillAllPages() } }
         }
         .onChange(of: client.trackCount) { _, _ in reload() }
-        .onAppear { reload() }
+        .onAppear { appear() }
         .sheet(item: $infoTrack) { TrackInfoSheet(track: $0) }
         .similarTracksSheet(item: $similarSeed)
         .alert(LS("library.saveAsPlaylist"), isPresented: $showSaveSheet) {
@@ -259,7 +295,9 @@ public struct LibraryView: View {
                 selection.removeAll()
             }
         } message: {
-            Text("Bewaar \(selection.count) geselecteerde track\(selection.count == 1 ? "" : "s") als lokale playlist.")
+            Text(String(format: selection.count == 1 ? LS("library.saveSelectionOne")
+                                                     : LS("library.saveSelectionMany"),
+                        selection.count))
         }
     }
 
@@ -276,6 +314,17 @@ public struct LibraryView: View {
     #else
     private var compactPicker: Bool { false }
     #endif
+
+    /// Whether the overflow menu has anything in it. Artists has no multi-select,
+    /// and on macOS a `List` selects without an edit mode, so the menu would
+    /// otherwise render as an empty popover you can open but not use.
+    private var hasOverflowMenu: Bool {
+        #if os(iOS)
+        (viewMode == .tracks && !tracks.isEmpty) || (viewMode == .albums && !albums.isEmpty)
+        #else
+        viewMode == .albums && !albums.isEmpty
+        #endif
+    }
 
     private var modePicker: some View {
         let picker = Picker(LS("recent.pivotLabel"), selection: $viewMode) {
@@ -344,15 +393,21 @@ public struct LibraryView: View {
         } else if displayTracks.isEmpty && !client.isSyncing {
             emptyState
         } else {
+            // `Array(displayTracks.enumerated())` used to be rebuilt on every body
+            // evaluation — a full copy of the list (tuples, so no COW) on every
+            // keystroke, selection change and sync tick, purely to know which rows
+            // are near the end. The last eight ids answer the same question and
+            // cost eight elements instead of tens of thousands.
+            let prefetch = Set(displayTracks.suffix(8).map(\.id))
             List(selection: $selection) {
-                ForEach(Array(displayTracks.enumerated()), id: \.element.id) { index, track in
+                ForEach(displayTracks, id: \.id) { track in
                     LibraryTrackRow(track: track, canPlay: client.hasActiveOutput) {
                         play([asRecord(track)])
                     }
                     .contextMenu { rowMenu(track) }
                     .tag(track.id)
                     .onAppear {
-                        if index >= displayTracks.count - 8 { Task { await loadMoreTracks() } }
+                        if prefetch.contains(track.id) { Task { await loadMoreTracks() } }
                     }
                 }
                 if loadingMore {
@@ -376,11 +431,15 @@ public struct LibraryView: View {
 
     @ViewBuilder
     private var albumsContent: some View {
-        AsyncStateView(isLoading: isLoadingGrid, isEmpty: visibleAlbums.isEmpty,
-                       onRetry: { reloadContent() }) {
+        // Hoisted: `visibleAlbums` filters the whole page set, and the body read
+        // it three times per evaluation (state, content, prefetch trigger).
+        let shown = visibleAlbums
+        let prefetch = Set(shown.suffix(6).map(\.id))
+        AsyncStateView(isLoading: isLoadingGrid || (loadingMore && shown.isEmpty),
+                       isEmpty: shown.isEmpty, onRetry: { reloadContent() }) {
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: Spacing.lg) {
-                    ForEach(Array(visibleAlbums.enumerated()), id: \.element.id) { index, album in
+                    ForEach(shown, id: \.id) { album in
                         Group {
                             if isSelectingAlbums {
                                 Button { toggleAlbumSelection(album.albumKey) } label: {
@@ -402,7 +461,7 @@ public struct LibraryView: View {
                             }
                         }
                         .onAppear {
-                            if index >= visibleAlbums.count - 6 { Task { await loadMoreAlbums() } }
+                            if prefetch.contains(album.id) { Task { await loadMoreAlbums() } }
                         }
                     }
                 }
@@ -413,17 +472,19 @@ public struct LibraryView: View {
             }
             .refreshable { await refresh() }
         } empty: {
-            gridEmptyState(noun: "albums")
+            gridEmptyState(.albums)
         }
     }
 
     @ViewBuilder
     private var artistsContent: some View {
-        AsyncStateView(isLoading: isLoadingGrid, isEmpty: visibleArtists.isEmpty,
-                       onRetry: { reloadContent() }) {
+        let shown = visibleArtists
+        let prefetch = Set(shown.suffix(6).map(\.id))
+        AsyncStateView(isLoading: isLoadingGrid || (loadingMore && shown.isEmpty),
+                       isEmpty: shown.isEmpty, onRetry: { reloadContent() }) {
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: Spacing.lg) {
-                    ForEach(Array(visibleArtists.enumerated()), id: \.element.id) { index, artist in
+                    ForEach(shown, id: \.id) { artist in
                         NavigationLink(value: artist) { ArtistGridCell(artist: artist) }
                             .buttonStyle(.plain)
                             .contextMenu {
@@ -436,7 +497,7 @@ public struct LibraryView: View {
                                 })
                             }
                             .onAppear {
-                                if index >= visibleArtists.count - 6 { Task { await loadMoreArtists() } }
+                                if prefetch.contains(artist.id) { Task { await loadMoreArtists() } }
                             }
                     }
                 }
@@ -447,18 +508,33 @@ public struct LibraryView: View {
             }
             .refreshable { await refresh() }
         } empty: {
-            gridEmptyState(noun: "artiesten")
+            gridEmptyState(.artists)
         }
     }
 
+    /// Three different reasons a grid is empty, and they used to read as one.
+    ///
+    /// "Geen albums — synchroniseer je bibliotheek" was shown even when the real
+    /// answer was "you have not starred anything yet", which is advice to do the
+    /// one thing that cannot help. (It was also a Dutch literal with the noun
+    /// passed in as data, so it stayed Dutch on an English phone.)
     @ViewBuilder
-    private func gridEmptyState(noun: String) -> some View {
-        if client.connectionState.isConnected {
-            ContentUnavailableView("Geen \(noun)", systemImage: "square.grid.2x2",
-                description: Text(searchText.isEmpty ? "Synchroniseer je bibliotheek." : "Geen \(noun) voor “\(searchText)”."))
-        } else {
+    private func gridEmptyState(_ mode: ViewMode) -> some View {
+        if !client.connectionState.isConnected {
             ContentUnavailableView(LS("library.notConnected"), systemImage: "wifi.slash",
                 description: LT("library.connectFirst"))
+        } else if favoritesOnly {
+            ContentUnavailableView(LS("library.noFavoritesTitle"), systemImage: "star",
+                description: Text(mode == .albums ? LS("library.noFavoriteAlbums")
+                                                  : LS("library.noFavoriteArtists")))
+        } else {
+            ContentUnavailableView(
+                mode == .albums ? LS("library.noAlbums") : LS("library.noArtists"),
+                systemImage: mode == .albums ? "square.grid.2x2" : "person.2",
+                description: Text(searchText.isEmpty
+                    ? LS("library.syncYourLibrary")
+                    : String(format: mode == .albums ? LS("library.noAlbumsFor")
+                                                     : LS("library.noArtistsFor"), searchText)))
         }
     }
 
@@ -466,7 +542,8 @@ public struct LibraryView: View {
 
     private var selectionBar: some View {
         HStack(spacing: Spacing.md) {
-            LT("\(selection.count) geselecteerd").font(.callout).foregroundStyle(.secondary)
+            Text(String(format: LS("library.selectedCount"), selection.count))
+                .font(.callout).foregroundStyle(.secondary)
             Spacer()
             Button { play(selectedRecords()) } label: { Label(LS("library.play"), systemImage: "play.fill") }
                 .disabled(!client.hasActiveOutput)
@@ -485,7 +562,9 @@ public struct LibraryView: View {
 
     private var albumSelectionBar: some View {
         HStack(spacing: Spacing.md) {
-            Text("\(albumSelection.count) album\(albumSelection.count == 1 ? "" : "s")")
+            Text(String(format: albumSelection.count == 1 ? LS("library.albumCountOne")
+                                                          : LS("library.albumCountMany"),
+                        albumSelection.count))
                 .font(.callout).foregroundStyle(.secondary)
             Spacer()
             Button { bulkPlayAlbums() } label: { Label(LS("library.playAll"), systemImage: "play.fill") }
@@ -547,7 +626,7 @@ public struct LibraryView: View {
         let rec = asRecord(track)
         PlayActionsMenu(fetch: { [rec] })
         Divider()
-        Button("Start Sonic Radio") {
+        Button(LS("commandPalette.startSonicRadio")) {
             Task { await client.playSonicRadio(title: track.title, artist: track.artist, album: track.album) }
         }.disabled(!client.hasActiveOutput)
         Button(LS("library.sonicallySimilar"), systemImage: "waveform.path.ecg") {
@@ -555,7 +634,7 @@ public struct LibraryView: View {
                                     album: track.album, imageKey: track.imageKey)
         }
         Divider()
-        Button("Info", systemImage: "info.circle") { infoTrack = track }
+        Button(LS("libraryDetail.info"), systemImage: "info.circle") { infoTrack = track }
         Button(LS("library.saveAsPlaylistMenu")) {
             selection = [track.id]
             showSaveSheet = true
@@ -588,21 +667,40 @@ public struct LibraryView: View {
         Task { await client.queueToActiveOutput(tracks, next: next) }
     }
 
-    private var tagChips: some View {
+    /// One line under the picker that says what you are looking at, and changes it.
+    ///
+    /// The four per-mode toolbars were folded into one overflow menu, which fixed
+    /// the vanishing title but hid the two settings that decide the contents of
+    /// the screen: the track sort order and the favourites filter. A menu you
+    /// have to open to read the state of is not an answer — you cannot tell a
+    /// short library from a filtered one. These chips carry their own state and
+    /// flip it in one tap, in the strip that already held the tag filters.
+    @ViewBuilder
+    private var browseBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(tags, id: \.tag) { item in
-                    let isOn = selectedTag == item.tag
-                    Button {
-                        selectedTag = isOn ? nil : item.tag
+                if viewMode == .tracks {
+                    Menu {
+                        Picker(LS("library.sort"), selection: $sort) {
+                            ForEach(SortField.allCases) { Text($0.label).tag($0) }
+                        }
                     } label: {
-                        Text(item.tag)
-                            .font(.caption)
-                            .padding(.horizontal, 9).padding(.vertical, Spacing.xs)
-                            .background(isOn ? Color.roonGold : Color.platformQuaternaryFill.opacity(0.5),
-                                        in: Capsule())
-                            // Gold is a light colour — white on gold fails WCAG AA (~2.3:1).
-                            .foregroundStyle(isOn ? .black : .primary)
+                        chip(String(format: LS("library.sortedBy"), sort.label),
+                             icon: "arrow.up.arrow.down", on: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(LS("library.sort"))
+                    ForEach(tags, id: \.tag) { item in
+                        let isOn = selectedTag == item.tag
+                        Button { selectedTag = isOn ? nil : item.tag } label: {
+                            chip(item.tag, icon: nil, on: isOn)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    Button { favoritesOnly.toggle() } label: {
+                        chip(LS("library.favoritesOnly"),
+                             icon: favoritesOnly ? "star.fill" : "star", on: favoritesOnly)
                     }
                     .buttonStyle(.plain)
                 }
@@ -612,10 +710,44 @@ public struct LibraryView: View {
         .background(.bar)
     }
 
+    private func chip(_ text: String, icon: String?, on: Bool) -> some View {
+        HStack(spacing: 4) {
+            if let icon { Image(systemName: icon).font(.caption2) }
+            Text(text).font(.caption).lineLimit(1)
+        }
+        .padding(.horizontal, 9).padding(.vertical, Spacing.xs)
+        .background(on ? Color.roonGold : Color.platformQuaternaryFill.opacity(0.5), in: Capsule())
+        // Gold is a light colour — white on gold fails WCAG AA (~2.3:1).
+        .foregroundStyle(on ? .black : .primary)
+        .contentShape(Capsule())
+    }
+
+    /// Full invalidation — the library itself changed (a resync landed).
     private func reload() {
-        overviewLoaded = false   // a resync (trackCount change) should repopulate the overview
+        loadedModes.removeAll()
         Task { tags = await client.topTags(limit: 28) }
         Task { await client.ensureFavoritesLoaded() }   // drives the star filter
+        reloadContent()
+    }
+
+    /// What `.onAppear` does. It runs on every tab switch, so it must not be
+    /// `reload()`: re-reading a library that has not changed cost seven queries
+    /// on the overview and the whole scroll position on the browse modes.
+    private func appear() {
+        if tags.isEmpty { Task { tags = await client.topTags(limit: 28) } }
+        Task { await client.ensureFavoritesLoaded() }   // guarded, once per session
+        loadContentIfNeeded()
+    }
+
+    private func loadContentIfNeeded() {
+        // The overview hands over to the combined result while searching, and
+        // that result is keyed by its query rather than by the mode.
+        if viewMode == .overview, isSearchActive {
+            guard unifiedQuery != searchText else { return }
+            reloadContent()
+            return
+        }
+        guard !loadedModes.contains(viewMode) else { return }
         reloadContent()
     }
 
@@ -663,6 +795,7 @@ public struct LibraryView: View {
     }
 
     private func reloadTracks() {
+        loadedModes.insert(.tracks)
         tracks = []
         displayTracks = []
         seenTrackKeys = []
@@ -744,6 +877,7 @@ public struct LibraryView: View {
     // MARK: - Albums / Artists grids (paginated, endless scroll)
 
     private func loadAlbums() {
+        loadedModes.insert(.albums)
         albums = []
         albumsReachedEnd = false
         isLoadingGrid = true
@@ -769,6 +903,7 @@ public struct LibraryView: View {
     }
 
     private func loadArtists() {
+        loadedModes.insert(.artists)
         artists = []
         artistsReachedEnd = false
         isLoadingGrid = true
@@ -792,9 +927,48 @@ public struct LibraryView: View {
         isSearching = false
     }
 
+    /// Loads the remaining pages of the active grid.
+    ///
+    /// The star filter is client-side over whatever pages happen to be loaded,
+    /// and paging used to *pause* while it was on — so "Alleen favorieten" really
+    /// meant "the favourites among the first 120 albums", with no sign that the
+    /// rest existed. A filter that silently hides matches is worse than no
+    /// filter, so switching it on finishes the catalogue first. Local SQLite,
+    /// 120 rows a page.
+    ///
+    /// Bounded twice: it stops as soon as a page fails to grow the list (an empty
+    /// result, or a page dropped because the query changed underneath it) and
+    /// again at a hard page cap.
+    private func fillAllPages() async {
+        guard !loadingMore else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        for _ in 0..<200 {
+            let before: Int
+            switch viewMode {
+            case .albums:
+                guard !albumsReachedEnd else { return }
+                before = albums.count
+                await loadAlbumsPage()
+                if albums.count == before { return }
+            case .artists:
+                guard !artistsReachedEnd else { return }
+                before = artists.count
+                await loadArtistsPage()
+                if artists.count == before { return }
+            default: return
+            }
+            await Task.yield()
+        }
+    }
+
     /// Pull-to-refresh: reset the active mode's pagination and reload the first page.
     private func refresh() async {
-        tags = await client.topTags(limit: 28)
+        // Only the two modes that show them; `topTags` scans and JSON-parses the
+        // whole feature table, which is not what a pull on the album grid asked for.
+        if viewMode == .overview || viewMode == .tracks {
+            tags = await client.topTags(limit: 28)
+        }
         switch viewMode {
         case .overview:
             await refreshOverview()
@@ -804,9 +978,11 @@ public struct LibraryView: View {
         case .albums:
             albums = []; albumsReachedEnd = false
             await loadAlbumsPage()
+            if favoritesOnly { await fillAllPages() }
         case .artists:
             artists = []; artistsReachedEnd = false
             await loadArtistsPage()
+            if favoritesOnly { await fillAllPages() }
         }
     }
 
@@ -814,7 +990,8 @@ public struct LibraryView: View {
     var emptyState: some View {
         if client.connectionState.isConnected {
             ContentUnavailableView(LS("library.noMatchingTracks"), systemImage: "music.note.list",
-                description: selectedTag != nil ? LT("Geen tracks met tag “\(selectedTag!)”.") : LT("library.syncThenSearch"))
+                description: selectedTag.map { Text(String(format: LS("library.noTracksWithTag"), $0)) }
+                    ?? LT("library.syncThenSearch"))
         } else {
             ContentUnavailableView(LS("library.notConnected"), systemImage: "wifi.slash",
                 description: LT("library.connectFirst"))
@@ -941,8 +1118,11 @@ public struct LibraryView: View {
         .accessibilityLabel(subtitle.isEmpty ? title : "\(title), \(subtitle)")
     }
 
+    /// Was a Dutch literal with an English plural-s bolted on ("1 album · 4
+    /// tracks"), next to `artistSummary`, which already says exactly this through
+    /// the catalogue. One of the two had to go.
     private func artistSubtitle(_ a: DatabaseManager.ArtistResult) -> String {
-        "\(a.albumCount) album\(a.albumCount == 1 ? "" : "s") · \(a.trackCount) \(LS("library.tracks").lowercased())"
+        Self.artistSummary(albums: a.albumCount, tracks: a.trackCount)
     }
 
     private func albumSubtitle(_ album: DatabaseManager.AlbumResult) -> String {
@@ -962,6 +1142,7 @@ public struct LibraryView: View {
         let q = searchText
         guard !q.trimmingCharacters(in: .whitespaces).isEmpty else {
             unified = nil
+            unifiedQuery = nil
             isSearching = false
             return
         }
@@ -969,6 +1150,7 @@ public struct LibraryView: View {
             let results = await client.searchEverything(query: q)
             guard q == searchText else { return }
             unified = results
+            unifiedQuery = q
             isSearching = false
         }
     }
@@ -994,34 +1176,8 @@ public struct LibraryView: View {
                     recordShelf(LS("library.forgottenFavorites"), "clock.arrow.circlepath", forgotten).plainCardRow()
                 }
                 browseTiles.plainCardRow()
-                // Downloads lived only in Settings, which is where you go to
-                // configure things — not to find your music. Same navCard shape
-                // as the other destinations, so it costs no extra shelf.
-                if !client.offlineKeys.isEmpty {
-                    navCard(LS("downloads.sectionTitle"),
-                            String(format: LS("downloads.librarySubtitle"), client.offlineKeys.count),
-                            "arrow.down.circle") { DownloadsView() }.plainCardRow()
-                }
-                // Playlists and bookmarks used to hang under the "Maak" tab —
-                // a list that linked to a hub. They're collections, so they
-                // belong with the rest of your music, in the same navCard shape
-                // the downloads already use.
-                navCard(LS("root.savedPlaylists"), LS("library.playlistsSubtitle"),
-                        SidebarItem.playlists.icon) { PlaylistsView() }.plainCardRow()
-                navCard(LS("root.savedForLater"), LS("library.bookmarksSubtitle"),
-                        SidebarItem.bookmarks.icon) { BookmarksView() }.plainCardRow()
-                navCard(LS("library.discoverWeeklyTitle"),
-                        LS("library.discoverWeeklySubtitle"),
-                        "sparkles") { DiscoverWeeklyView() }.plainCardRow()
-                navCard(LS("library.myRadiosTitle"), LS("library.myRadiosSubtitle"),
-                        "dot.radiowaves.left.and.right") { CustomRadioView() }.plainCardRow()
-                navCard(LS("nav.recommend"), LS("library.recommendSubtitle"),
-                        "wand.and.stars") { RecommendView() }.plainCardRow()
-                // Last, because it's the one you open on purpose rather than
-                // while looking for something to play.
-                navCard(LS("nav.lab"), LS("library.labSubtitle"),
-                        "flask") { LabView() }.plainCardRow()
-            } else if !overviewLoaded {
+                collectionTiles.plainCardRow()
+            } else if !loadedModes.contains(.overview) {
                 SkeletonRows().plainCardRow()
             } else {
                 overviewEmpty.plainCardRow()
@@ -1063,12 +1219,6 @@ public struct LibraryView: View {
               zoneAvailable: client.hasActiveOutput) { EmptyView() }
     }
 
-    private func albumShelf(_ title: String, _ icon: String,
-                            _ albums: [DatabaseManager.AlbumResult]) -> some View {
-        shelf(title, icon, covers: albums.map(albumCover),
-              zoneAvailable: client.hasActiveOutput) { EmptyView() }
-    }
-
     private func trackCover(_ t: DatabaseManager.LibraryTrackRow) -> Cover {
         let rec = asRecord(t)
         return Cover(id: t.id, title: t.title, subtitle: t.artist, imageKey: t.imageKey) {
@@ -1079,12 +1229,6 @@ public struct LibraryView: View {
     private func recordCover(_ t: TrackRecord) -> Cover {
         Cover(id: t.id, title: t.title, subtitle: t.artist, imageKey: t.imageKey) {
             Task { await client.playToActiveOutput([t]) }
-        }
-    }
-
-    private func albumCover(_ a: DatabaseManager.AlbumResult) -> Cover {
-        Cover(id: a.albumKey, title: a.album, subtitle: a.artist, imageKey: a.imageKey) {
-            Task { await client.playAlbum(albumKey: a.albumKey) }
         }
     }
 
@@ -1140,34 +1284,85 @@ public struct LibraryView: View {
 
     // MARK: Overview — Ontdek Wekelijks entry + states
 
-    /// A prominent navigation card into another feature (Ontdek Wekelijks, Mijn
-    /// radio's, Aanbevelen) — pushed onto this stack so it works on iOS + macOS alike.
-    @ViewBuilder
-    private func navCard<Destination: View>(
+    /// "1 album · 4 nummers" — through the catalogue, plural included.
+    ///
+    /// Was assembled from a Dutch literal, so every artist tile on an English
+    /// phone read "… · 4 nummers" under a translated heading.
+    static func artistSummary(albums: Int, tracks: Int) -> String {
+        let a = albums == 1 ? String(format: LS("library.albumCountOne"), albums)
+                            : String(format: LS("library.albumCountMany"), albums)
+        let t = tracks == 1 ? String(format: LS("library.trackCountOne"), tracks)
+                            : String(format: LS("library.trackCountMany"), tracks)
+        return "\(a) · \(t)"
+    }
+
+    /// The rest of your collection, as one labelled group of tiles.
+    ///
+    /// These were five full-width cards stacked below the music — ~450 pt of
+    /// navigation furniture, each one shaped like a feature of its own, and the
+    /// audit counted seven before two were removed. They are all the same kind of
+    /// thing ("elsewhere in your own collection"), so they read as one section of
+    /// half-width tiles: same five destinations, same subtitles, a little over
+    /// half the height, and one heading that says what the group is.
+    private var collectionTiles: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            sectionHeader(LS("library.collection"), "square.stack") { EmptyView() }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: Spacing.sm),
+                                GridItem(.flexible(), spacing: Spacing.sm)],
+                      spacing: Spacing.sm) {
+                // Downloads lived only in Settings, which is where you go to
+                // configure things — not to find your music.
+                if !client.offlineKeys.isEmpty {
+                    navTile(LS("downloads.sectionTitle"),
+                            String(format: LS("downloads.librarySubtitle"), client.offlineKeys.count),
+                            "arrow.down.circle") { DownloadsView() }
+                }
+                // Playlists and bookmarks used to hang under the "Maak" tab — a
+                // list that linked to a hub. They're collections, so they belong
+                // with the rest of your music.
+                navTile(LS("root.savedPlaylists"), LS("library.playlistsSubtitle"),
+                        SidebarItem.playlists.icon) { PlaylistsView() }
+                navTile(LS("root.savedForLater"), LS("library.bookmarksSubtitle"),
+                        SidebarItem.bookmarks.icon) { BookmarksView() }
+                // Discover Weekly is a segment of the Ontdek tab and My radios
+                // lives in Stations; both had a second door here, under a
+                // DIFFERENT name in the case of "Mijn radio's" (Stations calls the
+                // same screen "Eigen stations"). Two doors to one room is
+                // navigation furniture — and two names for one room is worse.
+                // They stay reachable where they belong.
+                navTile(LS("nav.recommend"), LS("library.recommendSubtitle"),
+                        "wand.and.stars") { RecommendView() }
+                // Last, because it's the one you open on purpose rather than
+                // while looking for something to play.
+                navTile(LS("nav.lab"), LS("library.labSubtitle"), "flask") { LabView() }
+            }
+        }
+    }
+
+    /// One destination in `collectionTiles`: a half-width card, pushed onto this
+    /// stack so it works on iOS + macOS alike.
+    private func navTile<Destination: View>(
         _ title: String, _ subtitle: String, _ icon: String,
         @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
         NavigationLink {
             destination()
         } label: {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: icon)
-                    .font(.title2).foregroundStyle(Color.roonGold)
-                    .frame(width: 44, height: 44)
-                    .background(Color.roonGold.opacity(0.15), in: RoundedRectangle(cornerRadius: Radius.lg))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                // No manual chevron: this NavigationLink lives in a List, which
-                // already draws its own disclosure indicator (double ">  >").
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Image(systemName: icon).font(.body).foregroundStyle(Color.roonGold)
+                Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(subtitle).font(.caption2).foregroundStyle(.secondary)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Spacing.md)
-            .contentShape(Rectangle())
+            .background(Color.platformQuaternaryFill.opacity(0.5),
+                        in: RoundedRectangle(cornerRadius: Radius.lg))
+            .contentShape(RoundedRectangle(cornerRadius: Radius.lg))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(subtitle)")
     }
 
     private var overviewEmpty: some View {
@@ -1182,22 +1377,27 @@ public struct LibraryView: View {
     // MARK: Overview — data loading
 
     private func loadOverview() {
-        guard !overviewLoaded else { return }
-        overviewLoaded = true
+        guard !loadedModes.contains(.overview) else { return }
+        loadedModes.insert(.overview)
         Task { await performOverviewLoad() }
     }
 
     private func refreshOverview() async {
-        overviewLoaded = true   // keep the onChange guard from double-firing mid-refresh
+        loadedModes.insert(.overview)   // keep the onChange guard from double-firing mid-refresh
         await performOverviewLoad()
     }
 
     /// Stats first (drives the hero + progressive reveal), then the shelves concurrently.
+    ///
+    /// Two of these queries used to be free money for nobody: the recently-added
+    /// shelf asked for `browseTracks`' default 300 rows to show 15, and
+    /// `libraryDurationSeconds()` — a SUM over the whole feature table — was
+    /// awaited into a `@State` that no view ever read.
     private func performOverviewLoad() async {
         async let statsV = client.libraryStats()
         async let analyzedV = client.audioFeaturesStats()
-        async let durationV = client.libraryDurationSeconds()
-        async let addedV = client.browseTracks(query: "", tag: nil, order: .recentlyAdded)
+        async let addedV = client.browseTracks(query: "", tag: nil, limit: overviewShelfSize,
+                                               order: .recentlyAdded)
         async let playedV = recentPlayedRows()
         async let forgottenV = client.forgottenFavorites()
         async let facetsV = client.radioFacetOptions()
@@ -1206,12 +1406,15 @@ public struct LibraryView: View {
         let a = await analyzedV
         analyzedTotal = a.total
         analyzedMatched = a.matched
-        librarySeconds = await durationV
-        recentlyAdded = Array(await addedV.prefix(15))
+        recentlyAdded = await addedV
         recentPlayed = await playedV
         forgotten = await forgottenV
         facets = await facetsV
     }
+
+    /// How many covers a horizontal shelf holds. One number, used by the fetch as
+    /// well, so the query stops asking for twenty times what it shows.
+    private var overviewShelfSize: Int { 15 }
 
     /// Recently-played rows *with artwork*: `ListenEntry` carries no image, so rank the
     /// play stats by last-played and resolve the top keys to full library rows.
@@ -1219,7 +1422,7 @@ public struct LibraryView: View {
         let ps = await client.playStats()
         let keys = ps.sorted { $0.lastPlayed > $1.lastPlayed }
             .map(\.matchKey).filter { !$0.isEmpty }
-        return await client.tracksByMatchKeys(Array(keys.prefix(15)))
+        return await client.tracksByMatchKeys(Array(keys.prefix(overviewShelfSize)))
     }
 }
 
@@ -1266,6 +1469,12 @@ struct LibraryTrackRow: View {
         client.offlineKeys.contains(LocalPlayability.matchKey(for: asRecordStatic(track)))
     }
 
+    /// Whether to show BPM + musical key on each row. Device-local, OFF by
+    /// default — see the comment at the badges below. (Both this and the switch
+    /// in Settings default to `false`; the doc here used to claim "on by
+    /// default", which is the kind of comment you act on and then debug.)
+    @AppStorage("library_show_sonic_details") private var showSonicDetails = false
+
     private func asRecordStatic(_ t: DatabaseManager.LibraryTrackRow) -> TrackRecord {
         TrackRecord(id: t.id, title: t.title, artist: t.artist, album: t.album,
                     year: t.year, isLive: t.isLive, imageKey: t.imageKey)
@@ -1295,10 +1504,21 @@ struct LibraryTrackRow: View {
                     if let a = track.artist {
                         Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
-                    if let bpm = track.bpm {
+                    // The album, which a library row had never shown — while BPM
+                    // and musical key were on every single one. For most listening
+                    // "which album is this from" beats "what tempo is it".
+                    if let al = track.album, !al.isEmpty {
+                        Text("· \(al)").font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                    }
+                    // BPM + Camelot key are mixing information: precise, useful if
+                    // you beatmatch, meaningless ("4A") if you don't — and they
+                    // were on every row, costing ~25 pt of height each. Behind a
+                    // switch now, off by default: eleven rows fit on the screen
+                    // where seven did. Settings → Dit apparaat → Uiterlijk.
+                    if showSonicDetails, let bpm = track.bpm {
                         badge("\(Int(bpm)) BPM")
                     }
-                    if let cam = track.camelot, !cam.isEmpty {
+                    if showSonicDetails, let cam = track.camelot, !cam.isEmpty {
                         badge(cam)
                     }
                     if !track.tags.isEmpty {
@@ -1371,12 +1591,12 @@ struct ArtistGridCell: View {
         VStack(spacing: 6) {
             AlbumArtView(imageKey: artist.imageKey, size: 150, cornerRadius: 75)
             Text(artist.name).font(.callout).lineLimit(1)
-            Text("\(artist.albumCount) album\(artist.albumCount == 1 ? "" : "s") · \(artist.trackCount) nummers")
+            Text(LibraryView.artistSummary(albums: artist.albumCount, tracks: artist.trackCount))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(artist.name), \(artist.albumCount) album\(artist.albumCount == 1 ? "" : "s"), \(artist.trackCount) nummers")
+        .accessibilityLabel("\(artist.name), \(LibraryView.artistSummary(albums: artist.albumCount, tracks: artist.trackCount))")
     }
 }

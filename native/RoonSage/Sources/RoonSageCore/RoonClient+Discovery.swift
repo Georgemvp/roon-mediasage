@@ -713,21 +713,39 @@ extension RoonClient {
     /// silent, misleading "nog geen ontdekkingen". Dutch `errorDescription` feeds
     /// straight into the views' error state.
     public enum DiscoveryFetchError: LocalizedError {
+        /// The app is in offline mode: this screen needs the server and there is
+        /// deliberately no attempt. Distinct from `notConnected`, which means we
+        /// tried and there was no address.
+        case offline
         case notConnected
         case server(Int)
         case transport(String)
         case decode
 
+        /// Through `CoreStrings`, and phrased by CAUSE rather than by HTTP status.
+        ///
+        /// This screen used to greet an offline user with "De server antwoordde
+        /// met een fout (401)" — in Dutch, under an English button, while the
+        /// banner at the top of the very same screen already said the app was
+        /// offline. Three things wrong in four lines: the language, the diagnosis
+        /// (a 401 is "not authorised", not "no network"), and the fact that we
+        /// asked at all.
         public var errorDescription: String? {
             switch self {
+            case .offline:
+                CoreStrings.s("core.error.offlineFeature",
+                              "Dit werkt alleen met verbinding met je server. Je bibliotheek en downloads blijven wel gewoon spelen.")
             case .notConnected:
-                "Geen verbinding met de RoonSage-server. Controleer bij Instellingen → Server of de server bereikbaar is."
+                CoreStrings.s("core.error.noServer",
+                              "Geen verbinding met de RoonSage-server. Controleer bij Instellingen → Server of de server bereikbaar is.")
             case .server(let code):
-                "De server antwoordde met een fout (\(code)). Probeer het zo opnieuw."
+                CoreStrings.f("core.error.serverStatus",
+                              "De server antwoordde met een fout (%d). Probeer het zo opnieuw.", code)
             case .transport(let msg):
-                "Kon de server niet bereiken: \(msg)"
+                CoreStrings.f("core.error.transport", "Kon de server niet bereiken: %@", msg)
             case .decode:
-                "Het antwoord van de server kon niet worden gelezen."
+                CoreStrings.s("core.error.badResponse",
+                              "Het antwoord van de server kon niet worden gelezen.")
             }
         }
     }
@@ -736,6 +754,10 @@ extension RoonClient {
     /// fetches), so callers can distinguish an empty result from an unreachable
     /// server. `null` bodies decode fine into optional `T`.
     func shareGETChecked<T: Decodable>(_ path: String, timeout: TimeInterval = 15, as type: T.Type) async throws -> T {
+        // Offline is a state we already know we're in — a stored host is still
+        // there, so without this guard we hit it anyway and reported whatever came
+        // back (a 401, a timeout) as if something were broken.
+        if offlineMode { throw DiscoveryFetchError.offline }
         guard let base = remoteBaseURL, let url = URL(string: base + path) else {
             throw DiscoveryFetchError.notConnected
         }

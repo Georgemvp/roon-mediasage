@@ -10,12 +10,13 @@ public enum ThemeMode: String, CaseIterable, Identifiable {
 
     public var id: String { rawValue }
 
-    /// Dutch label for the settings picker.
+    /// Label for the settings picker. Through the catalogue: these values sat
+    /// next to translated labels as "Theme — Aangepast" on an English phone.
     public var label: String {
         switch self {
-        case .system: "Systeem"
-        case .light:  "Licht"
-        case .dark:   "Donker"
+        case .system: LS("appearance.system")
+        case .light:  LS("appearance.light")
+        case .dark:   LS("appearance.dark")
         }
     }
 
@@ -34,16 +35,17 @@ public enum AccentChoice: String, CaseIterable, Identifiable {
 
     public var id: String { rawValue }
 
-    /// Dutch label for the settings picker.
+    /// Label for the settings picker. Through the catalogue: these values sat
+    /// next to translated labels as "Theme — Aangepast" on an English phone.
     public var label: String {
         switch self {
-        case .gold:   "Goud"
-        case .amber:  "Amber"
-        case .blue:   "Blauw"
-        case .indigo: "Indigo"
-        case .teal:   "Teal"
-        case .green:  "Groen"
-        case .pink:   "Roze"
+        case .gold:   LS("appearance.gold")
+        case .amber:  LS("appearance.amber")
+        case .blue:   LS("appearance.blue")
+        case .indigo: LS("appearance.indigo")
+        case .teal:   LS("appearance.teal")
+        case .green:  LS("appearance.green")
+        case .pink:   LS("appearance.pink")
         }
     }
 
@@ -75,16 +77,17 @@ public enum ThemePreset: String, CaseIterable, Identifiable {
 
     public var id: String { rawValue }
 
-    /// Dutch label for the settings picker.
+    /// Label for the settings picker. Through the catalogue: these values sat
+    /// next to translated labels as "Theme — Aangepast" on an English phone.
     public var label: String {
         switch self {
-        case .custom:   "Aangepast"
-        case .midnight: "Middernacht"
-        case .ocean:    "Oceaan"
-        case .forest:   "Woud"
-        case .mocha:    "Mokka"
-        case .sunset:   "Zonsondergang"
-        case .latte:    "Latte"
+        case .custom:   LS("appearance.custom")
+        case .midnight: LS("appearance.midnight")
+        case .ocean:    LS("appearance.ocean")
+        case .forest:   LS("appearance.forest")
+        case .mocha:    LS("appearance.mocha")
+        case .sunset:   LS("appearance.sunset")
+        case .latte:    LS("appearance.latte")
         }
     }
 
