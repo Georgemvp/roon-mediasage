@@ -360,9 +360,20 @@ struct RootView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @Environment(SleepTimer.self) private var sleepTimer
-    @State private var selection: SidebarItem = .nowPlaying
+    /// The library overview, not the player.
+    ///
+    /// Opening on Now Playing meant a cold start showed an EMPTY player: nothing
+    /// is playing yet, no zone has been restored, and the first thing the app
+    /// says is "niets aan het spelen". Plexamp and ARC both open on something you
+    /// can act on. The last tab is remembered, so this default only ever applies
+    /// to a genuinely first run.
+    @State private var selection: SidebarItem = .library
     @State private var showPalette = false
     @State private var showShortcuts = false
+    /// The player is presented OVER whatever you were doing (iPhone) rather than
+    /// being a tab you switch to. See `playerSheet`.
+    @State private var showPlayer = false
+    @AppStorage("lastTab") private var lastTabRaw: String = SidebarItem.library.rawValue
     @AppStorage("lastZoneID") private var lastZoneID: String = ""
     /// One-shot guard for the "restore the last zone" hook below.
     @State private var didRestoreZone = false
@@ -394,7 +405,7 @@ struct RootView: View {
     @ViewBuilder
     private var paletteSheet: some View {
         let palette = CommandPaletteView(
-            navigate: { selection = $0; showPalette = false },
+            navigate: { showPalette = false; go(to: $0) },
             showShortcuts: { showShortcuts = true }
         )
         #if os(iOS)
@@ -402,6 +413,33 @@ struct RootView: View {
         #else
         palette
         #endif
+    }
+
+    /// Every navigation request in the app goes through here.
+    ///
+    /// On the phone `.nowPlaying` is no longer a tab, so it can't be a selection:
+    /// it raises the player over whatever you were doing. Funnelling it means the
+    /// mini-bar, the command palette and any empty-state button all keep working
+    /// without knowing which shell they're in — on macOS/iPad the sidebar item
+    /// still exists and this stays a plain selection.
+    private func go(to item: SidebarItem) {
+        #if os(iOS)
+        if item == .nowPlaying, horizontalSizeClass == .compact {
+            showPlayer = true
+            return
+        }
+        #endif
+        selection = item
+    }
+
+    /// Restore the tab you were last on. Guards against a `.nowPlaying` value
+    /// persisted by an older build, which no longer has a tab on the phone.
+    private func restoreLastTab() {
+        guard let item = SidebarItem(rawValue: lastTabRaw) else { return }
+        #if os(iOS)
+        if item == .nowPlaying, horizontalSizeClass == .compact { return }
+        #endif
+        selection = item
     }
 
     @ViewBuilder
@@ -458,13 +496,15 @@ struct RootView: View {
             }
             // Placed inside the navigateTo environment so a mini-bar / empty-state
             // tap can switch tabs.
-            .environment(\.navigateTo, NavigateAction { selection = $0 })
+            .environment(\.navigateTo, NavigateAction { go(to: $0) })
             .id(selection)
         }
         .navigationTitle("")
         .toolbar { navToolbar }
         .background { tabShortcuts }
         .onChange(of: client.zones) { _, _ in restoreLastZoneOnce() }
+        .onAppear { restoreLastTab() }
+        .onChange(of: selection) { _, item in lastTabRaw = item.rawValue }
         .task { await autoPullFromServerIfEmpty() }
     }
 
@@ -504,35 +544,6 @@ struct RootView: View {
     private var tabView: some View {
         TabView(selection: iOSTabSelection) {
             NavigationStack {
-                // Two pages: Now Playing, and the queue one swipe to the left.
-                //
-                // The queue had no tab on iPhone at all — it existed only in the
-                // sidebar, which the phone doesn't have. So the queue this app
-                // can reorder and edit was simply unreachable on the device it
-                // matters most on. Paging beats another tab: the queue belongs
-                // TO what's playing, and the dots make the gesture discoverable.
-                TabView {
-                    NowPlayingView()
-                    QueueView()
-                        .navigationBarTitleDisplayMode(.inline)
-                }
-                // No page dots. The index view renders as a capsule pinned to
-                // the bottom centre — right on top of the feedback row — so it
-                // swallowed taps meant for the thumbs and the «…» menu and
-                // paged to the queue instead. A control that blocks the controls
-                // beneath it is worse than an undiscoverable gesture.
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                // Immersive: no toolbar here. The redundant zone picker +
-                // mini-transport (useful on list screens) just compete with
-                // the hero's own zone strip and large transport, so hide the
-                // whole bar and let the artwork run to the top.
-                .toolbar(.hidden, for: .navigationBar)
-                .ignoresSafeArea(.keyboard)
-            }
-            .tabItem { Label { LT("nav.nowPlaying") } icon: { Image(systemName: "play.circle.fill") } }
-            .tag(SidebarItem.nowPlaying)
-
-            NavigationStack {
                 LibraryView()
                     .navigationTitle(LS("Bibliotheek (\(client.trackCount))"))
                     .navigationBarTitleDisplayMode(.inline)
@@ -569,8 +580,54 @@ struct RootView: View {
             .tag(SidebarItem.settings)
         }
         .onChange(of: client.zones) { _, _ in restoreLastZoneOnce() }
-        .environment(\.navigateTo, NavigateAction { selection = $0 })
+        .environment(\.navigateTo, NavigateAction { go(to: $0) })
+        .onAppear { restoreLastTab() }
+        .onChange(of: selection) { _, item in lastTabRaw = item.rawValue }
+        .sheet(isPresented: $showPlayer) { playerSheet }
         .task { await autoPullFromServerIfEmpty() }
+    }
+
+    /// The player, raised over whatever you were doing.
+    ///
+    /// It used to be the first tab, so tapping the mini-bar threw you out of the
+    /// library and losing your place was the price of a glance at the artwork.
+    /// Plexamp and ARC both slide the player up as a card you flick away again;
+    /// that is the whole point of this change.
+    ///
+    /// A `.sheet` (not a `fullScreenCover`) because it dismisses on a downward
+    /// swipe for free, and `presentationDragIndicator(.visible)` says so without
+    /// spending a corner on a close button.
+    private var playerSheet: some View {
+        NavigationStack {
+            // Two pages: the player, and the queue one swipe to the left. The
+            // queue has no tab on the phone — it lives TO what's playing, so it
+            // travels with the player instead of being a destination.
+            TabView {
+                NowPlayingView()
+                QueueView()
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            // No page dots. The index view renders as a capsule pinned to the
+            // bottom centre — right on top of the feedback row — so it swallowed
+            // taps meant for the thumbs and the «…» menu and paged to the queue
+            // instead. A control that blocks the controls beneath it is worse
+            // than an undiscoverable gesture.
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            // Immersive: no toolbar here. The zone picker + mini-transport are
+            // useful on list screens but compete with the player's own output
+            // strip and large transport.
+            .toolbar(.hidden, for: .navigationBar)
+            .ignoresSafeArea(.keyboard)
+        }
+        // The empty-state buttons ("Ontdek muziek", "Maak een playlist") point at
+        // tabs BEHIND this sheet, so they have to close it first — otherwise you
+        // tap them and nothing appears to happen.
+        .environment(\.navigateTo, NavigateAction { item in
+            showPlayer = false
+            go(to: item)
+        })
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 
     private var iOSTabSelection: Binding<SidebarItem> {
@@ -580,6 +637,11 @@ struct RootView: View {
             get: {
                 if createItems.contains(selection) { return .generate }
                 if exploreItems.contains(selection) { return .discovery }
+                // No Now Playing tab any more — it's a sheet. A `.nowPlaying`
+                // selection can still arrive from a restored preference written
+                // by an older build, and a TabView selection with no matching tag
+                // renders a BLANK tab, so map it onto a real one.
+                if selection == .nowPlaying { return .library }
                 return selection
             },
             set: { selection = $0 }

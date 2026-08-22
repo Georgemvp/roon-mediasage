@@ -1,11 +1,11 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met "fix alles" uit de audit. Pak de VOLGENDE
-batch uit ## Next (nu: UX-speler-plan batch 2 = U2+U6, zie native/docs/UX_PLAYER_PLAN.md).
+batch uit ## Next (nu: UX-speler-plan batch 3 = U3+U10+U11, zie native/docs/UX_PLAYER_PLAN.md).
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst geshipt: v1.10.263 / ios-v1.7.230 / analyzer-v1.1.200 (getagd; de
+Laatst geshipt: v1.10.265 / ios-v1.7.231 / analyzer-v1.1.200 (getagd; de
 analyzer draait sinds 2c50e34 wél als v1.1.200 op de mini, via de CI-DMG).
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
@@ -62,10 +62,55 @@ sleutels, 0 missend / 0 wees.**
 TestFlight-build. Ook onbewezen: of het lokale station hoorbaar doorspeelt als
 de wachtrij leegloopt (stond al open in LOCAL_PLAYER_READINESS §7).
 
-**VOLGENDE: batch 2 = U2 + U6** — speler als blad over je context
-(`fullScreenCover` vanuit de mini-balk, veeg omlaag = terug) en landen op Start
-i.p.v. op een lege speler. Let op de val in `NowPlayingBar.swift:9-12`: de
-mini-balk hoort met `safeAreaInset` één keer om de `TabView`, niet per tab.
+**BATCH 2 (U2 + U6) IS AF EN GETAGD — v1.10.265 / ios-v1.7.231.** De tab
+"Nu speelt" is weg; de speler komt als blad (`.sheet`, detent `.large`, zichtbare
+grijper) over waar je was, en de wachtrij reist met hem mee als tweede pagina.
+Alle navigatie loopt door één trechter, `RootView.go(to:)`: `.nowPlaying` is op
+een compacte iPhone geen selectie meer maar een presentatie, dus de mini-balk,
+het ⌘K-palet en elke lege-staat-knop blijven werken zonder te weten in welke
+schil ze zitten. Landen op Bibliotheek, laatste tab onthouden (`lastTab`), mét
+een grendel tegen een `.nowPlaying` uit een oudere build — een `TabView`-selectie
+zonder bijbehorende tag rendert een blanco tab.
+
+**TWEE DINGEN UIT MIJN EIGEN PLAN GECORRIGEERD, want de code wist het beter.**
+(1) Ik had geschreven dat de mini-balk één keer om de `TabView` hoort met
+`safeAreaInset`. Fout: `nowPlayingBarDocked` staat bewust per tab en is een
+`VStack`-broer, want een bodem-`safeAreaInset` op een `NavigationStack` inset de
+scrollinhoud van een `List` met grote titel niet — rijen schuiven eronder door
+(`NowPlayingBar.swift:190-198`). Gelaten zoals hij stond. (2) "Speelt er al
+muziek, open dan meteen de speler" heb ik bewust NIET gebouwd: bij het starten is
+er nog niets verbonden, dus dat blad zou een halve seconde ná de tabbalk uit het
+niets omhoogschuiven. De mini-balk toont al wat er speelt.
+
+**BIJVANGST UIT DE SIMULATOR: het verbindscherm was half Nederlands op een
+Engelse telefoon.** `LS("Opnieuw verbinden met \(saved)")` interpoleerde de host
+ín de sleutel, dus die kon nooit oplossen en viel terug op de Nederlandse
+literal — precies de bugklasse waar `check-localization.sh` blind voor is (het
+is geen puntsleutel). Twee sleutels erbij, catalogus 844 → 846.
+
+**DE SIMULATOR-GRENS, voor de volgende sessie.** Er stond geen simulator op deze
+machine; ik heb er één aangemaakt (iPhone 17, iOS 26.5) en de app erop gestart.
+`simctl` maakt wél schermafdrukken maar verstuurt **geen tikken**, en
+GUI-automatisering van het bureaublad is geblokkeerd (geen Accessibility-TCC).
+Zonder tik kom je niet voorbij het verbindscherm, dus **de tabbalk en het
+spelerblad zijn niet visueel geverifieerd**. Enige route daarheen: een
+XCUITest-target. De simulator is daarna opgeruimd.
+
+**VERMOEDEN, ONBEWEZEN:** met 12 rijen in `client-library.db` en een onbereikbare
+`lastRoonHost` bleef de app op het verbindscherm staan, terwijl
+`RoonClient.swift:88-92` belooft zelf naar de offlinemodus te glijden zodra een
+poging faalt én er een lokale bibliotheek is. Waarschijnlijk bereikt
+`connectionState` nooit `.failed` maar blijft hij `.disconnected` tussen pogingen.
+Los uit te zoeken.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 846 sleutels, 0 missend / 0 wees.**
+
+**VOLGENDE: batch 3 = U3 + U10 + U11** — de twee kastjes-tabs (`iOSCreateHub`,
+`iOSExploreHub`) opheffen, zoeken een eigen tab geven en de sidebar dezelfde
+begrippen laten spreken. De tabbalk staat nu op vier: Bibliotheek · Maak ·
+Ontdek · Instellingen; doel is Start · Bibliotheek · Zoek · Stations, met
+Instellingen achter een tandwiel (dat laatste is U7, batch 5).
 
 **DE MACOS-RELEASE VAN DEZE BATCH FAALDE TWEE KEER OP APPLE, NIET OP DE CODE**
 (v1.10.263). De build was compleet, de `.app` gesigneerd, notarisatie *Accepted*
@@ -370,7 +415,7 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batch 1 (U1) af en getagd; **volgende is batch 2 = U2 + U6** (speler als blad + landen op Start). Zie §6 voor de volgorde.
+- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batch 1 (U1) en batch 2 (U2+U6) af en getagd; **volgende is batch 3 = U3 + U10 + U11** (kastjes-tabs opheffen, zoek-tab, sidebar gelijk). Zie §6 voor de volgorde.
 - **B3 (mood-backfill, GROTER dan gedacht):** er is GEEN mood-backfill — bouwen naar analogie van `refreshAttributes`/`autoArousalRefreshIfNeeded` (FeatureStore `moodRefreshRows`+`setMoodsBatch`, LibraryWalker `refreshMoods(missingKey:)`, AnalyzerModel `autoMoodRefreshIfNeeded()` + launch-wiring). **TRAP: `FeatureStore.contentSignature()` heeft GEEN moods-term** → zonder toevoeging pullen clients de nieuwe moods nooit (mirror ar/tm-patroon).
 - Resterend maar NIET headless verifieerbaar (vereist toestel/GUI): crossfade + gapless (AVPlayer→AVAudioEngine, groot/risico), Siri-intents, Control Center, CarPlay (OS-integratie), chat-agent (LLM), share-CARDS als afbeelding (ImageRenderer — kan niet getest: testtarget importeert RoonSageUI niet)
 - B7b Architectuur (groot/risico): RoonClient god-object-split, alleen build-verifieerbaar

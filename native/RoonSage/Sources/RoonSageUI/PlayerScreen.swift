@@ -32,7 +32,11 @@ struct PlayerScreen: View {
                     OutputSelector()
                     AirPlayRouteButton()
                 }
-                .padding(.top, Spacing.sm)
+                // Room for the sheet's drag indicator: on the phone this screen
+                // is presented as a card you pull down, and the grabber is drawn
+                // over the top of the content. 8pt put the output pill right
+                // under it.
+                .padding(.top, Spacing.lg)
                 .padding(.bottom, Spacing.xs)
                 #endif
                 PlayerHero(surface: surface)

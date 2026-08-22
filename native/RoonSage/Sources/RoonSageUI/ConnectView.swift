@@ -70,7 +70,13 @@ public struct ConnectView: View {
                     Button {
                         Task { await client.connect(host: saved, port: client.savedPort) }
                     } label: {
-                        Label(LS("Opnieuw verbinden met \(saved)"), systemImage: "arrow.clockwise")
+                        // `LS("… \(saved)")` interpolated the host INTO the key,
+                        // so it never resolved and silently fell back to the
+                        // Dutch literal — visible on an English phone as one
+                        // Dutch button between English ones. Format string, not
+                        // an interpolated key.
+                        Label(String(format: LS("connect.reconnectTo"), saved),
+                              systemImage: "arrow.clockwise")
                             .frame(minWidth: 240)
                     }
                     .buttonStyle(.borderedProminent)
@@ -146,7 +152,7 @@ public struct ConnectView: View {
                 if isServerMode {
                     LT("connect.helpServer")
                 } else if let saved = client.savedHost {
-                    Text("Op afstand? Gebruik \u{201C}Opnieuw verbinden met \(saved)\u{201D} — werkt via ZeroTier/VPN.\nOp hetzelfde netwerk? Gebruik dan \u{201C}Zoek op lokaal netwerk\u{201D}.")
+                    Text(String(format: LS("connect.helpSaved"), saved))
                 } else {
                     LT("connect.helpLocal")
                 }

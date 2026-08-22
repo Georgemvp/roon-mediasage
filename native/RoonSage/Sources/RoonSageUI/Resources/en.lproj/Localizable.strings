@@ -129,6 +129,8 @@
 "connect.enterIPManually"     = "Enter IP address manually";
 "connect.helpLocal"           = "Make sure RoonSage is enabled in Roon → Settings → Extensions.";
 "connect.helpServer"          = "Connect to the RoonSage server on your Mac mini. It runs the library sync and the analyses.";
+"connect.reconnectTo"         = "Reconnect to %@";
+"connect.helpSaved"           = "Away from home? Use “Reconnect to %@” — it works over ZeroTier/VPN.\nOn the same network? Use “Search local network” instead.";
 "connect.portPlaceholder"     = "Port";
 "connect.serverIPPlaceholder" = "Server IP";
 "connect.subtitleIOS"         = "Your music, smarter";

@@ -132,10 +132,13 @@ sheet (mac) met veeg-omlaag om te sluiten. De tab **Nu speelt** vervalt; je
 bladercontext blijft staan. Dit is *hét* verschil met Plexamp en ARC, en het
 verklaart waarom de app "als een dashboard voelt" en niet als een speler.
 
-Let op: de mini-balk staat nu per tab via `.nowPlayingBarDocked()`; met een
-overlay hoort hij één keer om de `TabView` heen, met `safeAreaInset`, anders
-krijg je hem vier keer of hij schuift over de tabknoppen (`NowPlayingBar.swift:9-12`
-beschrijft precies die val).
+~~Let op: de mini-balk hoort één keer om de `TabView` heen, met
+`safeAreaInset`.~~ **Dat advies was fout, en de code wist het al beter.**
+`nowPlayingBarDocked` staat bewust *per tab* en is een `VStack`-broer, geen
+inset: een bodem-`safeAreaInset` op een `NavigationStack` inset de scrollinhoud
+van een `List` met grote titel niet betrouwbaar, dus rijen schuiven ónder de
+balk door (`NowPlayingBar.swift:190-198` legt dat uit). Bij de uitvoering
+gelaten zoals hij stond.
 
 ### U3 🔴 M — Vier tabs in plaats van vijf, en geen kastjes
 `iOSCreateHub` en `iOSExploreHub` verdwijnen als tab. Hun inhoud verdeelt zich
@@ -158,8 +161,12 @@ werken voor wie hem kent.
 ### U6 🟠 S — Landen op Start, en terugkeren waar je was
 `selection` begint op `.nowPlaying`; bij een koude start is dat een leeg scherm.
 Standaard `.library` (het overzicht), en de laatst gebruikte tab onthouden in
-`@AppStorage`. Uitzondering: als er al muziek speelt bij het openen, opent de
-speler-overlay meteen — zoals ARC doet.
+`@AppStorage`. ~~Uitzondering: als er al muziek speelt bij het openen, opent de
+speler-overlay meteen.~~ **Bewust niet gedaan.** Bij het starten is er nog niets
+verbonden, dus dat blad zou een halve seconde ná de tabbalk uit het niets
+omhoog schuiven — een scherm dat je niet vroeg. De mini-balk toont al wat er
+speelt en is één tik van de volledige speler; die tik is de gebruiker's keuze,
+niet die van de app. Plexamp noch ARC doet dit.
 
 ### U7 🟠 M — Instellingen uit de tabbalk, en in tweeën
 Tandwiel rechtsboven op Start. Daarachter twee schermen:
@@ -240,6 +247,28 @@ blad-overgang soepel is met de art-crossfade eronder, of de veeggebaren botsen
 met de systeem-terugveeg, en of de mini-balk boven de tabbalk blijft staan met
 een geopende sheet.
 
+## 7b. Wat de simulator wél en niet kon bewijzen (2026-08-22)
+
+Er stond geen simulator op deze machine; er is er één aangemaakt (iPhone 17,
+iOS 26.5), de app op geïnstalleerd en gestart. Dat leverde één echte bevinding op
+en liep daarna vast op een grens die het vastleggen waard is.
+
+**Wél bewezen:** de app bouwt, installeert en start op een schoon toestel, en het
+verbindscherm mengde Nederlands en Engels (screenshot). Dat is gerepareerd.
+
+**Niet bewezen — en niet te forceren:** `simctl` kan schermafdrukken maken maar
+géén tikken versturen, en GUI-automatisering van het bureaublad is op deze
+machine geblokkeerd (geen Accessibility-TCC). Zonder een tik kom je niet voorbij
+het verbindscherm, dus de tabbalk en het spelerblad zijn **niet visueel
+geverifieerd**. Wie dat wél wil: een XCUITest-target is de enige route.
+
+**Vermoeden, onbewezen:** met een gevulde `client-library.db` (12 rijen) en een
+onbereikbare `lastRoonHost` bleef de app op het verbindscherm staan in plaats van
+zelf naar de offlinemodus te glijden, terwijl `RoonClient.swift:88-92` dat belooft
+zodra een poging faalt én er een lokale bibliotheek is. Waarschijnlijk bereikt
+`connectionState` nooit `.failed` maar blijft hij `.disconnected` tussen pogingen
+door. Los uit te zoeken; het raakt P9 (half-offline zichtbaar maken).
+
 ## 8. Risico's
 
 - **U1 is een hartoperatie.** De speler is het enige scherm dat élke sessie
@@ -276,7 +305,20 @@ een geopende sheet.
       precies is wat de twee schermen zélf waren. Wees-sleutels 1 → 0.
       **Regels spelerscherm: ~1.219 in twee kopieën → 704 in één** (plus 304 r.
       adapter en 103 r. getoetste rekenkunde in Core).
-- [ ] Batch 2 — U2 + U6
+- [x] Batch 2 — U2 + U6 · v1.10.265 / ios-v1.7.231.
+      De tab "Nu speelt" is weg; de speler komt als blad (`.sheet`, detent
+      `.large`, zichtbare grijper) over waar je was, en de wachtrij reist met hem
+      mee als tweede pagina. Alle navigatie loopt nu door één trechter,
+      `RootView.go(to:)`: `.nowPlaying` is op een compacte iPhone geen selectie
+      meer maar een presentatie, dus de mini-balk, het ⌘K-palet en elke
+      lege-staat-knop blijven werken zonder te weten in welke schil ze zitten.
+      Landen op Bibliotheek, laatste tab onthouden (`lastTab`), met een grendel
+      tegen een `.nowPlaying` die een oudere build heeft weggeschreven — een
+      `TabView`-selectie zonder bijbehorende tag rendert een blanco tab.
+      **Bijvangst uit de simulator: het verbindscherm was half Nederlands op een
+      Engelse telefoon.** `LS("Opnieuw verbinden met \(saved)")` interpoleerde de
+      host ín de sleutel, dus die kon nooit oplossen en viel terug op de
+      Nederlandse literal. Twee sleutels erbij, catalogus 844 → 846.
 - [ ] Batch 3 — U3 + U10 + U11
 - [ ] Batch 4 — U4 + U5
 - [ ] Batch 5 — U7
