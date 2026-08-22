@@ -304,10 +304,10 @@ private struct PlayerHero: View {
     private var trackInfo: some View {
         VStack(spacing: Spacing.xs) {
             if let title = surface.title {
-                Text(title.displayTitle)
-                    .font(.title2.bold())
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
+                // One scrolling line, not two: the title is what runs long
+                // (classical movements especially), and a second moving line
+                // turns the screen into a ticker tape.
+                MarqueeText(text: title.displayTitle, font: .title2.bold())
                 if let artist = surface.artist, !artist.isEmpty {
                     Text(artist)
                         .font(.title3)
@@ -361,10 +361,22 @@ private struct PlayerHero: View {
 
     @ViewBuilder
     private var featureRow: some View {
-        if surface.hasTrack, let f = feat {
+        if surface.hasTrack, feat != nil || surface.isDownloaded {
             HStack(spacing: Spacing.sm) {
-                if f.bpm > 0 { Badge("\(Int(f.bpm)) BPM", tint: .roonGold) }
-                if !f.camelot.isEmpty { Badge(f.camelot, tint: .roonGold) }
+                if let f = feat {
+                    if f.bpm > 0 { Badge("\(Int(f.bpm)) BPM", tint: .roonGold) }
+                    if !f.camelot.isEmpty { Badge(f.camelot, tint: .roonGold) }
+                }
+                // The one thing a portable player should say out loud: this
+                // track is on the device, so it keeps playing without a network.
+                // The library rows have carried this mark since the downloads
+                // landed; the player — where you'd actually wonder — didn't.
+                if surface.isDownloaded {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(Color.roonGold)
+                        .accessibilityLabel(LS("downloads.availableOffline"))
+                }
             }
             .lineLimit(1)
         }

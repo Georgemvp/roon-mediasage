@@ -391,7 +391,45 @@ door. Los uit te zoeken; het raakt P9 (half-offline zichtbaar maken).
       `scope: .all` blijft bestaan voor de twee plekken waar de instellingen al
       een paneel in een groter venster zijn: de macOS ⌘,-scene en het
       Server-tabblad van de analyzer-app.
-- [ ] Batch 6 — U8 + U9
+- [x] Batch 6 — U8 + U9 · v1.10.269 / ios-v1.7.235.
+      **Allebei kleiner geworden bij aanraking met de code, en dat is het
+      resultaat — geen tekort.** Wat er wél in zit:
+      - **Marquee** (`MarqueeText`, `KOEL_AUDIT` K7, het laatste open punt daar).
+        Alleen als de tekst écht overloopt, met rust aan beide uiteinden, en
+        volledig stil onder Reduce Motion. Alleen de títeI op de speler beweegt:
+        twee bewegende regels maken er een lichtkrant van, en de mini-balk staat
+        op élk scherm — permanente animatie in vaste chrome is ruis.
+      - **"Dit staat op je toestel" in de speler.** De bibliotheekrijen dragen dat
+        pijltje al sinds de downloads landden; de speler — waar je je afvraagt of
+        het blijft spelen zonder netwerk — niet. Alleen bij lokale uitvoer: een
+        Roon-zone streamt van de Core, dus een kopie op deze telefoon zegt daar
+        niets over.
+      - **Het downloadwerkwoord liegt niet meer.** Bij één track wisten we al of
+        hij er stond, maar het menu zei onverstoorbaar "Bewaar op dit apparaat"
+        en bood geen weg terug behalve het aparte downloadscherm. Nu "Van dit
+        apparaat verwijderen" als hij er is. Bij een album of selectie blijft het
+        "bewaar": `fetch()` is bewust lui, dus "staat dit er allemaal al?" zou
+        betekenen dat je elke entiteit resolvet om een contextmenu te tekenen.
+
+      **Bewust NIET gedaan, met reden:**
+      - *Veeg links/rechts over de hoes = vorige/volgende.* Dat gebaar is op dit
+        scherm al vergeven: horizontaal vegen bladert naar de wachtrij. Twee
+        betekenissen voor één gebaar in hetzelfde gebied is erger dan geen gebaar
+        — en de wachtrij heeft sinds U5 óók een knop.
+      - *Veeg omhoog = songtekst.* Dubbelt een knop die er al staat, in een
+        gebied waar het blad de verticale sleep bezit om zichzelf te sluiten.
+      - *Lang indrukken op de hoes voor volledig scherm.* Dat zou een werkende,
+        vindbare tik vervangen door een verborgen gebaar. Achteruitgang.
+      - *Filter "alleen gedownload".* `DownloadsView` is die lijst al, en staat
+        als kaart op het overzicht. Een tweede implementatie over gepagineerde
+        SQL zou op pagina 1 vrijwel niets tonen en dus liegen.
+      - *Marquee in de mini-balk.* Zie boven: vaste chrome, één tik van de volle
+        titel af.
+
+      **Wat al bleek te bestaan:** het downloadwerkwoord zat al in élk contextmenu
+      (`PlayActionsMenu`) en de badge al op élke bibliotheekrij — batch 4 van
+      LOCAL_PLAYER_READINESS had dat gedaan. U9 was voor tweederde al af; dat is
+      pas gebleken door te kijken, niet door het plan te herlezen.
 - [ ] Backlog — U12
 
 ## 10. Herhaalbare metingen

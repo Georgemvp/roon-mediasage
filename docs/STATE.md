@@ -1,11 +1,11 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met "fix alles" uit de audit. Pak de VOLGENDE
-batch uit ## Next (nu: UX-speler-plan batch 6 = U8+U9, de laatste, zie native/docs/UX_PLAYER_PLAN.md).
+batch uit ## Next (het UX-speler-plan is AF; nu is een toestel-oordeel aan de beurt, zie native/docs/UX_PLAYER_PLAN.md §7b).
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst geshipt: v1.10.268 / ios-v1.7.234 / analyzer-v1.1.200 (getagd; de
+Laatst geshipt: v1.10.269 / ios-v1.7.235 / analyzer-v1.1.200 (getagd; de
 analyzer draait sinds 2c50e34 wél als v1.1.200 op de mini, via de CI-DMG).
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
@@ -205,10 +205,60 @@ zijn.
 SUCCEEDED · check-localization 858 sleutels, 0 missend / 0 wees** (3 wezen van de
 verwijderde `zonePicker` opgeruimd).
 
-**VOLGENDE: batch 6 = U8 + U9** — duim-ergonomie (veeg links/rechts over de
-hoes, veeg omhoog voor songtekst, marquee voor lange titels, lang indrukken voor
-volledig scherm) en offline zichtbaar ín de bibliotheek (downloadknop in het
-contextmenu, badge, filter "alleen gedownload"). Daarmee is het plan rond.
+**BATCH 6 (U8 + U9) IS AF EN GETAGD — v1.10.269 / ios-v1.7.235. HET PLAN IS
+ROND.** Allebei de pakketten werden kleiner bij aanraking met de code, en dat is
+het resultaat, geen tekort.
+
+**Wat erin zit:** `MarqueeText` (KOEL K7, laatste open punt daar) — alleen bij
+echte overloop, rust aan beide uiteinden, volledig stil onder Reduce Motion, en
+alleen de títeI op de speler. Een "dit staat op je toestel"-pijltje in de speler
+(de bibliotheekrijen droegen dat al, de speler niet — juist daar vraag je je af
+of het blijft spelen zonder netwerk); alleen bij lokale uitvoer, want een
+Roon-zone streamt van de Core. En het downloadwerkwoord liegt niet meer: bij één
+track staat er nu "Van dit apparaat verwijderen" als hij er al is, in plaats van
+onverstoorbaar "Bewaar op dit apparaat" met als enige weg terug het aparte
+downloadscherm.
+
+**Bewust niet gedaan, met reden:** veeg links/rechts over de hoes voor
+vorige/volgende — horizontaal vegen bladert op dit scherm al naar de wachtrij,
+en twee betekenissen voor één gebaar in hetzelfde gebied is erger dan geen
+gebaar. Veeg omhoog voor songtekst — dubbelt een knop, in een gebied waar het
+blad de verticale sleep bezit. Lang indrukken voor volledig scherm — vervangt
+een werkende vindbare tik door een verborgen gebaar. Filter "alleen gedownload"
+— `DownloadsView` ís die lijst al; een tweede implementatie over gepagineerde
+SQL toont op pagina 1 vrijwel niets en liegt dus. Marquee in de mini-balk —
+vaste chrome op élk scherm, permanente animatie is daar ruis.
+
+**En tweederde van U9 bestond al:** het downloadwerkwoord zat in élk contextmenu
+en de badge op élke bibliotheekrij (batch 4 van LOCAL_PLAYER_READINESS). Dat
+bleek door te kijken, niet door het plan te herlezen.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 859 sleutels, 0 missend / 0 wees.**
+
+---
+
+**HET UX-PLAN IS AF: zes batches, v1.10.263 → v1.10.269 / ios-v1.7.230 →
+ios-v1.7.235.** Vijf van de zeven maten uit §7 gehaald en gemeten: tabbalk 5
+(waarvan 3 kastjes) → 4 echte bestemmingen · spelercode 1.421 regels in 2
+bestanden → 704 in 1 · instellingen 21 secties → 8 en ≤ 9 over twee schermen ·
+wachtrij bereikbaar in 1 tik · verzonnen eigennamen in de tabbalk 9 → 0. De twee
+resterende maten (tikken tot muziek, speler ↔ bladeren met behoud van context)
+zijn per constructie waar maar niet gemeten, want dat vraagt een toestel.
+
+**WAT ER NIET IS GEBEURD EN DE VOLGENDE SESSIE MOET DOEN: kijken.** Geen enkele
+wijziging uit deze zes batches is visueel geverifieerd. `simctl` maakt
+schermafdrukken maar verstuurt geen tikken, en GUI-automatisering is op deze
+machine geblokkeerd, dus voorbij het verbindscherm kom ik niet (zie
+UX_PLAYER_PLAN §7b). `ios-v1.7.235` staat in TestFlight. Casper's oordeel op het
+toestel is nu waardevoller dan nog een batch.
+
+**Bijvangst uit deze serie, elk apart gecommit:** Sonic Radio werkte al lokaal
+maar ontbrak in het menu · het verbindscherm was half Nederlands op een Engelse
+telefoon · de DMG-release had geen retry op Apple's timestamp-dienst · drie
+kopieën van het uitvoermenu die al uit elkaar waren gelopen · de catalogus ging
+van 860 naar 859 sleutels mét 24 nieuwe erbij, omdat 25 duplicaten en wezen
+verdwenen.
 
 **DE MACOS-RELEASE VAN DEZE BATCH FAALDE TWEE KEER OP APPLE, NIET OP DE CODE**
 (v1.10.263). De build was compleet, de `.app` gesigneerd, notarisatie *Accepted*
@@ -513,7 +563,7 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batches 1-5 af en getagd (U1, U2+U6, U3+U10+U11, U4+U5, U7); **volgende is batch 6 = U8 + U9**, de laatste. Zie §6 voor de volgorde.
+- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. **Alle zes batches af en getagd** (U1 t/m U12 behalve de backlog-U12). Volgende stap is geen batch maar een oordeel op het toestel. Zie §6 voor de volgorde.
 - **B3 (mood-backfill, GROTER dan gedacht):** er is GEEN mood-backfill — bouwen naar analogie van `refreshAttributes`/`autoArousalRefreshIfNeeded` (FeatureStore `moodRefreshRows`+`setMoodsBatch`, LibraryWalker `refreshMoods(missingKey:)`, AnalyzerModel `autoMoodRefreshIfNeeded()` + launch-wiring). **TRAP: `FeatureStore.contentSignature()` heeft GEEN moods-term** → zonder toevoeging pullen clients de nieuwe moods nooit (mirror ar/tm-patroon).
 - Resterend maar NIET headless verifieerbaar (vereist toestel/GUI): crossfade + gapless (AVPlayer→AVAudioEngine, groot/risico), Siri-intents, Control Center, CarPlay (OS-integratie), chat-agent (LLM), share-CARDS als afbeelding (ImageRenderer — kan niet getest: testtarget importeert RoonSageUI niet)
 - B7b Architectuur (groot/risico): RoonClient god-object-split, alleen build-verifieerbaar

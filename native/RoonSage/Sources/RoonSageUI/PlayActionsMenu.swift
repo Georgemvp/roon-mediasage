@@ -60,15 +60,32 @@ struct PlayActionsMenu: View {
         // portable player. Sits with the play verbs because that is where you
         // already are when you decide you want something.
         Divider()
-        Button(LS("downloads.saveOnDevice"), systemImage: "arrow.down.circle") {
-            Haptics.tap()
-            Task {
-                let records = await fetch()
-                guard !records.isEmpty else { return }
-                await client.downloadForOffline(records)
+        // For a single track we know whether it's already here, so the menu says
+        // the true thing and offers the way back. It used to read "Bewaar op dit
+        // apparaat" on a track that was already downloaded, with no way to remove
+        // it except the separate downloads screen — a menu that lies about state
+        // and then dead-ends.
+        //
+        // For an album or a selection this stays "bewaar": `fetch()` is
+        // deliberately lazy (a grid of hundreds of cells must cost nothing until
+        // you open one), so asking "is all of this here?" would mean resolving
+        // every entity's tracks just to draw a context menu.
+        if let seed = trackRadioSeed, client.isDownloaded(seed) {
+            Button(LS("downloads.removeFromDevice"), systemImage: "arrow.down.circle.fill", role: .destructive) {
+                Haptics.tap()
+                Task { await client.removeOfflineTrack(matchKey: LocalPlayability.matchKey(for: seed)) }
             }
+        } else {
+            Button(LS("downloads.saveOnDevice"), systemImage: "arrow.down.circle") {
+                Haptics.tap()
+                Task {
+                    let records = await fetch()
+                    guard !records.isEmpty else { return }
+                    await client.downloadForOffline(records)
+                }
+            }
+            .disabled(client.downloadProgress != nil)
         }
-        .disabled(client.downloadProgress != nil)
 
         if includeLocal {
             Divider()

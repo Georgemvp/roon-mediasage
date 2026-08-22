@@ -85,6 +85,11 @@ protocol NowPlayingSurface {
     /// only what is still to come, so it says that instead of inventing a total.
     var queueSummary: String? { get }
 
+    /// Is the playing track on this device? Only ever true for on-device
+    /// playback: a Roon zone streams from the Core, so a copy sitting in this
+    /// phone's downloads has nothing to do with whether the music keeps going.
+    var isDownloaded: Bool { get }
+
     // MARK: Actions
 
     func toggle()
@@ -205,6 +210,14 @@ struct LocalNowPlayingSurface: NowPlayingSurface {
         return PlayerUpNext(title: t.title, subtitle: t.artist.nilIfEmpty, imageKey: t.imageKey)
     }
 
+    var isDownloaded: Bool {
+        guard !client.offlineKeys.isEmpty, let t = lp.current else { return false }
+        return client.isDownloaded(TrackRecord(id: t.id, title: t.title,
+                                               artist: t.artist.nilIfEmpty,
+                                               album: t.album.nilIfEmpty,
+                                               imageKey: t.imageKey))
+    }
+
     var queueSummary: String? {
         let total = lp.queue.count
         guard total > 1 else { return nil }
@@ -288,6 +301,8 @@ struct ZoneNowPlayingSurface: NowPlayingSurface {
         let item = client.queueItems[1]
         return PlayerUpNext(title: item.title, subtitle: item.subtitle, imageKey: item.imageKey)
     }
+
+    var isDownloaded: Bool { false }
 
     /// Roon's queue starts at the playing track, so index 0 is "now" and the
     /// rest is what's left — there is no honest "van N" to report.
