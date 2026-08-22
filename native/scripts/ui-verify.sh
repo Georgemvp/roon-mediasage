@@ -60,7 +60,11 @@ xcrun simctl terminate "$udid" "$BUNDLE_ID" >/dev/null 2>&1 || true
 container=$(xcrun simctl get_app_container "$udid" "$BUNDLE_ID" data)
 db="$container/Library/Application Support/RoonSage/client-library.db"
 [[ -f "$db" ]] || { echo "client-library.db is niet aangemaakt — startte de app wel?" >&2; exit 1; }
-python3 "$(dirname "${BASH_SOURCE[0]}")/seed-demo-library.py" "$db"
+# Also seeds feature rows and real audio in the pinned-download directory:
+# without those, every play verb filters the whole library out and the player
+# can never be photographed with anything in it.
+python3 "$(dirname "${BASH_SOURCE[0]}")/seed-demo-library.py" "$db" \
+    --downloads "$container/Library/Application Support/RoonSageDownloads"
 
 echo "── de app fotograferen"
 rm -rf "$DERIVED/result.xcresult"

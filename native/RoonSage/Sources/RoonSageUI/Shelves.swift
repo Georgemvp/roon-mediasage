@@ -93,7 +93,13 @@ public func coverTile(_ c: Cover, zoneAvailable: Bool) -> some View {
     }
     .buttonStyle(.plain)
     .disabled(!zoneAvailable)
-    .accessibilityLabel("Speel \(c.title)\(c.subtitle.map { " van \($0)" } ?? "")")
+    .accessibilityLabel(c.subtitle.map {
+        String(format: LS("shelf.playTitleByArtist"), c.title, $0)
+    } ?? String(format: LS("shelf.playTitle"), c.title))
+    // Language-independent handle for the UI walk: every visible label here is
+    // localised, so matching on Dutch would make the test pass or fail on the
+    // simulator's language instead of on the UI.
+    .accessibilityIdentifier("cover.tile")
     .contextMenu {
         Button(LS("bm.playNow"), systemImage: "play.fill") { Haptics.tap(); c.play() }
             .disabled(!zoneAvailable)

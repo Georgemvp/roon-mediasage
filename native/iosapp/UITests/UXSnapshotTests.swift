@@ -4,11 +4,11 @@ import XCTest
 /// question every UX commit had to leave open.
 ///
 /// Six batches of interface work shipped with "NIET geverifieerd" in the commit
-/// message, because this machine can't drive a GUI: the terminal has no
-/// Accessibility or Screen Recording TCC grant, so `osascript … System Events`
-/// and `screencapture` are dead, and `simctl` takes screenshots but cannot send
-/// a tap. XCUITest runs *inside* the simulator through the test harness and
-/// needs no system permission at all — it was available the whole time.
+/// message, on the theory that this machine couldn't drive a GUI. XCUITest runs
+/// *inside* the simulator through the test harness and needs no system
+/// permission at all — it was available the whole time. Keep it that way: a walk
+/// that leans on `osascript`/`screencapture` breaks the moment a TCC grant is
+/// revoked, or on CI where there is no desktop to record.
 ///
 /// This is a walk-and-photograph test, not an assertion suite. It asserts only
 /// what would make the walk meaningless (a tab that isn't there, a button that
@@ -56,6 +56,76 @@ final class UXSnapshotTests: XCTestCase {
         try openSettings()
     }
 
+    /// The player, which the shell exists to serve — and which no batch had ever
+    /// photographed, because a seeded library without feature rows is a library
+    /// where every play verb filters everything out. See `seed-demo-library.py`.
+    func testPlayerAndQueue() throws {
+        try enterOfflineMode()
+
+        let tile = app.buttons.matching(identifier: "cover.tile").firstMatch
+        guard tile.waitForExistence(timeout: 20) else {
+            snap("10-geen-tegel")
+            throw XCTSkip("Geen speelbare tegel op het overzicht — is de bibliotheek mét features gezaaid?")
+        }
+        tile.tap()
+
+        // `descendants(matching: .any)`, not `otherElements`: the bar carries
+        // `.accessibilityAddTraits(.isButton)`, and which element type XCUITest
+        // then reports it as is not ours to assume.
+        let bar = app.descendants(matching: .any)["nowplaying.bar"]
+        guard bar.waitForExistence(timeout: 20) else {
+            snap("10-geen-minibalk")
+            return XCTFail("Er speelt niets na een tik op een tegel — de mini-balk kwam nooit")
+        }
+        snap("10-minibalk-speelt")
+
+        // The whole point of batch 2: this opens a sheet OVER the library, it
+        // does not throw you into another tab.
+        bar.tap()
+        _ = app.staticTexts.firstMatch.waitForExistence(timeout: 5)
+        snap("11-speler")
+
+        // And batch 5: the queue is one tap away, not an unannounced swipe.
+        let queue = app.buttons.matching(NSPredicate(
+            format: "label CONTAINS[c] 'wachtrij' OR label CONTAINS[c] 'queue'")).firstMatch
+        if queue.exists {
+            queue.tap()
+            snap("12-wachtrij")
+        } else {
+            // Fall back to the swipe the button replaced, so a missing button is
+            // visible in the photos rather than silently skipping the queue.
+            app.swipeLeft()
+            snap("12-wachtrij-via-veeg")
+        }
+    }
+
+    /// Stations is four segments deep and only the first was ever seen.
+    func testStationsSegments() throws {
+        try enterOfflineMode()
+
+        let tabs = app.tabBars.buttons
+        guard tabs.count == 4 else { return XCTFail("Verwacht vier tabs, kreeg \(tabs.count)") }
+        tabs.element(boundBy: 3).tap()
+        XCTAssertTrue(tabs.element(boundBy: 3).wait(for: \.isSelected, toEqual: true, timeout: 5))
+
+        let segments = app.segmentedControls.firstMatch
+        guard segments.waitForExistence(timeout: 10) else {
+            snap("20-geen-segmenten")
+            return XCTFail("Stations toont geen moduskiezer")
+        }
+        for index in 0..<segments.buttons.count {
+            let seg = segments.buttons.element(boundBy: index)
+            let label = seg.label
+            seg.tap()
+            // The title bar is the claim under test here: every segment renders a
+            // child that may set its own navigationTitle, overriding the tab's.
+            _ = app.staticTexts.firstMatch.waitForExistence(timeout: 3)
+            attachText("titel-bij-\(label)",
+                       app.navigationBars.firstMatch.identifier)
+            snap(String(format: "%02d-stations-%@", 20 + index, label))
+        }
+    }
+
     // MARK: - Steps
 
     /// The connect screen is the gate. With a library on disk the app usually
@@ -63,17 +133,36 @@ final class UXSnapshotTests: XCTestCase {
     /// (`RoonClient.connectionState` didSet), so most runs never see the gate;
     /// when it does appear, press the button in whichever language it's in.
     private func enterOfflineMode() throws {
-        if app.tabBars.firstMatch.waitForExistence(timeout: 90) { return }
-
-        let offline = app.buttons.matching(NSPredicate(
-            format: "label IN {'Offline gebruiken', 'Use offline'}")).firstMatch
-        guard offline.waitForExistence(timeout: 30) else {
-            snap("00-vastgelopen-op-verbindscherm")
-            throw XCTSkip("Geen weg voorbij het verbindscherm — is de demo-bibliotheek gezaaid?")
+        if !app.tabBars.firstMatch.waitForExistence(timeout: 90) {
+            let offline = app.buttons.matching(NSPredicate(
+                format: "label IN {'Offline gebruiken', 'Use offline'}")).firstMatch
+            guard offline.waitForExistence(timeout: 30) else {
+                snap("00-vastgelopen-op-verbindscherm")
+                throw XCTSkip("Geen weg voorbij het verbindscherm — is de demo-bibliotheek gezaaid?")
+            }
+            offline.tap()
+            XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 30),
+                          "Na 'Offline gebruiken' verscheen er geen tabbalk")
         }
-        offline.tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 30),
-                      "Na 'Offline gebruiken' verscheen er geen tabbalk")
+        try startOnLibrary()
+    }
+
+    /// Land every test on the same tab.
+    ///
+    /// `RootView.restoreLastTab()` reopens whichever tab you last used, and the
+    /// simulator's UserDefaults survive between test runs — so the second run of
+    /// a suite opens on the tab the first one ended in. That is correct product
+    /// behaviour and a trap for a walk: three tests failed at once ("no playable
+    /// tile", "tab not selected") purely because they assumed tab 0.
+    private func startOnLibrary() throws {
+        let first = app.tabBars.buttons.element(boundBy: 0)
+        guard first.waitForExistence(timeout: 10) else {
+            snap("00-geen-tabbalk")
+            throw XCTSkip("Geen tabbalk om vanaf te starten")
+        }
+        if !first.isSelected { first.tap() }
+        XCTAssertTrue(first.wait(for: \.isSelected, toEqual: true, timeout: 10),
+                      "Kon niet op Bibliotheek starten")
     }
 
     private func openSettings() throws {

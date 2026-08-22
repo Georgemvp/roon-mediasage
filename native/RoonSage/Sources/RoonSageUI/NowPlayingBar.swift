@@ -42,7 +42,7 @@ public struct NowPlayingBar: View {
                 // local screen (not a Roon zone that was picked while local kept
                 // playing in the background).
                 onOpen: { client.selectLocalOutput(); navigateTo(.nowPlaying) },
-                accessibilityLabel: "Lokaal afspelen op \(Self.localNoun): \(track.title). Tik om Nu speelt te openen."
+                accessibilityLabel: String(format: LS("nowPlayingBar.a11yLocal"), Self.localNoun, track.title)
             )
         } else if client.localOutputSelected {
             // This device is the CHOSEN output and it's idle, so there is nothing
@@ -65,7 +65,7 @@ public struct NowPlayingBar: View {
                 onNext: { Haptics.tap(); Task { await client.next(zoneID: zone.id) } },
                 onStop: nil,
                 onOpen: { navigateTo(.nowPlaying) },
-                accessibilityLabel: "Speelt in \(zone.displayName): \(np.title). Tik om Nu speelt te openen."
+                accessibilityLabel: String(format: LS("nowPlayingBar.a11yZone"), zone.displayName, np.title)
             )
         }
     }
@@ -153,6 +153,8 @@ public struct NowPlayingBar: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
+        // Language-independent handle for the UI walk (see `gear.settings`).
+        .accessibilityIdentifier("nowplaying.bar")
     }
 
     @ViewBuilder
