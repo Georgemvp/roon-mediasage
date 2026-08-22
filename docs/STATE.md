@@ -1,6 +1,6 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met "fix alles" uit de audit. Pak de VOLGENDE
-batch uit ## Next (nu: B3 mood-backfill).
+batch uit ## Next (nu: UX-speler-plan batch 1 = U1, zie native/docs/UX_PLAYER_PLAN.md).
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
@@ -15,6 +15,25 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+NU (2026-08-22): **UX-PLAN OM ROONSAGE ALS SPELER TE LATEN VOELEN** (user: "Kijk
+hoe je de ux van roonsage kan verbeteren zodat het als een locale player net als
+plexamp of roon arc kan functioneren en het niet te ingewikkeld is qua ui" →
+"Maak een uitgebreid plan"). **Geschreven, nog niets gebouwd:**
+`native/docs/UX_PLAYER_PLAN.md` — 12 werkpakketten (U1-U12) in 6 batches, met
+getelde bevindingen uit commit 2c50e34 in plaats van indrukken.
+
+De motorkant is af (LOCAL_PLAYER_READINESS batch 1-5); wat overblijft is de
+*vorm*. Kern van de diagnose: 5 tabs waarvan 3 kastjes (`iOSCreateHub`,
+`iOSExploreHub`, Instellingen), koude start op een lege speler, mini-balk die je
+naar een tab gooit i.p.v. een blad over je context, en **twee volledige
+Nu-speelt-schermen** (1.421 regels) die al twee keer met de hand zijn
+gelijkgetrokken. Doel-architectuur: **Start · Bibliotheek · Zoek · Stations** +
+speler als overlay + Lab-kaart + tandwiel. Geen enkele feature verdwijnt.
+
+Batch 1 = U1 (één `NowPlayingSurface`-protocol, `LocalPlaybackController` en een
+`ZoneSurface`-adapter, één `PlayerScreen`) — strikt refactorend, protocol +
+adapters mét tests vóór het samenvoegen van het scherm.
+
 NU (2026-08-10): **LOKAAL AFSPELEN IS EEN VOLWAARDIGE UITVOER** (user: "Local play is nu echt een beetje weggezet... we zouden er een meer lokale music player van kunnen maken?" → "begin hier mee, maak een duidelijk plan en voer dat uit"). Vertrekpunt: `playToActiveOutput` bestond al, maar alleen de *primaire* play-verbs gebruikten 'm; de wachtrij-verbs waren Roon-only (`PlayActionsMenu.swift:24` gaf dat zelf toe: "the local engine has no insert-next") en `QueueView` toonde "geen zone gekozen" zodra je lokaal luisterde. Daarnaast stond op 9 plekken een losse `LocalPlayButton` naast een zone-gated knop — het tweede pad dat het "weggezet" liet voelen.
 
 **GEBOUWD (5 stappen, elk apart geverifieerd), NIET GECOMMIT/GETAGD:**
@@ -302,6 +321,7 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
+- **UX-speler-plan (nieuw, 2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`, batch 1 = U1 (speler-duplicatie opheffen). Zie §6 voor de volgorde.
 - **B3 (mood-backfill, GROTER dan gedacht):** er is GEEN mood-backfill — bouwen naar analogie van `refreshAttributes`/`autoArousalRefreshIfNeeded` (FeatureStore `moodRefreshRows`+`setMoodsBatch`, LibraryWalker `refreshMoods(missingKey:)`, AnalyzerModel `autoMoodRefreshIfNeeded()` + launch-wiring). **TRAP: `FeatureStore.contentSignature()` heeft GEEN moods-term** → zonder toevoeging pullen clients de nieuwe moods nooit (mirror ar/tm-patroon).
 - Resterend maar NIET headless verifieerbaar (vereist toestel/GUI): crossfade + gapless (AVPlayer→AVAudioEngine, groot/risico), Siri-intents, Control Center, CarPlay (OS-integratie), chat-agent (LLM), share-CARDS als afbeelding (ImageRenderer — kan niet getest: testtarget importeert RoonSageUI niet)
 - B7b Architectuur (groot/risico): RoonClient god-object-split, alleen build-verifieerbaar
