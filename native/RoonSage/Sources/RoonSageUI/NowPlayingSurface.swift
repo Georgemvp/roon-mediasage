@@ -175,10 +175,12 @@ struct LocalNowPlayingSurface: NowPlayingSurface {
         #endif
     }
 
-    /// Deliberately false for now: enabling it is a behaviour change, not a
-    /// refactor, and it gets its own commit. (`playSonicRadio(zoneID: nil)`
-    /// already routes to the active output, so the verb itself is ready.)
-    var supportsSonicRadio: Bool { false }
+    /// Sonic Radio runs on this device too, and always has — the engine side is
+    /// complete (`startRadio(zoneID: nil)` → `deliver` → `playToActiveOutput`,
+    /// and `topUpRadioIfNeeded` has a local branch that reads the on-device
+    /// queue). Only the menu item was missing, because the local screen was a
+    /// separate file that never got it. Exactly the drift this refactor ends.
+    var supportsSonicRadio: Bool { true }
 
     var lyricsSource: LyricsView.Source { .device }
 
