@@ -833,8 +833,8 @@
 "sonicRadio.dialMostlyKnown" = "Mostly familiar";
 "sonicRadio.dialLightExploring" = "Light exploring";
 "sonicRadio.dialAdventurous" = "Adventurous";
-"sonicRadio.playing" = "Radio playing";
-"sonicRadio.emptyTitle" = "No radios yet";
+"sonicRadio.playing" = "Station playing";
+"sonicRadio.emptyTitle" = "No stations yet";
 "sonicRadio.emptyBody" = "Listen to some music and make sure your library is analysed — stations around your favourite artists then appear here every day.";
 "sonicRadio.qobuzLoading" = "Loading…";
 "sonicRadio.qobuzNoneYet" = "No stations mirrored yet. Tap to sync.";

@@ -833,8 +833,8 @@
 "sonicRadio.dialMostlyKnown" = "Vooral bekend";
 "sonicRadio.dialLightExploring" = "Lichte verkenning";
 "sonicRadio.dialAdventurous" = "Verkennend";
-"sonicRadio.playing" = "Radio speelt";
-"sonicRadio.emptyTitle" = "Nog geen radio's";
+"sonicRadio.playing" = "Station speelt";
+"sonicRadio.emptyTitle" = "Nog geen stations";
 "sonicRadio.emptyBody" = "Luister wat muziek en zorg dat je bibliotheek geanalyseerd is — dan verschijnen hier dagelijks stations rond je favoriete artiesten.";
 "sonicRadio.qobuzLoading" = "Ophalen…";
 "sonicRadio.qobuzNoneYet" = "Nog geen stations op Qobuz gezet. Tik om te synchroniseren.";

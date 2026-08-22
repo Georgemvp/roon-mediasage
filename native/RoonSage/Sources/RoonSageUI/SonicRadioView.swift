@@ -172,7 +172,10 @@ public struct SonicRadioView: View {
                 Haptics.tap()
                 navigateTo(.library)
             } label: {
-                Text(LS("sonicJourneys.browseAlbums")).font(.subheadline)
+                Text(LS("sonicJourneys.browseAlbums"))
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
