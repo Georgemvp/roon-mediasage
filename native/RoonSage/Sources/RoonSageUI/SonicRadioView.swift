@@ -27,6 +27,7 @@ public struct SonicRadioView: View {
     @State private var syncMessage: String?
     @State private var detailPlaylist: RoonClient.SonicRadioPlaylist?
     @State private var showQobuzMirror = false
+    @State private var keepMessage: String?
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: Spacing.md)]
 
@@ -56,6 +57,17 @@ public struct SonicRadioView: View {
                 emptyState
             }
             .plainCardRow()
+
+            if let keepMessage {
+                Text(keepMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .plainCardRow()
+                    .task {
+                        try? await Task.sleep(for: .seconds(4))
+                        self.keepMessage = nil
+                    }
+            }
 
             albumRadioCard.plainCardRow()
 
@@ -337,6 +349,29 @@ public struct SonicRadioView: View {
                 start(radio, as: mode)
             } label: {
                 Label(mode.title, systemImage: mode.symbol)
+            }
+        }
+        Divider()
+        // "Keep this one." An automatic station and a saved one were two
+        // separate notions of the same thing; `RadioConfig.fromStation` maps
+        // the first onto the second, so what you're hearing can become yours.
+        Button {
+            keep(radio)
+        } label: {
+            Label(LS("stations.keepThis"), systemImage: "plus.circle")
+        }
+    }
+
+    /// Save the station you're looking at as an editable own station. The work
+    /// is in Core: a station seeds on track ids and a config pins match keys,
+    /// and translating between them needs the database.
+    private func keep(_ radio: RoonClient.SonicRadio) {
+        Haptics.tap()
+        Task {
+            if let name = await client.keepStationAsOwnRadio(radio) {
+                keepMessage = String(format: LS("stations.keptAs"), name)
+            } else {
+                keepMessage = LS("stations.keepFailed")
             }
         }
     }

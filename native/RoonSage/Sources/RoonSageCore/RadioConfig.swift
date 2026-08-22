@@ -88,3 +88,67 @@ public struct RadioConfig: Codable, FetchableRecord, PersistableRecord, Sendable
         case updatedAt       = "updated_at"
     }
 }
+
+// MARK: - From an automatic station
+
+public extension RadioConfig {
+    /// Turn one of the engine's automatic stations into an editable, saveable
+    /// config — "keep this one".
+    ///
+    /// **This is the whole point of the plan's fase 4 in one function.** A
+    /// `RadioConfig` is the general case: an artist station is
+    /// `RadioConfig(artists: [...])`, `genre:house` is
+    /// `RadioConfig(genres: ["house"])`, and a station with no metadata facet at
+    /// all (a sonic cluster, an album) is one with its seed tracks pinned. The
+    /// automatic stations were a second, parallel notion of the same thing;
+    /// this maps one onto the other.
+    ///
+    /// `seedMatchKeys` is only consulted for the id prefixes that carry no facet
+    /// of their own — a cluster or an album has no genre to name it by, so its
+    /// seeds ARE its definition.
+    ///
+    /// Returns nil when the id has a shape we don't know, rather than inventing
+    /// a config that would build a different station than the one you heard.
+    static func fromStation(
+        id radioID: String,
+        name: String,
+        adventurousness: Double = RoonClient.defaultAdventurousness,
+        seedMatchKeys: [String] = []
+    ) -> RadioConfig? {
+        var config = RadioConfig(name: name, adventurousness: adventurousness)
+
+        // `RadioCategory` already owns the id-prefix vocabulary; parsing it a
+        // second time here is how two mappings drift apart.
+        if let category = RoonClient.RadioCategory(radioID: radioID) {
+            let value = String(radioID.dropFirst(category.idPrefix.count))
+            // "genre:" with nothing after it is not a genre. Without this an
+            // empty facet passes `hasFacets` and yields a station that resolves
+            // to nothing — caught by `testUnknownOrMalformedIdsAreRefused`.
+            let facetless: Set<RoonClient.RadioCategory> = [.sonic, .recent]
+            guard !value.isEmpty || facetless.contains(category) else { return nil }
+            switch category {
+            case .artist:
+                // The id lowercases the artist; the display name is what the
+                // seed resolver matches on.
+                config.artists = [name]
+            case .genre:    config.genres = [value.lowercased()]
+            case .mood:     config.moods = [value.lowercased()]
+            case .activity: config.activities = [value.lowercased()]
+            case .decade:
+                guard let year = Int(value) else { return nil }
+                config.decades = [year]
+            case .sonic, .recent:
+                // An embedding neighbourhood and a recency slice have no facet
+                // that names them — their seeds ARE the definition.
+                config.trackKeys = seedMatchKeys
+            }
+        } else if radioID.contains(":") {
+            // "album:", "track:" and friends: no facet either, same treatment.
+            config.trackKeys = seedMatchKeys
+        } else {
+            return nil
+        }
+
+        return config.hasFacets ? config : nil
+    }
+}

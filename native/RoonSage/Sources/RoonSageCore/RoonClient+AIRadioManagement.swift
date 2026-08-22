@@ -123,22 +123,15 @@ extension RoonClient {
     /// facet (artist → artist facet, genre → genre facet, …). The user then edits +
     /// saves it as a custom radio; its AI title is regenerated on first sync. Sonic
     /// (cluster) radios have no facet mapping and fall back to a bare, named config.
+    /// One mapping, in `RadioConfig.fromStation`. This used to carry its own copy
+    /// of the same switch — the exact duplication this screen's audit is about.
+    ///
+    /// Forking keeps its original behaviour: no seed keys are passed, so a sonic
+    /// or recency station (which has no facet that names it) falls back to a
+    /// bare, named config for the user to fill in, rather than being refused.
     public nonisolated static func radioConfigFromAIRadio(_ item: AIRadioItem) -> RadioConfig {
-        var cfg = RadioConfig(name: item.label)
-        guard let cat = RadioCategory(radioID: item.id) else { return cfg }
-        let key = String(item.id.dropFirst(cat.idPrefix.count))
-        switch cat {
-        case .artist:   cfg.artists = [item.label]
-        case .genre:    cfg.genres = [key]
-        case .mood:     cfg.moods = [key]
-        case .activity: cfg.activities = [key]
-        case .decade:   if let y = Int(key) { cfg.decades = [y] }
-        // No facet mapping: a sonic cluster is an embedding neighbourhood and
-        // `.recent` is a recency slice — neither is expressible as a RadioConfig
-        // filter, so both fork into a bare, named config the user then fills in.
-        case .sonic, .recent: break
-        }
-        return cfg
+        RadioConfig.fromStation(id: item.id, name: item.label)
+            ?? RadioConfig(name: item.label)
     }
 
     // MARK: Server-side JSON (for the share server routes)

@@ -558,3 +558,31 @@ extension RoonClient {
         await startRadio(radio, zoneID: zoneID)
     }
 }
+
+// MARK: - Keep an automatic station
+
+extension RoonClient {
+
+    /// Save one of the engine's automatic stations as an editable own station.
+    ///
+    /// Returns the saved name, or nil when this station can't be expressed as a
+    /// config (see `RadioConfig.fromStation`).
+    ///
+    /// **Lives in Core, not in the view, because of one type trap:**
+    /// `SonicRadio.seedIds` are analyzed *track ids*, while
+    /// `RadioConfig.trackKeys` are *match keys*. They look alike and are not
+    /// interchangeable — pinning ids as keys would save a station that resolves
+    /// to nothing at all. The translation needs the database, so it belongs here.
+    public func keepStationAsOwnRadio(_ radio: SonicRadio) async -> String? {
+        var seedKeys: [String] = []
+        if let db = database, !radio.seedIds.isEmpty {
+            seedKeys = (try? await db.matchKeys(forTrackIDs: radio.seedIds)) ?? []
+        }
+        guard let config = RadioConfig.fromStation(
+            id: radio.id, name: radio.artist,
+            adventurousness: radioAdventurousness,
+            seedMatchKeys: seedKeys)
+        else { return nil }
+        return await saveRadioConfig(config) ? config.name : nil
+    }
+}

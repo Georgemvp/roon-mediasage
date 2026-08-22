@@ -872,6 +872,9 @@
 "state.retry"      = "Opnieuw proberen";
 
 /* stationsHub */
+"stations.keepThis" = "Bewaar als eigen station";
+"stations.keptAs" = "Bewaard als eigen station: %@";
+"stations.keepFailed" = "Dit station kon niet bewaard worden.";
 "stations.startPlain" = "Start met mijn eigen instelling";
 "stations.personaSteers" = "%@ stuurt je stations — de schuif geldt zolang niet.";
 "stations.personaClear" = "Uitzetten";

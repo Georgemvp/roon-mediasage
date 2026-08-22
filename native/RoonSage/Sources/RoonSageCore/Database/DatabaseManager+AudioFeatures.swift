@@ -544,6 +544,21 @@ extension DatabaseManager {
 
     /// Every library track that has analyzed audio features, deduped by
     /// title+artist. Source data for Sonic Radio / Fingerprint / Music Map.
+    /// `match_key` for a set of track ids, in no particular order and without
+    /// duplicates. The two identifiers look alike and are not interchangeable:
+    /// stations seed on track ids, `RadioConfig` pins match keys.
+    public func matchKeys(forTrackIDs ids: [String]) async throws -> [String] {
+        guard !ids.isEmpty else { return [] }
+        return try await pool.read { db in
+            let marks = databaseQuestionMarks(count: ids.count)
+            let rows = try String.fetchAll(
+                db,
+                sql: "SELECT DISTINCT match_key FROM tracks WHERE id IN (\(marks)) AND match_key IS NOT NULL AND match_key != ''",
+                arguments: StatementArguments(ids))
+            return rows
+        }
+    }
+
     /// The identity of every analyzed track — no features, no embeddings.
     ///
     /// **Why a second query exists.** `sonicTracks()` reads a 512-float embedding

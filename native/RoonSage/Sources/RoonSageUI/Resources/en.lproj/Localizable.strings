@@ -872,6 +872,9 @@
 "state.retry"      = "Try again";
 
 /* stationsHub */
+"stations.keepThis" = "Keep as your own station";
+"stations.keptAs" = "Kept as your own station: %@";
+"stations.keepFailed" = "This station couldn't be saved.";
 "stations.startPlain" = "Start with my own setting";
 "stations.personaSteers" = "%@ is steering your stations — the slider doesn't apply meanwhile.";
 "stations.personaClear" = "Turn off";
