@@ -200,10 +200,24 @@ extension RoonClient {
     /// library's match_key → artist mapping. Feeds the radio affinity score so a
     /// thumb *nudges* an artist's ranking rather than forcing a station.
     func feedbackArtistTallies(lib: [DatabaseManager.SonicTrack]) -> (liked: [String: Int], disliked: [String: Int]) {
+        tallies(matchKeysAndArtists: lib.lazy.map { ($0.matchKey, $0.artist) })
+    }
+
+    /// Same tally over the light identity rows, so the station LIST can be built
+    /// without pulling embeddings (see `analyzedTrackIdentities`).
+    func feedbackArtistTallies(
+        artistByMatchKey rows: [DatabaseManager.TrackIdentityRow]
+    ) -> (liked: [String: Int], disliked: [String: Int]) {
+        tallies(matchKeysAndArtists: rows.lazy.map { ($0.matchKey, $0.artist) })
+    }
+
+    private func tallies<S: Sequence>(
+        matchKeysAndArtists pairs: S
+    ) -> (liked: [String: Int], disliked: [String: Int]) where S.Element == (String, String?) {
         guard !feedbackByMatchKey.isEmpty else { return ([:], [:]) }
         var artistByKey: [String: String] = [:]
-        for t in lib where !t.matchKey.isEmpty {
-            if let a = t.artist, !a.isEmpty { artistByKey[t.matchKey] = a.lowercased() }
+        for (matchKey, artist) in pairs where !matchKey.isEmpty {
+            if let a = artist, !a.isEmpty { artistByKey[matchKey] = a.lowercased() }
         }
         var liked: [String: Int] = [:], disliked: [String: Int] = [:]
         for (mk, kind) in feedbackByMatchKey {

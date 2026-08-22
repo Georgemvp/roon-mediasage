@@ -825,6 +825,8 @@
 "sonicRadio.navTitle"    = "Radios";
 "sonicRadio.adventurousness" = "Adventurousness";
 "sonicRadio.dialFamiliar" = "Familiar";
+"sonicRadio.dialAppliesNext" = "Applies from the next station you start.";
+"sonicRadio.dialSteerRunning" = "Applies from the next station. Steer what's playing now with the field at the top.";
 "sonicRadio.dialExploring" = "Exploring";
 "sonicRadio.hideDisliked" = "Hide thumbed-down tracks entirely";
 "sonicRadio.dialMostlyKnown" = "Mostly familiar";

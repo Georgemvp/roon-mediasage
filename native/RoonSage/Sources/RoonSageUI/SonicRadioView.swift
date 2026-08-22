@@ -59,7 +59,9 @@ public struct SonicRadioView: View {
 
             adventurousnessTuner.plainCardRow()
 
-            qobuzSection.plainCardRow()
+            qobuzSection
+                .task { await loadQobuz(force: false) }
+                .plainCardRow()
         }
         .cardFeedList()
         .screenTitle(LS("sonicRadio.navTitle"))
@@ -72,7 +74,6 @@ public struct SonicRadioView: View {
             .help(LS("sonicRadio.refreshHelp"))
         }
         .task { await load(force: false) }
-        .task { await loadQobuz(force: false) }
         .onAppear {
             adventurousness = client.radioAdventurousness
             hardBan = client.radioHardBanDisliked
@@ -176,6 +177,23 @@ public struct SonicRadioView: View {
             SettingToggle(LS("sonicRadio.hideDisliked"), isOn: $hardBan)
                 .padding(.top, Spacing.xs)
                 .onChange(of: hardBan) { client.radioHardBanDisliked = hardBan }
+
+            // The dial applies to the NEXT station you start, which nothing on
+            // screen said — so moving it mid-listen looked broken. When a station
+            // is running there IS a way to change it now: the steer field on the
+            // active-radio banner, which is the same dial by another name.
+            // Two spelled-out calls: check-localization.sh greps for
+            // `LS("literal")` and cannot see a key chosen inside the call.
+            Group {
+                if client.activeRadio == nil {
+                    Text(LS("sonicRadio.dialAppliesNext"))
+                } else {
+                    Text(LS("sonicRadio.dialSteerRunning"))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .cardStyle()
     }
@@ -281,6 +299,14 @@ public struct SonicRadioView: View {
     }
 
     @ViewBuilder
+    /// The Qobuz mirror.
+    ///
+    /// Its `.task` hangs on the SECTION, not on the screen. `/ai-radios` measures
+    /// 6,08 s cold and 0,91 s warm against a real library, and as a screen-level
+    /// task it paid that on every single appearance of Radio's — for a block that
+    /// lives below the stations, the "my radios" card and the dial. Inside a
+    /// `List` the row is only created when it scrolls into range, so now you pay
+    /// for it when you actually look at it.
     private var qobuzSection: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             VStack(alignment: .leading, spacing: Spacing.xs) {

@@ -73,13 +73,26 @@ extension RoonClient {
     /// scoring below; the other categories are bucketed by `radioBuckets(_:)`
     /// (genre/mood/activity/decade) and ordered as that builder returns them.
     public func dailyRadios(category: RadioCategory) async -> [SonicRadio] {
-        guard category == .artist else {
-            return await radioBuckets(category).map {
+        // Memoized per rotation bucket. The list is a pure function of (category,
+        // library, feedback, bucket) and the bucket only turns over on a new
+        // day-part — yet this ran in full on every appearance of the screen,
+        // because the "loaded" flag lived in SwiftUI `@State` and dies with the
+        // view. Flick to DJ-modi and back and the whole thing happened again.
+        let stamp = Self.rotationStamp()
+        if let hit = radioListCache.value(category: category.rawValue, stamp: stamp) {
+            return hit
+        }
+        let built: [SonicRadio]
+        if category == .artist {
+            built = await dailyRadios()
+        } else {
+            built = await radioBuckets(category).map {
                 SonicRadio(id: $0.id, artist: $0.label, imageKey: $0.imageKey,
                            trackCount: $0.trackCount, seedIds: $0.seedIds)
             }
         }
-        return await dailyRadios()
+        radioListCache.store(built, category: category.rawValue, stamp: stamp)
+        return built
     }
 
     /// Build today's stations from the most-played artists (Roon + imported
@@ -87,7 +100,13 @@ extension RoonClient {
     /// enough analyzed tracks qualify; order rotates daily.
     public func dailyRadios() async -> [SonicRadio] {
         guard let db = database else { return [] }
-        let lib = await radioLibrary()
+        // Identities only — no embeddings. Building this list needs a name, a
+        // cover and a count; `radioLibrary()` would have pulled the whole
+        // analyzed library with its 512-float vectors (~165 MB at 66k tracks)
+        // for a screen that shows a dozen station tiles. The embeddings load on
+        // `startRadio`, where they are actually used.
+        await ensureFeedbackLoaded()
+        let lib = (try? await db.analyzedTrackIdentities()) ?? []
         guard !lib.isEmpty else { return [] }
         // Top artists drive the seeds. The thin client's local `listening_history`
         // is empty (history lives on the server), so pull it from /history in
@@ -101,13 +120,13 @@ extension RoonClient {
         }
 
         // Group analyzed tracks by lowercased artist for O(1) lookup.
-        var byArtist: [String: [DatabaseManager.SonicTrack]] = [:]
+        var byArtist: [String: [DatabaseManager.TrackIdentityRow]] = [:]
         for t in lib {
             guard let a = t.artist, !a.isEmpty else { continue }
             byArtist[a.lowercased(), default: []].append(t)
         }
 
-        let tallies = feedbackArtistTallies(lib: lib)
+        let tallies = feedbackArtistTallies(artistByMatchKey: lib)
         let disliked = radioDislikedMatchKeys
         var playCount: [String: Int] = [:]
         for e in top { playCount[e.artist.lowercased()] = e.count }

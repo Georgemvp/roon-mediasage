@@ -464,6 +464,24 @@ extension DatabaseManager {
         }
     }
 
+    /// A track's identity without any analysis payload — see
+    /// `analyzedTrackIdentities(excludeLive:)`.
+    public struct TrackIdentityRow: Sendable, Identifiable {
+        public var id: String
+        public var title: String
+        public var artist: String?
+        public var imageKey: String?
+        public var matchKey: String
+
+        public init(id: String, title: String, artist: String?, imageKey: String?, matchKey: String) {
+            self.id = id
+            self.title = title
+            self.artist = artist
+            self.imageKey = imageKey
+            self.matchKey = matchKey
+        }
+    }
+
     public struct SonicTrack: Sendable, Identifiable {
         public var id: String
         public var title: String
@@ -526,6 +544,47 @@ extension DatabaseManager {
 
     /// Every library track that has analyzed audio features, deduped by
     /// title+artist. Source data for Sonic Radio / Fingerprint / Music Map.
+    /// The identity of every analyzed track — no features, no embeddings.
+    ///
+    /// **Why a second query exists.** `sonicTracks()` reads a 512-float embedding
+    /// blob, JSON-parses tags/moods/attributes and runs two correlated subqueries
+    /// per row, for the whole analyzed library — roughly 2,5 kB per track, so
+    /// ~165 MB at 66.378 tracks. That is right for anything that has to *compare*
+    /// sound. It is pure waste for building a LIST of stations, which needs a
+    /// name, a cover and a count.
+    ///
+    /// Same `is_live` filter and same title+artist de-duplication as
+    /// `sonicTracks()`, deliberately: the artist stations are built from this and
+    /// must come out identical.
+    public func analyzedTrackIdentities(excludeLive: Bool = true) async throws -> [TrackIdentityRow] {
+        try await pool.read { db in
+            var sql = """
+                SELECT t.id, t.title, t.artist, t.image_key, t.match_key
+                FROM tracks t JOIN track_audio_features f ON t.match_key = f.match_key
+                WHERE f.match_key IS NOT NULL
+            """
+            if excludeLive { sql += " AND t.is_live = 0" }
+            let rows = try Row.fetchAll(db, sql: sql)
+            var seen = Set<String>()
+            var out: [TrackIdentityRow] = []
+            out.reserveCapacity(rows.count)
+            for r in rows {
+                let title = r["title"] as String? ?? ""
+                let artist = r["artist"] as String?
+                let dedup = "\(title.lowercased())|\((artist ?? "").lowercased())"
+                guard !seen.contains(dedup) else { continue }
+                seen.insert(dedup)
+                out.append(TrackIdentityRow(
+                    id: r["id"] as String? ?? "",
+                    title: title,
+                    artist: artist,
+                    imageKey: r["image_key"] as String?,
+                    matchKey: r["match_key"] as String? ?? ""))
+            }
+            return out
+        }
+    }
+
     public func sonicTracks(excludeLive: Bool = true) async throws -> [SonicTrack] {
         try await pool.read { db in
             var sql = """

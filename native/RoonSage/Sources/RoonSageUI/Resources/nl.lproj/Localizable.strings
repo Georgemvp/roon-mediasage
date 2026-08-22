@@ -825,6 +825,8 @@
 "sonicRadio.navTitle"    = "Radio's";
 "sonicRadio.adventurousness" = "Avontuurlijkheid";
 "sonicRadio.dialFamiliar" = "Vertrouwd";
+"sonicRadio.dialAppliesNext" = "Geldt vanaf het volgende station dat je start.";
+"sonicRadio.dialSteerRunning" = "Geldt vanaf het volgende station. Wat nú speelt stuur je bij met het tekstveld bovenaan.";
 "sonicRadio.dialExploring" = "Op ontdekking";
 "sonicRadio.hideDisliked" = "Verberg tracks met duim-omlaag volledig";
 "sonicRadio.dialMostlyKnown" = "Vooral bekend";

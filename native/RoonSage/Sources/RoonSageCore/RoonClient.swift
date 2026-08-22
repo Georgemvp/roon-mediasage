@@ -353,6 +353,9 @@ public final class RoonClient {
     /// Cached analyzed library for Sonic features (C4) — invalidated on
     /// feature/library sync.
     let sonicCache = SonicLibraryCache()
+    /// Station *lists* per category + rotation bucket. Same inputs as
+    /// `sonicCache`, so it is invalidated in exactly the same places.
+    let radioListCache = RadioListCache()
     /// Gated, serialised listen-logging + LB/Last.fm scrobbling.
     let scrobbler = ScrobbleCoordinator()
     /// Using the app with no server reachable.

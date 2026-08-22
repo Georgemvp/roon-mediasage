@@ -271,6 +271,7 @@ extension RoonClient {
         refreshTrackCount()
         refreshGenreCount()
         await sonicCache.invalidate()
+        radioListCache.invalidate()
         return count
     }
 
@@ -307,6 +308,7 @@ extension RoonClient {
                 refreshGenreCount()
                 // Track rows (incl. match_key) may have changed → sonic cache is stale.
                 await sonicCache.invalidate()
+        radioListCache.invalidate()
             } catch {
                 syncProgress = SyncProgress(phase: "Fout: \(error.localizedDescription)", albumsCompleted: 0, albumsTotal: 0, tracksFound: 0)
             }

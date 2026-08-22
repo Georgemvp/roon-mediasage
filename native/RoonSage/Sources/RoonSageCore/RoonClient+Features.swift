@@ -165,6 +165,7 @@ extension RoonClient {
         // subgenres. Best-effort: older analyzers without /genres yield nothing.
         await pullGenreTaxonomy(from: baseURL)
         await sonicCache.invalidate()
+        radioListCache.invalidate()
         return diag
     }
 
@@ -950,6 +951,7 @@ extension RoonClient {
             return 0
         }
         await sonicCache.invalidate()
+        radioListCache.invalidate()
         return coords.count
     }
 
@@ -964,6 +966,7 @@ extension RoonClient {
     /// explicit "Reload" actions in Music Map / Sonic DNA.
     public func invalidateSonicCache() async {
         await sonicCache.invalidate()
+        radioListCache.invalidate()
     }
 
     /// Release the sonic caches when the system reports memory pressure.
@@ -985,7 +988,11 @@ extension RoonClient {
         source.setEventHandler { [weak self] in
             guard let self else { return }
             Log.info("Geheugendruk — sonische caches vrijgegeven", category: .app)
-            Task { await self.invalidateSonicCache() }
+            // Only the heavy tier. `radioListCache` holds a few dozen station
+            // names and is what SPARES us the 165 MB reload — dropping it under
+            // pressure would force exactly the allocation we are trying to avoid,
+            // at the worst possible moment.
+            Task { await self.sonicCache.invalidate() }
         }
         source.activate()
         memoryPressureSource = source
