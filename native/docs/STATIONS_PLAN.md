@@ -238,6 +238,66 @@ aanbiedt.
 zelfde dial, plus een prompt en een doelaantal. Eén formulier in plaats van twee
 schermen die dezelfde vraag anders stellen. (Grootste stap; alleen zinvol ná W11.)
 
+## 5b. Uitvoering (2026-08-22)
+
+Fase 1 t/m 3 zijn gebouwd en geshipt, plus W12 uit fase 4. **W11 en W13 zijn
+gestópt op twee harde bevindingen** die pas bij de uitvoering boven water kwamen.
+
+### Wat er staat
+
+| | Status |
+|---|---|
+| W1 lijstcache per rotatiebucket | ✅ `RadioListCache`, 6 tests |
+| W2 Qobuz-spiegel lui laden | ✅ task op de sectie i.p.v. het scherm |
+| W3 lijst zonder embeddings | ✅ `analyzedTrackIdentities()` |
+| W4 dial zegt wat hij doet | ✅ |
+| W5/W7 één woordenschat | ✅ Voor jou · Gast-DJ · Reizen · Genereer |
+| W6 spiegel opgevouwen | ✅ één regel + eigen scherm |
+| W8 Journeys splitsen | ✅ Album Radio staat bij de stations |
+| W9 persona overal | ✅ `stationPersona`, lang-indruk op elke kaart |
+| W10 één zichtbare dial | ✅ override wordt benoemd |
+| W12 bewaar dit als station | ✅ `RadioConfig.fromStation`, 5 tests |
+| **W11 één stationsmodel** | ⛔ geblokkeerd, zie hieronder |
+| **W13 Genereer als station** | ⛔ hangt aan W11 |
+
+### Waarom W11 niet zomaar kan — twee bevindingen
+
+**1 · De stabiele station-id is een anker in de echte wereld.** `artist:<lower>`
+en `genre:house` dragen drie dingen die een `custom:<uuid>` niet kan overnemen:
+- `radiosync.selection.v1` — de allow-list van wat naar Qobuz gespiegeld wordt;
+- `titleKey(id)` / `titleSigKey(id)` — de gecachete AI-titel, en die titel ís de
+  Qobuz-playlistnaam waarop `find-or-create` matcht. `RoonClient+ArtistRadio`
+  noemt dat met zoveel woorden "the one chosen key";
+- `radioHidden` — welke stations je hebt weggeklikt.
+
+Omzetten naar configs betekent dus: elke bestaande Qobuz-playlist verliest zijn
+anker en wordt bij de volgende sync opnieuw aangemaakt **naast** de oude, in een
+echt Qobuz-account. Dat is zichtbare schade voor een refactor waarvan de winst
+codereductie is.
+
+**2 · De twee gates verschillen bewust, niet per ongeluk.** `bucketGate` matcht
+genres op `SonicTrack.genres` (MusicBrainz ∪ Deezer); `customGate` matcht op
+Roon's `track_genres`. Dat lijkt een halve migratie, maar `b5325a9` — de commit
+die de buckets omzette omdat "Daft Punk in jazz" opdook — zegt letterlijk: *"Roon
+genresByTrackID() blijft ongemoeid (artist-affiniteit/**custom**/SonicDNA hangen
+eraan)."*
+
+Eén gate maken vereist dus eerst een inhoudelijke beslissing, geen opruimactie.
+
+**Openstaande vraag voor Casper.** Een eigen station met een genre-facet is nu
+*losser* dan het automatische station van dezelfde naam: het laat muziek toe die
+Roon grof als dat genre tagde. Het argument dat de grove bron voor de buckets
+afschoot geldt hier net zo goed. Maar het omzetten verandert wat je opgeslagen
+stations afspelen, dus het is jouw keuze. `StationGateParityTests` legt het
+verschil vast zodat het alleen bewust kan veranderen.
+
+### Wat W11 wél opleverde
+
+De duplicatie die de audit aanwees is weg: `radioConfigFromAIRadio` had zijn
+eigen kopie van de categorie→facet-switch en gebruikt nu `RadioConfig.fromStation`.
+Eén mapping, en `RadioCategory` bezit het id-prefix-vocabulaire in plaats van dat
+twee plekken het parsen.
+
 ## 6. Maten om achteraf te toetsen
 
 | Maat | Nu | Doel |

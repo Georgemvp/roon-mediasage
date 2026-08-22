@@ -109,6 +109,22 @@ extension RoonClient {
         if genreKeys.isEmpty, moodKeys.isEmpty, decades.isEmpty, profiles.isEmpty { return nil }
         return { t in
             if !genreKeys.isEmpty {
+                // Roon's `track_genres` map, DELIBERATELY — not `t.genres`
+                // (MusicBrainz ∪ Deezer) that the automatic genre stations switched
+                // to in b5325a9 ("genre-outliers door grove Roon-gate (Daft Punk in
+                // jazz)"). That commit states the choice explicitly: "Roon
+                // genresByTrackID() blijft ongemoeid (artist-affiniteit/custom/
+                // SonicDNA hangen eraan)."
+                //
+                // So a user-composed station with a genre facet is looser than the
+                // automatic station of the same name, and that is by design rather
+                // than by accident. Whether it should STAY that way is a separate
+                // question — the argument that killed it for buckets (a coarse tag
+                // lets in music the genre doesn't describe) applies here just as
+                // well, and switching it would change what people's saved stations
+                // play. Flagged in native/docs/STATIONS_PLAN.md, not silently
+                // flipped. `StationGateParityTests` pins the difference so it can
+                // only change on purpose.
                 let g = genres[t.id] ?? []
                 if !g.contains(where: { genreKeys.contains($0.lowercased()) }) { return false }
             }
