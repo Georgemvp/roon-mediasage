@@ -232,7 +232,7 @@ automatiseren is — het bureaublad heeft geen Screen-Recording-TCC):
 | Tikken naar de wachtrij | onbekend (blinde veeg) | **1 vanuit de speler** |
 | Verzonnen eigennamen in het navigatiepad | 9 (Sonic Lab, Music Map, Sonic DNA, Song Paths, Alchemy, Multitag, Journeys, DJ-modi, Ontdek Wekelijks) | **1** (Lab), de rest pas ín Lab |
 | Bestemmingen in de tabbalk | 5, waarvan 3 kastjes | **4 echte** |
-| Regels Nu-speelt-code | 1.421 in 2 bestanden | **< 900 in 1** |
+| Regels Nu-speelt-code | 1.421 in 2 bestanden | **< 900 in 1** — gehaald: 704 (U1) |
 | Secties in het eerste instellingenscherm | 21 | **≤ 10 per scherm, 2 schermen** |
 
 Plus wat alleen op een toestel kan en dus expliciet openblijft: of de
@@ -261,7 +261,21 @@ een geopende sheet.
 
 ## 9. Status
 
-- [ ] Batch 1 — U1
+- [x] Batch 1 — U1 · v1.10.263 / ios-v1.7.230.
+      `NowPlayingModel` (Core, puur, 20 tests) + `NowPlayingSurface` (het verschil
+      tussen de uitvoeren als data) + één `PlayerScreen`. `LocalNowPlaying.swift`
+      weg. **De vondst zat niet in de layout maar in wat de splitsing verborg:**
+      Sonic Radio ontbrak in het menu van de lokale speler terwijl de motor het
+      al volledig kon — `startRadio(zoneID: nil)` levert aan de actieve uitvoer
+      en `topUpRadioIfNeeded` heeft een lokale tak. Eén regel, aparte commit.
+      Verder samengevoegd naar de béste van de twee, niet naar het gemiddelde:
+      haptics op ⏮ (had alleen lokaal), de toegankelijke scrub-actie (alleen de
+      zone), en de uitweg onder "niets aan het spelen" (alleen de zone — een
+      stille telefoon zag er daardoor kapot uit). Catalogus 860 → 844: de héle
+      `localNowPlaying.*`-familie was een duplicaat van `nowPlaying.*`, wat
+      precies is wat de twee schermen zélf waren. Wees-sleutels 1 → 0.
+      **Regels spelerscherm: ~1.219 in twee kopieën → 704 in één** (plus 304 r.
+      adapter en 103 r. getoetste rekenkunde in Core).
 - [ ] Batch 2 — U2 + U6
 - [ ] Batch 3 — U3 + U10 + U11
 - [ ] Batch 4 — U4 + U5

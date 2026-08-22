@@ -1,12 +1,12 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met "fix alles" uit de audit. Pak de VOLGENDE
-batch uit ## Next (nu: UX-speler-plan batch 1 = U1, zie native/docs/UX_PLAYER_PLAN.md).
+batch uit ## Next (nu: UX-speler-plan batch 2 = U2+U6, zie native/docs/UX_PLAYER_PLAN.md).
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst geshipt: v1.10.205 / ios-v1.7.170 / analyzer-v1.1.175 (getagd, analyzer
-NIET geredeployd op de mini — draait nog analyzer-v1.1.173).
+Laatst geshipt: v1.10.263 / ios-v1.7.230 / analyzer-v1.1.200 (getagd; de
+analyzer draait sinds 2c50e34 wél als v1.1.200 op de mini, via de CI-DMG).
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 ═══════════════════════════════════════════════════════════════════ -->
@@ -30,9 +30,46 @@ Nu-speelt-schermen** (1.421 regels) die al twee keer met de hand zijn
 gelijkgetrokken. Doel-architectuur: **Start · Bibliotheek · Zoek · Stations** +
 speler als overlay + Lab-kaart + tandwiel. Geen enkele feature verdwijnt.
 
-Batch 1 = U1 (één `NowPlayingSurface`-protocol, `LocalPlaybackController` en een
-`ZoneSurface`-adapter, één `PlayerScreen`) — strikt refactorend, protocol +
-adapters mét tests vóór het samenvoegen van het scherm.
+**BATCH 1 (U1) IS AF EN GETAGD — v1.10.263 / ios-v1.7.230.** Drie commits:
+1. `RoonSageCore/NowPlayingModel` — de rekenkunde die béide schermen elk apart
+   droegen: clamping, wandklok-interpolatie tussen polls, resttijd, m:ss, het
+   loop-rondje. Puur en `nonisolated` (`now` gaat erin), 20 tests, elk een geval
+   dat ooit een verkeerd getal gaf: delen door lengte 0, een pauzeklok die
+   doorliep, negatieve resttijd op een trackgrens, NaN-duur uit een AVAsset.
+2. `RoonSageUI/NowPlayingSurface` + `PlayerScreen` — het verschil tussen de
+   uitvoeren staat nu als **data** (volumevorm, Sonic Radio, songtekstbron),
+   niet als twee schermen. `LocalNowPlaying.swift` verwijderd.
+3. **Sonic Radio werkt nu ook op dit apparaat.** Dat ontbrak in het lokale menu
+   terwijl de motor het al kón: `startRadio(zoneID: nil)` → `deliver` →
+   `playToActiveOutput`, en `topUpRadioIfNeeded` heeft een eigen lokale tak
+   (`LocalQueue.upcomingCount`). Eén regel — dít is wat de splitsing verborg.
+
+Waar de twee schermen verschilden was dat bijna nooit met opzet; samengevoegd
+naar de béste van de twee: haptics op ⏮ (had alleen lokaal), de toegankelijke
+scrub-actie (alleen zone), en de uitweg onder "niets aan het spelen" (alleen
+zone — een stille telefoon zag er daardoor kapot uit). Twee dingen bewust
+gerepareerd: het volume-uitleesvenster toont 0 bij demping maar de slider houdt
+zijn niveau, en een poll tijdens het slepen trekt de knop niet meer terug.
+
+Catalogus **860 → 844**: de héle `localNowPlaying.*`-familie was een duplicaat
+van `nowPlaying.*` — precies wat de twee schermen zélf waren. Wees-sleutels
+1 → 0. Regels spelerscherm ~1.219 in twee kopieën → **704 in één**.
+
+**Verified: 949 tests 0 failures (was 929) · `swift build -c release --product
+RoonSage` exit 0 · iOS-simulator BUILD SUCCEEDED · check-localization 844
+sleutels, 0 missend / 0 wees.**
+**NIET geverifieerd: hoe het scherm eruitziet op het toestel** — dat vraagt een
+TestFlight-build. Ook onbewezen: of het lokale station hoorbaar doorspeelt als
+de wachtrij leegloopt (stond al open in LOCAL_PLAYER_READINESS §7).
+
+**VOLGENDE: batch 2 = U2 + U6** — speler als blad over je context
+(`fullScreenCover` vanuit de mini-balk, veeg omlaag = terug) en landen op Start
+i.p.v. op een lege speler. Let op de val in `NowPlayingBar.swift:9-12`: de
+mini-balk hoort met `safeAreaInset` één keer om de `TabView`, niet per tab.
+
+**Losse waarneming, niet van deze batch:** `native/RoonSage/Package.swift` heeft
+een ongecommitte wijziging (`.process("Resources")` → `.copy("Resources")` in
+het AudioAnalysis-target) die er al stond; met rust gelaten.
 
 NU (2026-08-10): **LOKAAL AFSPELEN IS EEN VOLWAARDIGE UITVOER** (user: "Local play is nu echt een beetje weggezet... we zouden er een meer lokale music player van kunnen maken?" → "begin hier mee, maak een duidelijk plan en voer dat uit"). Vertrekpunt: `playToActiveOutput` bestond al, maar alleen de *primaire* play-verbs gebruikten 'm; de wachtrij-verbs waren Roon-only (`PlayActionsMenu.swift:24` gaf dat zelf toe: "the local engine has no insert-next") en `QueueView` toonde "geen zone gekozen" zodra je lokaal luisterde. Daarnaast stond op 9 plekken een losse `LocalPlayButton` naast een zone-gated knop — het tweede pad dat het "weggezet" liet voelen.
 
@@ -321,7 +358,7 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **UX-speler-plan (nieuw, 2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`, batch 1 = U1 (speler-duplicatie opheffen). Zie §6 voor de volgorde.
+- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batch 1 (U1) af en getagd; **volgende is batch 2 = U2 + U6** (speler als blad + landen op Start). Zie §6 voor de volgorde.
 - **B3 (mood-backfill, GROTER dan gedacht):** er is GEEN mood-backfill — bouwen naar analogie van `refreshAttributes`/`autoArousalRefreshIfNeeded` (FeatureStore `moodRefreshRows`+`setMoodsBatch`, LibraryWalker `refreshMoods(missingKey:)`, AnalyzerModel `autoMoodRefreshIfNeeded()` + launch-wiring). **TRAP: `FeatureStore.contentSignature()` heeft GEEN moods-term** → zonder toevoeging pullen clients de nieuwe moods nooit (mirror ar/tm-patroon).
 - Resterend maar NIET headless verifieerbaar (vereist toestel/GUI): crossfade + gapless (AVPlayer→AVAudioEngine, groot/risico), Siri-intents, Control Center, CarPlay (OS-integratie), chat-agent (LLM), share-CARDS als afbeelding (ImageRenderer — kan niet getest: testtarget importeert RoonSageUI niet)
 - B7b Architectuur (groot/risico): RoonClient god-object-split, alleen build-verifieerbaar
