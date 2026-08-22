@@ -73,9 +73,17 @@ vallen — tracks waar geen tegenbewijs voor bestaat; de terugval houdt ze binne
 Geen enkele bestaande test brak: die bouwen tracks zonder precieze genres en
 volgen dus de terugval-tak.
 
-**Verified: 971 tests 0 failures (was 956) · `swift build -c release` exit 0 ·
-check-localization 999 sleutels, 0 missend / 0 wees · alle drie de UI-tests groen
-· vier segmenten gefotografeerd.** Nog niet getagd/gedeployd.
+**GESHIPT + LIVE (2026-08-22 20:47): `v1.10.272` / `ios-v1.7.238` /
+`analyzer-v1.1.202`**, alle vier workflows groen. Analyzer gedeployd via de
+CI-DMG-route (handtekening `5W3QDZ94FH` gecontroleerd, oude bewaard als
+`.bak-1.1.201`, `bootout` → installeren → `bootstrap`). Client-app NIET
+gedeployd (constraint).
+
+**Verified: 973 tests 0 failures (was 956) · `swift build -c release` exit 0 ·
+check-localization 999 sleutels, 0 missend / 0 wees · alle drie de UI-tests
+groen · vier segmenten gefotografeerd · mini draait analyzer-v1.1.202 als één pid
+(27224, was 17098), :5767 87.820 tracks, :5766 66.378, Roon verbonden, 5 zones,
+0 ws-sluitingen.**
 
 ---
 
