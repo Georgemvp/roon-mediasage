@@ -82,7 +82,9 @@ public struct SonicSearchView: View {
             if !query.isEmpty {
                 Button { query = ""; results = []; lyricsHits = []; searched = false } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                }.buttonStyle(.borderless)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(LS("a11y.clearSearch"))
             }
             Button { runSearch() } label: { Text(loading ? LS("sonicSearch.searching") : LS("sonicSearch.search")) }
                 .buttonStyle(.borderedProminent).tint(Color.roonGold)

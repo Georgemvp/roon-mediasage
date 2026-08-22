@@ -745,6 +745,7 @@
 "root.previousTrack"      = "Vorige track";
 "root.savedForLater"      = "Bewaard voor later";
 "root.savedPlaylists"     = "Bewaarde playlists";
+"root.zonesStale"         = "Roon-verbinding weg — dit is de laatst bekende stand";
 
 /* shareCard */
 "shareCard.shareAsImage" = "Deel als afbeelding";
@@ -1154,3 +1155,113 @@
 "appearance.mocha" = "Mokka";
 "appearance.sunset" = "Zonsondergang";
 "appearance.latte" = "Latte";
+
+/* C1 — VoiceOver-labels voor icon-only knoppen */
+"a11y.refresh"         = "Verversen";
+"a11y.clearSearch"     = "Wis de zoekopdracht";
+"a11y.removeTrack"     = "Verwijder dit nummer";
+"sonicDNA.share"       = "Deel je sonische DNA";
+"sonicDNA.recompute"   = "Herbereken";
+"nowPlaying.volume"    = "Volume";
+
+/* B3 — macOS-app-shell: menubalk, menubar-extra en updater */
+"menu.controls"              = "Bediening";
+"menu.playPause"             = "Speel / pauzeer";
+"menu.volumeUp"              = "Volume omhoog";
+"menu.volumeDown"            = "Volume omlaag";
+"menu.checkForUpdates"       = "Zoek naar updates…";
+"menu.checkingForUpdates"    = "Zoeken naar updates…";
+"menu.upToDateTitle"         = "Je bent up-to-date";
+"menu.upToDateBody"          = "RoonSage %@ is de nieuwste versie.";
+"menu.ok"                    = "OK";
+"menuBar.nothingPlaying"     = "Er speelt niets";
+"menuBar.notConnected"       = "Niet verbonden";
+"menuBar.softer"             = "Zachter";
+"menuBar.louder"             = "Harder";
+"menuBar.zones"              = "Zones";
+"update.available"           = "Update beschikbaar";
+"update.downloading"         = "Downloaden…";
+"update.readyToInstall"      = "Klaar om te installeren";
+"update.installing"          = "Installeren…";
+"update.failed"              = "Update mislukt";
+"update.availableBody"       = "RoonSage %@ is beschikbaar.";
+"update.downloadingBody"     = "RoonSage %@ wordt gedownload…";
+"update.readyBody"           = "De update is gedownload. Klik op Installeer om hem toe te passen en RoonSage automatisch te herstarten.";
+"update.doNotQuit"           = "Sluit de app niet af.";
+"update.failedBody"          = "Er ging iets mis. Je kunt de update ook handmatig installeren.";
+"update.replacingBundle"     = "App-bundel vervangen…";
+"update.later"               = "Later";
+"update.releaseNotes"        = "Releasenotities";
+"update.download"            = "Download update";
+"update.viewRelease"         = "Bekijk release";
+"update.cancel"              = "Annuleer";
+"update.installAndRestart"   = "Installeer & herstart";
+"update.installManually"     = "Installeer handmatig";
+"update.retry"               = "Probeer opnieuw";
+
+/* B2 — geïnterpoleerde sleutels vervangen door String(format:) */
+"a11y.playTrack"                        = "Speel %@ af";
+"a11y.playNow"                          = "Speel %@ nu";
+"a11y.queueNext"                        = "Zet %@ als volgende in de wachtrij";
+"a11y.startStationFrom"                 = "Start station vanaf %@";
+"a11y.addTrackTo"                       = "Track toevoegen aan %@";
+"a11y.source"                           = "Bron: %@";
+"a11y.matchPercent"                     = "Match %d procent";
+"a11y.connection"                       = "Verbinding: %@";
+"section.results"                       = "Resultaten (%d)";
+"section.chosen"                        = "Gekozen (%d)";
+"musicMap.analyzedTracks"               = "%d geanalyseerde tracks";
+"playlists.deleteConfirmBody"           = "%@ wordt definitief verwijderd.";
+"playlists.playInZone"                  = "Speel af in %@";
+"playlists.savingToQobuz"               = "“%@” bewaren in Qobuz…";
+"playlists.starting"                    = "“%@” starten…";
+"playlists.startFailed"                 = "“%@” kon niet starten — geen van de tracks was beschikbaar.";
+"filteredTracks.noneFor"                = "Geen tracks voor “%@”.";
+"ask.saveBody"                          = "Bewaar %d nummers als lokale playlist.";
+"libraryDetail.sourceLine"              = "bron: %@";
+"songPaths.bridgeTracks"                = "Brugtracks: %d";
+"songPaths.pathSection"                 = "Sonisch pad (%d tracks)";
+"songPaths.savedToQobuz"                = "Op Qobuz gezet als ‘%@’.";
+"customRadio.noneForCategory"           = "Geen %@-radio's beschikbaar — analyseer eerst meer muziek.";
+"customRadioEditor.trackCountStepper"   = "Aantal tracks: %d";
+"customRadioEditor.decade"              = "Jaren %d";
+"discoverFeed.skipped"                  = "%@ overgeslagen";
+"discoverFeed.buildingMood"             = "Nieuwe ontdekkingen (%@) worden gebouwd — dit kan ~2 min duren…";
+"discoverFeed.lookingUp"                = "Bezig met afspelen — ‘%@’ opzoeken…";
+"discoverFeed.playStarted"              = "Afspelen gestart — ‘%@’.";
+"discoverFeed.playFailed"               = "Afspelen mislukt — ‘%@’ kon niet starten.";
+"similar.mixStarted"                    = "Mix gestart — %d tracks.";
+"ai.candidates"                         = "%d kandidaten";
+"root.sleepTimerActiveUntil"            = "Slaaptimer actief tot %@ — tik om te annuleren";
+"discovery.playStartedOnZone"           = "Afspelen gestart op ‘%@’.";
+"recommend.albumsSection"               = "Aanbevolen albums (%d)";
+"commandPalette.noResultsFor"           = "Geen resultaten voor ‘%@’";
+"commandPalette.goTo"                   = "Ga naar %@";
+"commandPalette.sleepTimerMinutes"      = "Slaaptimer: %d min";
+"commandPalette.theme"                  = "Thema: %@";
+"queue.emptyForZone"                    = "Niets in de wachtrij van %@.";
+"queue.saveBody"                        = "Bewaar de %d tracks in de wachtrij als playlist. Afspelen zoekt ze later op titel + artiest terug in je bibliotheek.";
+"songAlchemy.resultsSection"            = "Alchemieresultaten (%d)";
+"discoverWeekly.generatedOn"            = "Gegenereerd op %@";
+"discoverWeekly.week"                   = "Week %@";
+"discoverWeekly.trackCount"             = "%d tracks";
+"discoverWeekly.outsideLibrary"         = "%d buiten je bibliotheek";
+"labelExplorer.labelsSection"           = "Labels (%d)";
+"labelExplorer.albumsInLibrary"         = "%d albums in je bibliotheek";
+"dJSet.tracksStepper"                   = "Tracks: %d";
+"dJSet.startBPM"                        = "Start: %d BPM";
+"dJSet.endBPM"                          = "Eind: %d BPM";
+"dJSet.tracksAvailable"                 = "%d tracks · %d beschikbaar";
+"dJSet.setOfTracks"                     = "Set van %d tracks";
+"dJSet.playlistSaved"                   = "Playlist “%@” bewaard.";
+"dJSet.tracksSection"                   = "Tracks (%d)";
+"dJSet.smoothCount"                     = "%d/%d soepel";
+"dJSet.smoothA11y"                      = "%d van %d overgangen mixen harmonisch";
+"queue.emptyForZoneFallback"            = "deze zone";
+
+/* B5 — waarom een Roon-zone-wachtrij niet bewerkbaar is */
+"queue.zoneReadOnly"   = "Roon geeft deze wachtrij alleen door om te lezen: tik een nummer aan om daar verder te spelen. Herschikken, verwijderen en wissen kan op “dit apparaat”.";
+
+/* B6 — dedup in de bibliotheek zichtbaar maken */
+"library.duplicatesHidden"   = "%d dubbele versies verborgen — tik om ze te tonen";
+"library.duplicatesShown"    = "Dubbele versies worden getoond — tik om ze te verbergen";

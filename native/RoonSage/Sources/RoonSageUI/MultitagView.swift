@@ -85,7 +85,7 @@ struct MultitagView: View {
     }
 
     private var resultsSection: some View {
-        Section(LS("Resultaten (\(results.count))")) {
+        Section(String(format: LS("section.results"), results.count)) {
             HStack(spacing: Spacing.sm) {
                 Button {
                     Haptics.success()

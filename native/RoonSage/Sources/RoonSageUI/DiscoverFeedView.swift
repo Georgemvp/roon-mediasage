@@ -208,7 +208,7 @@ public struct DiscoverFeedView: View {
             HStack(spacing: Spacing.md) {
                 Image(systemName: "hand.thumbsdown")
                     .foregroundStyle(.secondary)
-                LT("\(item.album ?? item.artist) overgeslagen")
+                Text(String(format: LS("discoverFeed.skipped"), item.album ?? item.artist))
                     .font(.subheadline)
                     .lineLimit(1)
                 Spacer(minLength: Spacing.md)
@@ -266,7 +266,7 @@ public struct DiscoverFeedView: View {
         // without this banner + the toolbar spinner the button reads as dead.
         let moodLabel = mood.map { RoonClient.moodLabel($0) }
         withAnimation(Motion.quick) {
-            message = moodLabel.map { LS("Nieuwe ontdekkingen (\($0)) worden gebouwd — dit kan ~2 min duren…") }
+            message = moodLabel.map { String(format: LS("discoverFeed.buildingMood"), $0) }
                 ?? LS("discoverFeed.buildingFull")
         }
         await client.triggerDiscoveryRun(mood: mood)
@@ -301,14 +301,14 @@ public struct DiscoverFeedView: View {
         let name = item.album ?? item.artist
         Haptics.tap()
         _ = playing.insert(item.id)
-        withAnimation(Motion.quick) { message = LS("Bezig met afspelen — ‘\(name)’ opzoeken…") }
+        withAnimation(Motion.quick) { message = String(format: LS("discoverFeed.lookingUp"), name) }
         Task {
             let ok = await client.playRecommendation(item.id, zoneID: client.selectedZone?.id)
             playing.remove(item.id)
             withAnimation(Motion.quick) {
                 message = ok
-                    ? LS("Afspelen gestart — ‘\(name)’.")
-                    : LS("Afspelen mislukt — ‘\(name)’ kon niet starten.")
+                    ? String(format: LS("discoverFeed.playStarted"), name)
+                    : String(format: LS("discoverFeed.playFailed"), name)
             }
             clearMessageSoon()
         }
@@ -469,7 +469,7 @@ private struct RecommendationCard: View {
         .padding(6)
         .background(.ultraThinMaterial, in: Circle())
         .padding(Spacing.sm)
-        .accessibilityLabel(LS("Match \(pct) procent"))
+        .accessibilityLabel(String(format: LS("a11y.matchPercent"), pct))
     }
 
     private var actionRow: some View {

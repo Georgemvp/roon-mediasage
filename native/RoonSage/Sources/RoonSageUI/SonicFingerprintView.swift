@@ -44,12 +44,14 @@ public struct SonicFingerprintView: View {
                           preview: SharePreview("Mijn Sonic DNA", image: shareImage)) {
                     Image(systemName: "square.and.arrow.up")
                 }
-                .help("Deel je sonische DNA")
+                .accessibilityLabel(LS("sonicDNA.share"))
+                .help(LS("sonicDNA.share"))
             }
             Button { Task { await load(force: true) } } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .help("Herbereken")
+            .accessibilityLabel(LS("sonicDNA.recompute"))
+            .help(LS("sonicDNA.recompute"))
             .disabled(isLoading)
         }
         .task { await load(force: false) }

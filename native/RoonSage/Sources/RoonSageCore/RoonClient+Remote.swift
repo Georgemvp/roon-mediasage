@@ -524,11 +524,16 @@ extension RoonClient {
 
     /// Send a proxied command to the server, then immediately re-poll so the UI
     /// reflects the result without waiting for the next tick.
-    func remote(_ command: RemoteCommand) async {
+    ///
+    /// Returns whether the server accepted it, so an optimistic UI update can be
+    /// rolled back when it didn't (see `TransportIntent`). Discardable: most
+    /// callers still only care about the toast.
+    @discardableResult
+    func remote(_ command: RemoteCommand) async -> Bool {
         guard let base = remoteBaseURL, let url = URL(string: "\(base)/command") else {
             lastActionError = ActionError(message: CoreStrings.s(
                 "core.error.noServer", "Geen verbinding met de RoonSage-server."))
-            return
+            return false
         }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -542,9 +547,10 @@ extension RoonClient {
         if let (_, resp) = try? await URLSession.shared.data(for: req),
            (resp as? HTTPURLResponse)?.statusCode == 200 {
             await pollPlaybackOnce()
-        } else {
-            lastActionError = ActionError(message: CoreStrings.s(
-                "core.error.commandFailed", "Commando mislukt — is de RoonSage-server bereikbaar?"))
+            return true
         }
+        lastActionError = ActionError(message: CoreStrings.s(
+            "core.error.commandFailed", "Commando mislukt — is de RoonSage-server bereikbaar?"))
+        return false
     }
 }

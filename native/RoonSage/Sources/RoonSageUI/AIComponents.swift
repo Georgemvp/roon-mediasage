@@ -242,7 +242,7 @@ public struct FilterChips: View {
                 && filters.activities.isEmpty && filters.decades.isEmpty {
                 Badge(LS("aIComponents.wholeLibrary"))
             }
-            if let poolSize { Badge(LS("\(poolSize) kandidaten")) }
+            if let poolSize { Badge(String(format: LS("ai.candidates"), poolSize)) }
         }
     }
 }

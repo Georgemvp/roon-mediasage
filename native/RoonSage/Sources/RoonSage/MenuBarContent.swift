@@ -64,11 +64,11 @@ struct MenuBarContent: View {
                             .lineLimit(1)
                     }
                 } else if client.connectionState.isConnected {
-                    Text("Er speelt niets")
+                    Text(LS("menuBar.nothingPlaying"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Niet verbonden")
+                    Text(LS("menuBar.notConnected"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -91,20 +91,20 @@ struct MenuBarContent: View {
         HStack(spacing: 0) {
             Spacer()
 
-            menuBarButton("backward.fill", label: "Vorige track") {
+            menuBarButton("backward.fill", label: LS("root.previousTrack")) {
                 Task { await client.previous(zoneID: zone.id) }
             }
 
             menuBarButton(
                 zone.state == .playing ? "pause.circle.fill" : "play.circle.fill",
-                label: zone.state == .playing ? "Pauzeer" : "Speel af",
+                label: zone.state == .playing ? LS("root.pause") : LS("root.play"),
                 font: .title3,
                 accent: true
             ) {
                 Task { await client.playPause(zoneID: zone.id) }
             }
 
-            menuBarButton("forward.fill", label: "Volgende track") {
+            menuBarButton("forward.fill", label: LS("root.nextTrack")) {
                 Task { await client.next(zoneID: zone.id) }
             }
 
@@ -113,13 +113,13 @@ struct MenuBarContent: View {
             // Volume quick adjust
             if let output = zone.outputs.first, let vol = output.volume {
                 menuBarButton(vol.isMuted ? "speaker.slash.fill" : "speaker.fill",
-                              label: vol.isMuted ? "Dempen opheffen" : "Dempen") {
+                              label: vol.isMuted ? LS("nowPlaying.unmute") : LS("nowPlaying.mute")) {
                     Task { await client.toggleMute(outputID: output.id, muted: !vol.isMuted) }
                 }
-                menuBarButton("speaker.minus", label: "Zachter") {
+                menuBarButton("speaker.minus", label: LS("menuBar.softer")) {
                     Task { await client.adjustVolume(outputID: output.id, delta: -(vol.step > 0 ? vol.step : 2)) }
                 }
-                menuBarButton("speaker.plus", label: "Harder") {
+                menuBarButton("speaker.plus", label: LS("menuBar.louder")) {
                     Task { await client.adjustVolume(outputID: output.id, delta: vol.step > 0 ? vol.step : 2) }
                 }
             }
@@ -133,7 +133,7 @@ struct MenuBarContent: View {
 
     var zonePickerSection: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Zones")
+            Text(LS("menuBar.zones"))
                 .font(.caption2.uppercaseSmallCaps())
                 .foregroundStyle(.tertiary)
                 .padding(.horizontal, 12)

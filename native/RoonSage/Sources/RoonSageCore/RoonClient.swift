@@ -225,20 +225,59 @@ public final class RoonClient {
 
     /// Run a fire-and-forget user action against the transport service,
     /// surfacing failures (and the not-connected case) via `lastActionError`.
-    func runAction(_ label: String, _ op: (TransportService) async throws -> Void) async {
+    ///
+    /// Returns whether the command went out, so an optimistic UI update can be
+    /// rolled back when it didn't (see `TransportIntent`). The result is
+    /// discardable: most callers still only care about the toast.
+    @discardableResult
+    func runAction(_ label: String, _ op: (TransportService) async throws -> Void) async -> Bool {
         guard let ts = transportService else {
             lastActionError = ActionError(message: CoreStrings.f(
                 "core.error.actionNoConnection", "%@ mislukt — geen verbinding met Roon.", label))
-            return
+            return false
         }
         do {
             try await op(ts)
             Log.debug("transport-actie '\(label)' verzonden", category: .roon)
+            return true
         } catch {
             Log.warning("transport-actie '\(label)' mislukt: \(error)", category: .roon)
             lastActionError = ActionError(message: CoreStrings.f(
                 "core.error.actionFailed", "%@ mislukt: %@", label, error.localizedDescription))
+            return false
         }
+    }
+
+    // MARK: - Optimistic transport
+
+    /// Show a transport change now; let the snapshot confirm or the failure undo it.
+    ///
+    /// The rollback is conditional on nothing newer having landed: if an
+    /// authoritative snapshot arrived while the command was in flight, that is
+    /// the truth and this must not overwrite it. Zone is `Equatable`, so
+    /// "nothing newer" is simply "the zone still reads exactly as we left it".
+    func withOptimistic(_ intent: TransportIntent, zoneID: String,
+                        _ send: () async -> Bool) async {
+        let before = zones.first(where: { $0.id == zoneID })
+        applyOptimistic(intent, zoneID: zoneID)
+        let optimistic = zones.first(where: { $0.id == zoneID })
+        let ok = await send()
+        guard !ok, let before, zones.first(where: { $0.id == zoneID }) == optimistic else { return }
+        setZones(replacing(before))
+    }
+
+    private func applyOptimistic(_ intent: TransportIntent, zoneID: String) {
+        setZones(intent.applied(to: zones, zoneID: zoneID))
+    }
+
+    private func replacing(_ zone: Zone) -> [Zone] {
+        zones.map { $0.id == zone.id ? zone : $0 }
+    }
+
+    /// One place that keeps `zones` and `zoneMap` in step.
+    private func setZones(_ new: [Zone]) {
+        zones = new
+        zoneMap = Dictionary(uniqueKeysWithValues: new.map { ($0.id, $0) })
     }
     public internal(set) var isSyncing = false
     public internal(set) var syncProgress = SyncProgress(phase: "", albumsCompleted: 0, albumsTotal: 0, tracksFound: 0)
@@ -1036,9 +1075,27 @@ public final class RoonClient {
 
     // MARK: - Play queue
 
+    /// Whether this process owns the queue subscription, or is fed one.
+    ///
+    /// In `.server` mode there is no Roon WebSocket to subscribe to: `queueItems`
+    /// arrives with every `PlaybackSnapshot` (`applyPlaybackSnapshot`). Starting
+    /// or stopping a subscription there is not merely useless, it is destructive
+    /// — both ends clear `queueItems`, and the snapshot that refills it only
+    /// arrives when the state CHANGES (`PlaybackEventHub` pushes on a digest
+    /// change) or when the 15 s fallback poll fires. Opening the queue on a
+    /// paused zone therefore showed "niets in de wachtrij" for up to 15 seconds,
+    /// and leaving it blanked the player's up-next pill for the same window.
+    nonisolated static func ownsQueueSubscription(mode: RoonControlMode) -> Bool {
+        mode == .direct
+    }
+
+    var ownsQueueSubscription: Bool { Self.ownsQueueSubscription(mode: controlMode) }
+
     /// Subscribe to a zone's play queue. Maintains `queueItems` (initial list +
-    /// incremental insert/remove changes from Roon).
+    /// incremental insert/remove changes from Roon). No-op in `.server` mode —
+    /// see `ownsQueueSubscription`.
     public func startQueue(zoneID: String) {
+        guard ownsQueueSubscription else { return }
         queueTask?.cancel()
         queueItems = []
         queueZoneID = zoneID
@@ -1054,6 +1111,7 @@ public final class RoonClient {
     }
 
     public func stopQueue() {
+        guard ownsQueueSubscription else { return }
         queueTask?.cancel()
         queueTask = nil
         queueItems = []

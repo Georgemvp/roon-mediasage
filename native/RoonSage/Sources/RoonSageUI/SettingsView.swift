@@ -896,7 +896,7 @@ public struct SettingsView: View {
 struct OfflineDownloadsSection: View {
     @Environment(RoonClient.self) private var client
     @State private var sizeBytes = 0
-    @State private var count = 0
+    @State private var downloadedCount = 0
     @AppStorage(LocalAudioCache.downloadOnCellularKey) private var allowOnCellular = false
 
     private static let sizeFormatter: ByteCountFormatter = {
@@ -924,13 +924,13 @@ struct OfflineDownloadsSection: View {
                 DownloadsView()
             } label: {
                 LabeledContent(LS("downloads.onDevice"),
-                               value: "\(count) · \(Self.sizeFormatter.string(fromByteCount: Int64(sizeBytes)))")
+                               value: "\(downloadedCount) · \(Self.sizeFormatter.string(fromByteCount: Int64(sizeBytes)))")
             }
             Toggle(LS("downloads.allowOnCellular"), isOn: $allowOnCellular)
             Button(LS("downloads.removeAll"), role: .destructive) {
                 Task { await client.removeAllOfflineTracks(); await refresh() }
             }
-            .disabled(count == 0)
+            .disabled(downloadedCount == 0)
             Text(LS("downloads.explainer"))
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -940,7 +940,7 @@ struct OfflineDownloadsSection: View {
 
     private func refresh() async {
         sizeBytes = LocalAudioCache.downloadsSizeBytes()
-        count = client.offlineKeys.count
+        downloadedCount = client.offlineKeys.count
     }
 }
 

@@ -333,7 +333,7 @@ public struct DiscoveryView: View {
             // like a no-op. A genuine failure still surfaces via the global
             // error toast (client.lastActionError).
             if client.lastActionError == nil {
-                withAnimation(Motion.quick) { actionMessage = LS("Afspelen gestart op ‘\(zone.displayName)’.") }
+                withAnimation(Motion.quick) { actionMessage = String(format: LS("discovery.playStartedOnZone"), zone.displayName) }
                 Task {
                     try? await Task.sleep(for: .seconds(4))
                     withAnimation(Motion.quick) { actionMessage = nil }

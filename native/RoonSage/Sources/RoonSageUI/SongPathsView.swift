@@ -50,7 +50,7 @@ public struct SongPathsView: View {
             if fromTrack != nil && toTrack != nil {
                 Section {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        LT("Brugtracks: \(Int(stepCount) - 2)")
+                        Text(String(format: LS("songPaths.bridgeTracks"), Int(stepCount) - 2))
                             .font(.caption).foregroundStyle(.secondary)
                         Slider(value: $stepCount, in: 4...16, step: 1)
                             .tint(Color.roonGold)
@@ -175,7 +175,7 @@ public struct SongPathsView: View {
     }
 
     private var pathResultSection: some View {
-        Section(LS("Sonisch pad (\(path.count) tracks)")) {
+        Section(String(format: LS("songPaths.pathSection"), path.count)) {
             HStack(spacing: Spacing.sm) {
                 Button {
                     Haptics.success()
@@ -195,7 +195,7 @@ public struct SongPathsView: View {
                             title: title, description: LS("songPaths.qobuzDescription"),
                             tracks: pathRecords)
                         syncMsg = ok
-                            ? LS("Op Qobuz gezet als ‘\(RoonClient.qobuzPlaylistName(for: title))’.")
+                            ? String(format: LS("songPaths.savedToQobuz"), RoonClient.qobuzPlaylistName(for: title))
                             : LS("songPaths.syncFailed")
                     }
                 } label: {

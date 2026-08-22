@@ -52,7 +52,7 @@ public struct DJSetView: View {
                 }
 
                 Section(LS("nav.settings")) {
-                    Stepper(LS("Tracks: \(count)"), value: $count, in: 5...60, step: 5)
+                    Stepper(String(format: LS("dJSet.tracksStepper"), count), value: $count, in: 5...60, step: 5)
 
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         LT("dJSet.curve").font(.subheadline)
@@ -61,8 +61,8 @@ public struct DJSetView: View {
                     }
                     .padding(.vertical, 2)
 
-                    Stepper(LS("Start: \(Int(startBPM)) BPM"), value: $startBPM, in: 60...200, step: 1)
-                    Stepper(LS("Eind: \(Int(endBPM)) BPM"), value: $endBPM, in: 60...200, step: 1)
+                    Stepper(String(format: LS("dJSet.startBPM"), Int(startBPM)), value: $startBPM, in: 60...200, step: 1)
+                    Stepper(String(format: LS("dJSet.endBPM"), Int(endBPM)), value: $endBPM, in: 60...200, step: 1)
                     HStack {
                         LT("dJSet.tags").foregroundStyle(.secondary)
                         TextField(LS("dJSet.tagsPlaceholder"), text: $tagsText)
@@ -139,7 +139,7 @@ public struct DJSetView: View {
             BPMCurvePreview(bpms: DJSetBuilder.plannedBPM(start: startBPM, end: endBPM, count: count, curve: curve))
                 .frame(height: 44)
                 .accessibilityHidden(true)
-            LT("\(count) tracks · \(stats.matched) beschikbaar")
+            Text(String(format: LS("dJSet.tracksAvailable"), count, stats.matched))
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(Spacing.lg)
@@ -182,7 +182,7 @@ public struct DJSetView: View {
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
         } header: {
-            LT("Set van \(set.count) tracks")
+            Text(String(format: LS("dJSet.setOfTracks"), set.count))
         }
 
         // Actions.
@@ -192,7 +192,7 @@ public struct DJSetView: View {
                 Button(LS("dJSet.save")) {
                     let n = saveName.trimmingCharacters(in: .whitespaces)
                     guard !n.isEmpty else { return }
-                    client.saveDJSet(name: n, set: set); status = LS("Playlist “\(n)” bewaard.")
+                    client.saveDJSet(name: n, set: set); status = String(format: LS("dJSet.playlistSaved"), n)
                 }.disabled(saveName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             HStack(spacing: Spacing.sm) {
@@ -241,7 +241,7 @@ public struct DJSetView: View {
         }
 
         // Tracklist — DJ deck order with transition quality between pairs.
-        Section(LS("Tracks (\(set.count))")) {
+        Section(String(format: LS("dJSet.tracksSection"), set.count)) {
             let mix = mixBPMs
             ForEach(Array(set.enumerated()), id: \.element.id) { i, t in
                 trackRow(index: i, track: t, mix: mix)
@@ -588,13 +588,13 @@ private struct HarmonicTransitionStrip: View {
                     LegendDot(color: .roonGold, text: LS("dJSet.legendHarmonic"))
                     LegendDot(color: .roonSuccess, text: LS("dJSet.legendSameKey"))
                     Spacer()
-                    LT("\(smooth)/\(rels.count) soepel")
+                    Text(String(format: LS("dJSet.smoothCount"), smooth, rels.count))
                         .font(.caption2.weight(.medium)).foregroundStyle(.secondary)
                 }
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(LS("\(smooth) van \(rels.count) overgangen mixen harmonisch"))
+        .accessibilityLabel(String(format: LS("dJSet.smoothA11y"), smooth, rels.count))
     }
 }
 

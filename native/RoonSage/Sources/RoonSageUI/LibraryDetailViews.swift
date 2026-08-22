@@ -114,7 +114,7 @@ struct AlbumDetailView: View {
                         .font(.caption.bold())
                         .foregroundStyle(Color.roonGold)
                     Spacer()
-                    LT("bron: \(editorial.source)")
+                    Text(String(format: LS("libraryDetail.sourceLine"), editorial.source))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }

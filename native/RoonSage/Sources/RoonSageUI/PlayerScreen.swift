@@ -138,24 +138,10 @@ private struct PlayerHero: View {
     /// (the wall display and share cards draw this view without presenting it).
     init(surface: any NowPlayingSurface) {
         self.surface = surface
-        let pos = max(0, surface.positionSec)
-        _anchorPosition = State(initialValue: pos)
-        _displayPosition = State(initialValue: pos)
         _volumeValue = State(initialValue: surface.volume?.value ?? 0)
     }
 
     @State private var volumeValue: Double = 0
-    // Position while dragging the scrubber, in seconds. Held separately from the
-    // displayed position so letting go can't be undone by a poll landing in the
-    // same frame.
-    @State private var isSeeking = false
-    @State private var seekPositionSec: Double = 0
-    // For outputs that report a position per poll rather than continuously:
-    // the last known-true position and when we learned it. See
-    // `NowPlayingModel.interpolatedPosition`.
-    @State private var anchorPosition: Double = 0
-    @State private var anchorDate: Date = .init()
-    @State private var displayPosition: Double = 0
 
     @State private var feat: (bpm: Double, camelot: String, tags: [String])?
     @State private var attrs: [String: Float] = [:]
@@ -208,25 +194,6 @@ private struct PlayerHero: View {
         .padding(.bottom, Spacing.sm)
         .task(id: surface.featureKey) { await refreshFeatures() }
         .task { await client.ensureFeedbackLoaded() }
-        // Re-anchor on every authoritative update. Skipped entirely for an
-        // engine that publishes a live position — writing state at 2 Hz to
-        // recompute a number we already have is pure churn.
-        .onChange(of: surface.positionSec) { _, pos in
-            guard !surface.positionIsContinuous, !isSeeking else { return }
-            setAnchor(pos)
-        }
-        // Pause/resume re-anchors at the frozen value, so resuming continues
-        // where the bar stopped instead of jumping by the paused interval.
-        .onChange(of: surface.isPlaying) { _, _ in
-            guard !surface.positionIsContinuous else { return }
-            setAnchor(displayPosition)
-        }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
-            guard !surface.positionIsContinuous, !isSeeking else { return }
-            displayPosition = NowPlayingModel.interpolatedPosition(
-                anchor: anchorPosition, anchoredAt: anchorDate, now: Date(),
-                isPlaying: surface.isPlaying, duration: surface.durationSec)
-        }
         .onChange(of: surface.volume?.value) { _, v in if let v, !isAdjustingVolume { volumeValue = v } }
         .sheet(isPresented: $showLyrics) { lyricsSheet }
         .sheet(isPresented: $showWall) { WallDisplayView() }
@@ -242,22 +209,6 @@ private struct PlayerHero: View {
         case .zone(let z): LyricsView(zone: z)
         case .device:      LyricsView()
         }
-    }
-
-    // MARK: Position plumbing
-
-    /// The position to show right now: the finger while dragging, the engine's
-    /// own clock when it has one, otherwise our interpolation.
-    private var shownPosition: Double {
-        if isSeeking { return seekPositionSec }
-        return surface.positionIsContinuous ? surface.positionSec : displayPosition
-    }
-
-    /// Pin the displayed position to a known-true value and stamp the wall clock.
-    private func setAnchor(_ pos: Double) {
-        anchorPosition = max(0, pos)
-        anchorDate = Date()
-        displayPosition = anchorPosition
     }
 
     // MARK: Art — sized to fit; springs on track change, shrinks slightly when paused
@@ -401,86 +352,25 @@ private struct PlayerHero: View {
         }
     }
 
-    // MARK: Scrubber — custom, bounded progress bar (the system Slider rendered
-    // full-bleed here). Clear track, gold fill, draggable thumb, elapsed/remaining.
+    // MARK: Scrubber
 
-    @ViewBuilder
+    /// The progress bar, as its own view — the whole point of this split.
+    ///
+    /// `displayPosition` used to be `@State` on the hero, ticked once a second,
+    /// and the scrubber read it. So every tick invalidated the ENTIRE hero: the
+    /// artwork, the marquee title, the feature badges, the visualizer, the
+    /// transport, the volume row and the footer, sixty times a minute, to move a
+    /// six-point bar. Owning the clock here means a tick invalidates the bar and
+    /// nothing else.
     private var scrubber: some View {
-        // Read the position UNCONDITIONALLY. Folding it into a ternary let Swift
-        // short-circuit it whenever the duration was still 0, so SwiftUI never
-        // registered a dependency and the row stopped redrawing entirely.
-        let pos = shownPosition
-        let dur = surface.durationSec
-        let frac = NowPlayingModel.fraction(position: pos, duration: dur)
-        VStack(spacing: Spacing.xs) {
-            GeometryReader { geo in
-                let w = geo.size.width
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.28)).frame(height: 6)
-                    Capsule().fill(Color.roonGold).frame(width: max(0, w * frac), height: 6)
-                    // Always show the knob (even at 0:00) so the bar clearly reads
-                    // as a scrubber rather than a flat line.
-                    Circle().fill(.white)
-                        .frame(width: 16, height: 16)
-                        .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
-                        .offset(x: min(max(w * frac - 8, 0), w - 16))
-                }
-                .frame(maxHeight: .infinity, alignment: .center)
-                .contentShape(Rectangle())
-                // High priority so a drag starting on the scrubber beats the paging
-                // TabView that carries the queue one swipe away.
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { v in
-                            guard let s = NowPlayingModel.seekSeconds(
-                                atX: v.location.x, width: w, duration: dur) else { return }
-                            isSeeking = true
-                            seekPositionSec = s
-                        }
-                        .onEnded { v in
-                            guard let s = NowPlayingModel.seekSeconds(
-                                atX: v.location.x, width: w, duration: dur) else {
-                                isSeeking = false; return
-                            }
-                            seekPositionSec = s
-                            setAnchor(s)          // hold until the next poll confirms
-                            surface.seek(toSeconds: s)
-                            isSeeking = false
-                        }
-                )
-            }
-            .frame(height: 22)
-            .accessibilityElement()
-            .accessibilityLabel(LS("nowPlaying.playbackPosition"))
-            .accessibilityValue(NowPlayingModel.formatTime(pos))
-            .accessibilityHint(LS("nowPlaying.scrubHint"))
-            .accessibilityAdjustableAction { direction in
-                guard dur > 0 else { return }
-                let step = dur * 0.05
-                let target = direction == .increment ? min(pos + step, dur) : max(pos - step, 0)
-                setAnchor(target)     // hold until the next poll confirms
-                surface.seek(toSeconds: target)
-            }
-
-            HStack {
-                Text(NowPlayingModel.formatTime(pos))
-                Spacer()
-                // "3 van 24" between the two counters: it's positional
-                // information, same as the clock, and this row already has the
-                // space. A line of its own under the title would have made the
-                // busiest part of the screen busier.
-                if let queue = surface.queueSummary {
-                    Text(queue)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer()
-                }
-                Text(NowPlayingModel.remainingLabel(position: pos, duration: dur))
-            }
-            .font(.footnote.weight(.medium).monospacedDigit())
-            .foregroundStyle(.primary)
-        }
+        PlayerScrubber(
+            positionSec: surface.positionSec,
+            durationSec: surface.durationSec,
+            isPlaying: surface.isPlaying,
+            positionIsContinuous: surface.positionIsContinuous,
+            queueSummary: surface.queueSummary,
+            onSeek: { surface.seek(toSeconds: $0) }
+        )
     }
 
     // MARK: Transport
@@ -499,7 +389,7 @@ private struct PlayerHero: View {
                     .tappable44()
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Shuffle")
+            .accessibilityLabel(LS("queue.shuffle"))
             .accessibilityValue(surface.shuffle ? LS("nowPlaying.on") : LS("nowPlaying.off"))
             .accessibilityAddTraits(surface.shuffle ? .isSelected : [])
 
@@ -551,6 +441,29 @@ private struct PlayerHero: View {
     /// Whether the slider is under the finger — a poll landing mid-drag must not
     /// yank the knob back to the server's last known level.
     @State private var isAdjustingVolume = false
+    /// When the last live level went out, so a drag doesn't flood the zone.
+    @State private var lastVolumeSentAt = Date.distantPast
+
+    /// A volume slider that only commits on release is a picture of a volume
+    /// control, not a volume control: you drag, the knob moves, and the room
+    /// stays exactly as loud as it was until you let go. Every hardware remote
+    /// and every other player changes the level as you move.
+    ///
+    /// Throttled rather than debounced. A trailing debounce would send nothing
+    /// at all while the finger keeps moving — which is the behaviour being fixed
+    /// — so this sends the leading value and then at most one every 150 ms. The
+    /// release still sends the final value unconditionally, so where the knob
+    /// stops is always where the zone ends up, even if the last tick was
+    /// throttled away.
+    private static let liveVolumeInterval: TimeInterval = 0.15
+
+    private func sendLiveVolume(_ value: Double, _ vol: PlayerVolume) {
+        guard isAdjustingVolume else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastVolumeSentAt) >= Self.liveVolumeInterval else { return }
+        lastVolumeSentAt = now
+        vol.set(value)
+    }
 
     @ViewBuilder
     private var volumeRow: some View {
@@ -578,13 +491,15 @@ private struct PlayerHero: View {
 
                 Slider(value: $volumeValue, in: vol.range, step: vol.step) { editing in
                     isAdjustingVolume = editing
-                    if !editing { vol.set(volumeValue) }
+                    // The release always commits, throttle or no throttle.
+                    if !editing { lastVolumeSentAt = .distantPast; vol.set(volumeValue) }
                 }
+                .onChange(of: volumeValue) { _, v in sendLiveVolume(v, vol) }
                 // Neutral tint (not gold) so the volume reads as a separate
                 // control and isn't mistaken for a second progress bar.
                 .tint(.white.opacity(0.55))
                 .controlSize(.small)
-                .accessibilityLabel("Volume")
+                .accessibilityLabel(LS("nowPlaying.volume"))
 
                 Text("\(vol.isMuted ? 0 : Int(volumeValue.rounded()))")
                     .font(.caption.monospacedDigit())
@@ -750,8 +665,13 @@ private struct PlayerHero: View {
 
     /// Just the "what got skipped" note. There is deliberately no stop button on
     /// this screen: a music player's marquee offers play/pause, not a destructive
-    /// stop-and-wipe. Stopping is still reachable from the mini-player, and the
-    /// queue screen can clear what's upcoming.
+    /// stop-and-wipe. Stopping is still reachable from the mini-player.
+    ///
+    /// This used to add "and the queue screen can clear what's upcoming", which
+    /// is true for the on-device queue and false for a Roon zone — Roon's
+    /// Extension API has no queue-mutation verb at all. `QueueView` now says so
+    /// on the zone path instead of leaving you hunting for a button that cannot
+    /// exist.
     private func statusLine(_ note: String) -> some View {
         Text(note)
             .font(.caption2)
@@ -767,5 +687,181 @@ private struct PlayerHero: View {
         }
         feat = await client.featuresFor(title: title, artist: surface.artist, album: surface.album)
         attrs = await client.attributesFor(title: title, artist: surface.artist, album: surface.album)
+    }
+}
+
+// MARK: - Scrubber
+
+/// Custom, bounded progress bar (the system Slider rendered full-bleed here).
+/// Clear track, gold fill, draggable thumb, elapsed/remaining.
+///
+/// Owns the position clock so a tick redraws this and not the whole player.
+@MainActor
+struct PlayerScrubber: View {
+    let positionSec: Double
+    let durationSec: Double
+    let isPlaying: Bool
+    /// True for an engine that publishes a live position of its own; then there
+    /// is nothing to interpolate and no ticker to run.
+    let positionIsContinuous: Bool
+    let queueSummary: String?
+    let onSeek: (Double) -> Void
+
+    init(positionSec: Double, durationSec: Double, isPlaying: Bool,
+         positionIsContinuous: Bool, queueSummary: String?,
+         onSeek: @escaping (Double) -> Void) {
+        self.positionSec = positionSec
+        self.durationSec = durationSec
+        self.isPlaying = isPlaying
+        self.positionIsContinuous = positionIsContinuous
+        self.queueSummary = queueSummary
+        self.onSeek = onSeek
+        // Seed from the real position so the first frame is right — no flash
+        // from 0:00, and it renders correctly off-screen too (the wall display
+        // and the share cards draw this without presenting it).
+        let pos = max(0, positionSec)
+        _anchorPosition = State(initialValue: pos)
+        _displayPosition = State(initialValue: pos)
+    }
+
+    // Position while dragging, in seconds. Held separately from the displayed
+    // position so letting go can't be undone by a poll landing in the same frame.
+    @State private var isSeeking = false
+    @State private var seekPositionSec: Double = 0
+    // For outputs that report a position per poll rather than continuously: the
+    // last known-true position and when we learned it. See
+    // `NowPlayingModel.interpolatedPosition`.
+    @State private var anchorPosition: Double = 0
+    @State private var anchorDate: Date = .init()
+    @State private var displayPosition: Double = 0
+
+    /// Whether the interpolating ticker should be running at all, and the key
+    /// that restarts it. A paused zone has a position that by definition does not
+    /// move, so ticking there wrote the same number into `@State` once a second
+    /// forever — SwiftUI does not dedupe an equal `Double`, so a paused phone
+    /// redrew at 1 Hz until the screen locked.
+    private struct TickerKey: Equatable { let running: Bool }
+    private var tickerKey: TickerKey {
+        TickerKey(running: !positionIsContinuous && isPlaying)
+    }
+
+    /// The position to show right now: the finger while dragging, the engine's
+    /// own clock when it has one, otherwise our interpolation.
+    private var shownPosition: Double {
+        if isSeeking { return seekPositionSec }
+        return positionIsContinuous ? positionSec : displayPosition
+    }
+
+    /// Pin the displayed position to a known-true value and stamp the wall clock.
+    private func setAnchor(_ pos: Double) {
+        anchorPosition = max(0, pos)
+        anchorDate = Date()
+        displayPosition = anchorPosition
+    }
+
+    var body: some View {
+        // Read the position UNCONDITIONALLY. Folding it into a ternary let Swift
+        // short-circuit it whenever the duration was still 0, so SwiftUI never
+        // registered a dependency and the row stopped redrawing entirely.
+        let pos = shownPosition
+        let dur = durationSec
+        let frac = NowPlayingModel.fraction(position: pos, duration: dur)
+        VStack(spacing: Spacing.xs) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.28)).frame(height: 6)
+                    Capsule().fill(Color.roonGold).frame(width: max(0, w * frac), height: 6)
+                    // Always show the knob (even at 0:00) so the bar clearly reads
+                    // as a scrubber rather than a flat line.
+                    Circle().fill(.white)
+                        .frame(width: 16, height: 16)
+                        .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+                        .offset(x: min(max(w * frac - 8, 0), w - 16))
+                }
+                .frame(maxHeight: .infinity, alignment: .center)
+                .contentShape(Rectangle())
+                // High priority so a drag starting on the scrubber beats the paging
+                // TabView that carries the queue one swipe away.
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { v in
+                            guard let s = NowPlayingModel.seekSeconds(
+                                atX: v.location.x, width: w, duration: dur) else { return }
+                            isSeeking = true
+                            seekPositionSec = s
+                        }
+                        .onEnded { v in
+                            guard let s = NowPlayingModel.seekSeconds(
+                                atX: v.location.x, width: w, duration: dur) else {
+                                isSeeking = false; return
+                            }
+                            seekPositionSec = s
+                            setAnchor(s)          // hold until the next poll confirms
+                            onSeek(s)
+                            isSeeking = false
+                        }
+                )
+            }
+            .frame(height: 22)
+            .accessibilityElement()
+            .accessibilityLabel(LS("nowPlaying.playbackPosition"))
+            .accessibilityValue(NowPlayingModel.formatTime(pos))
+            .accessibilityHint(LS("nowPlaying.scrubHint"))
+            .accessibilityAdjustableAction { direction in
+                guard dur > 0 else { return }
+                let step = dur * 0.05
+                let target = direction == .increment ? min(pos + step, dur) : max(pos - step, 0)
+                setAnchor(target)     // hold until the next poll confirms
+                onSeek(target)
+            }
+
+            HStack {
+                Text(NowPlayingModel.formatTime(pos))
+                Spacer()
+                // "3 van 24" between the two counters: it's positional
+                // information, same as the clock, and this row already has the
+                // space. A line of its own under the title would have made the
+                // busiest part of the screen busier.
+                if let queue = queueSummary {
+                    Text(queue)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                Text(NowPlayingModel.remainingLabel(position: pos, duration: dur))
+            }
+            .font(.footnote.weight(.medium).monospacedDigit())
+            .foregroundStyle(.primary)
+        }
+        // Re-anchor on every authoritative update. Skipped entirely for an engine
+        // that publishes a live position — writing state at 2 Hz to recompute a
+        // number we already have is pure churn.
+        .onChange(of: positionSec) { _, pos in
+            guard !positionIsContinuous, !isSeeking else { return }
+            setAnchor(pos)
+        }
+        // Pause/resume re-anchors at the frozen value, so resuming continues
+        // where the bar stopped instead of jumping by the paused interval.
+        .onChange(of: isPlaying) { _, _ in
+            guard !positionIsContinuous else { return }
+            setAnchor(displayPosition)
+        }
+        // A `.task`, not `Timer.publish(...).autoconnect()` inside `body`: that
+        // built a NEW publisher on every body evaluation, and since the tick
+        // itself caused an evaluation it re-subscribed a fresh timer every
+        // second. This one starts when playback starts, stops when it stops, and
+        // is cancelled for free when the view goes away.
+        .task(id: tickerKey) {
+            guard tickerKey.running else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled, !isSeeking else { continue }
+                displayPosition = NowPlayingModel.interpolatedPosition(
+                    anchor: anchorPosition, anchoredAt: anchorDate, now: Date(),
+                    isPlaying: true, duration: durationSec)
+            }
+        }
     }
 }

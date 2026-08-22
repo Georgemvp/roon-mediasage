@@ -87,6 +87,7 @@ public struct SonicRadioView: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
+            .accessibilityLabel(LS("a11y.refresh"))
             .help(LS("sonicRadio.refreshHelp"))
         }
         .task { await load(force: false) }

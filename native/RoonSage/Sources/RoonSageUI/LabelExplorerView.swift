@@ -31,7 +31,7 @@ public struct LabelExplorerView: View {
                 }
                 .pickerStyle(.segmented)
             }
-            Section(LS("Labels (\(labels.count))")) {
+            Section(String(format: LS("labelExplorer.labelsSection"), labels.count)) {
                 ForEach(labels) { label in
                     NavigationLink(value: label) { labelRow(label) }
                         .contextMenu {
@@ -81,7 +81,7 @@ public struct LabelExplorerView: View {
             labelGlyph(label, size: 52)
             VStack(alignment: .leading, spacing: 4) {
                 Text(label.name).font(.headline).lineLimit(2)
-                LT("\(label.albumCount) albums in je bibliotheek")
+                Text(String(format: LS("labelExplorer.albumsInLibrary"), label.albumCount))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

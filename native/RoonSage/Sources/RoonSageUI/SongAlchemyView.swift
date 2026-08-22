@@ -113,7 +113,7 @@ public struct SongAlchemyView: View {
                     Image(systemName: "plus").foregroundStyle(tint)
                 }
                 .buttonStyle(.borderless)
-                .accessibilityLabel(LS("Track toevoegen aan \(title)"))
+                .accessibilityLabel(String(format: LS("a11y.addTrackTo"), title))
             }
             if tracks.wrappedValue.isEmpty {
                 LT("songAlchemy.empty")
@@ -134,6 +134,7 @@ public struct SongAlchemyView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel(LS("a11y.removeTrack"))
                     }
                 }
             }
@@ -158,6 +159,7 @@ public struct SongAlchemyView: View {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel(LS("a11y.clearSearch"))
                 }
             }
             .padding(Spacing.md)
@@ -208,7 +210,7 @@ public struct SongAlchemyView: View {
     }
 
     private var resultsSection: some View {
-        Section(LS("Alchemieresultaten (\(results.count))")) {
+        Section(String(format: LS("songAlchemy.resultsSection"), results.count)) {
             HStack(spacing: Spacing.sm) {
                 Button {
                     Haptics.success()

@@ -510,7 +510,7 @@ public struct GenerateView: View {
                         Button { model.playOne(t, client: client) } label: { Image(systemName: "play.fill") }
                             .buttonStyle(.borderless)
                             .disabled(!client.hasActiveOutput)
-                            .accessibilityLabel(LS("Speel \(t.title)"))
+                            .accessibilityLabel(String(format: LS("a11y.playTrack"), t.title))
                     }
                 }
                 .contextMenu {

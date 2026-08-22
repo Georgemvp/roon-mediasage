@@ -49,7 +49,7 @@ public struct RecommendView: View {
             recommendSection
 
             if !albums.isEmpty {
-                Section(LS("Aanbevolen albums (\(albums.count))")) {
+                Section(String(format: LS("recommend.albumsSection"), albums.count)) {
                     if let resultFilters {
                         FilterChips(filters: resultFilters).padding(.vertical, 2)
                     }
@@ -209,7 +209,7 @@ public struct RecommendView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(!client.hasActiveOutput)
-                    .accessibilityLabel(LS("Speel \(album.album) af"))
+                    .accessibilityLabel(String(format: LS("a11y.playTrack"), album.album))
                     .help(client.hasActiveOutput ? LS("recommend.playAlbumHelp") : LS("recommend.pickZoneFirst"))
                 }
             }

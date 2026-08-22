@@ -48,6 +48,7 @@ public struct ContentView: View {
         .animation(Motion.standard, value: client.connectionState.isConnected)
         .animation(Motion.standard, value: client.hasLiveSession)
         .animation(Motion.standard, value: client.offlineMode)
+        .animation(Motion.standard, value: client.zonesAreStale)
         .overlay(alignment: .bottom) { ActionErrorToast() }
         .roonSageAppearance()
         .appLanguage()
@@ -109,14 +110,30 @@ struct ReconnectingBanner: View {
         // screenshot the UI harness ever took — six batches of building never
         // surfaced it, because you have to *look*.
         if !client.connectionState.isConnected && !client.hasLiveSession && !client.offlineMode {
-            Label(client.connectionState.label, systemImage: "arrow.clockwise")
-                .font(.caption.weight(.medium))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
-                .padding(.top, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
+            pill(client.connectionState.label, icon: "arrow.clockwise")
+        } else if client.zonesAreStale {
+            // The other half of the zone-grace window, which had no voice at all.
+            //
+            // When the Roon link drops, Core deliberately KEEPS the last-known
+            // zones for 45 s (`RoonClient.zoneGraceSeconds`) so a two-second blip
+            // doesn't empty the picker and disable every play button. It marks
+            // them `zonesAreStale` while it does — and until now not one view read
+            // that flag. So the app looked entirely healthy: zones listed, zone
+            // selected, transport enabled, and the only sign anything was wrong
+            // was an error toast AFTER you pressed play. The pill above can't
+            // cover it either, because `hasLiveSession` is still true here.
+            pill(LS("root.zonesStale"), icon: "exclamationmark.triangle.fill")
         }
+    }
+
+    private func pill(_ text: String, icon: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(.ultraThinMaterial, in: Capsule())
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 
@@ -405,6 +422,10 @@ struct RootView: View {
     /// Same for settings: a tab in the bar is prime real estate for a screen you
     /// visit twice a year. It's a gear on the library, and a sheet from here.
     @State private var showSettings = false
+    /// A destination with no tab on a compact iPhone (the queue, playlists,
+    /// bookmarks, the Lab tools, …), presented over the current tab. See
+    /// `iOSTab(for:)` for why these can't just be a selection.
+    @State private var destinationSheet: SidebarItem?
     /// Which page of the player sheet is showing: 0 the player, 1 the queue.
     @State private var playerPage = 0
     @AppStorage("lastTab") private var lastTabRaw: String = SidebarItem.library.rawValue
@@ -425,10 +446,28 @@ struct RootView: View {
             // buttons instead of floating over them.
             // Cmd/Ctrl+K opens the command palette from anywhere in the app.
             .background {
-                Button("") { showPalette.toggle() }
-                    .keyboardShortcut("k", modifiers: .command)
-                    .opacity(0)
-                    .accessibilityHidden(true)
+                ZStack {
+                    Button("") { showPalette.toggle() }
+                        .keyboardShortcut("k", modifiers: .command)
+                    #if os(macOS)
+                    // ⌘F — the reflex this app didn't answer.
+                    //
+                    // If the screen you're on already has a search field, put the
+                    // cursor in it. If it doesn't, go to the one that does and
+                    // focus it on the next runloop turn, once SwiftUI has built
+                    // it. Both halves fail silently: the worst case is that ⌘F
+                    // navigates and doesn't take focus, which is still better
+                    // than nothing happening.
+                    Button("") {
+                        if SearchFieldFocus.focusKeyWindowSearchField() { return }
+                        go(to: .library)
+                        DispatchQueue.main.async { SearchFieldFocus.focusKeyWindowSearchField() }
+                    }
+                    .keyboardShortcut("f", modifiers: .command)
+                    #endif
+                }
+                .opacity(0)
+                .accessibilityHidden(true)
             }
             .sheet(isPresented: $showPalette) {
                 paletteSheet
@@ -456,26 +495,37 @@ struct RootView: View {
     /// mini-bar, the command palette and any empty-state button all keep working
     /// without knowing which shell they're in — on macOS/iPad the sidebar item
     /// still exists and this stays a plain selection.
+    ///
+    /// The same reasoning had to be extended to every OTHER tabless destination.
+    /// `iOSTabSelection` maps an arbitrary item onto one of four tags, and
+    /// anything it didn't recognise fell into a `default` that returned
+    /// `.library`. The command palette offers seventeen "Ga naar …" commands, so
+    /// nine of them — Wachtrij, Playlists, Bewaard, DJ, Lab, Sonic Lab, Music
+    /// Map, Multitag, Smaak — set a selection no tab answered to and silently
+    /// landed you on the library. `Self.iOSTab(for:)` now returns nil instead of
+    /// guessing, and nil means "present it", exactly like the player and settings.
     private func go(to item: SidebarItem) {
         #if os(iOS)
         if horizontalSizeClass == .compact {
             switch item {
             case .nowPlaying: playerPage = 0; showPlayer = true; return
             case .settings:   showSettings = true; return
-            default: break
+            default:
+                if Self.iOSTab(for: item) == nil { destinationSheet = item; return }
             }
         }
         #endif
         selection = item
     }
 
-    /// Restore the tab you were last on. Guards against a `.nowPlaying` value
-    /// persisted by an older build, which no longer has a tab on the phone.
+    /// Restore the tab you were last on. Guards against a value persisted by an
+    /// older build (or reached through a sheet) that has no tab on the phone —
+    /// restoring one of those would leave the selection pointing at a tag the
+    /// TabView cannot show, and re-raise a sheet you closed last session.
     private func restoreLastTab() {
         guard let item = SidebarItem(rawValue: lastTabRaw) else { return }
         #if os(iOS)
-        // Neither has a tab on a compact iPhone any more; both are sheets.
-        if horizontalSizeClass == .compact, item == .nowPlaying || item == .settings { return }
+        if horizontalSizeClass == .compact, Self.iOSTab(for: item) == nil { return }
         #endif
         selection = item
     }
@@ -592,7 +642,7 @@ struct RootView: View {
         TabView(selection: iOSTabSelection) {
             NavigationStack {
                 LibraryView()
-                    // NOT `LS("Bibliotheek (\(count))")`. That interpolates the
+                    // NOT an LS key with the count interpolated into it. That bakes the
                     // number INTO the key, so it can never resolve and silently
                     // renders the Dutch literal — the app's main heading stayed
                     // Dutch on an English phone while everything under it
@@ -647,6 +697,7 @@ struct RootView: View {
         .onChange(of: selection) { _, item in lastTabRaw = item.rawValue }
         .sheet(isPresented: $showPlayer) { playerSheet }
         .sheet(isPresented: $showSettings) { settingsSheet }
+        .sheet(item: $destinationSheet) { destinationSheetView($0) }
         .task { await autoPullFromServerIfEmpty() }
     }
 
@@ -726,29 +777,59 @@ struct RootView: View {
         .presentationDragIndicator(.visible)
     }
 
-    /// Which of the four tabs an arbitrary destination belongs to.
+    /// Which of the four tabs a destination belongs to — **nil when it has none**.
     ///
     /// The command palette can ask for any of the 29 `SidebarItem`s by name, and
-    /// a `TabView` selection with no matching tag renders a BLANK tab — so every
-    /// item has to resolve to one of the four. `.nowPlaying` and `.settings`
-    /// never reach here: `go(to:)` turns those into sheets.
+    /// a `TabView` selection with no matching tag renders a BLANK tab, so every
+    /// item does have to resolve to something. It used to resolve here, with a
+    /// `default` that answered `.library` for everything it didn't recognise —
+    /// which turned nine palette commands into no-ops that dropped you on the
+    /// library. Answering nil instead lets `go(to:)` present those destinations
+    /// rather than pretending they are a tab; `.nowPlaying` and `.settings` never
+    /// reach here at all, they were already sheets.
+    static func iOSTab(for item: SidebarItem) -> SidebarItem? {
+        switch item {
+        case .library:                     .library
+        case .sonicSearch, .ask:           .sonicSearch
+        case .discover, .discovery:        .discovery
+        case .stationsHub, .radios, .journeys, .djModes, .generate, .recommend:
+                                           .stationsHub
+        default:                           nil
+        }
+    }
+
     private var iOSTabSelection: Binding<SidebarItem> {
-        let searchItems: Set<SidebarItem> = [.sonicSearch, .ask]
-        let exploreItems: Set<SidebarItem> = [.discover, .discovery]
-        let stationItems: Set<SidebarItem> = [
-            .stationsHub, .radios, .journeys, .djModes, .generate, .recommend
-        ]
-        return Binding(
-            get: {
-                if searchItems.contains(selection) { return .sonicSearch }
-                if exploreItems.contains(selection) { return .discovery }
-                if stationItems.contains(selection) { return .stationsHub }
-                // Everything else — the library itself, playlists, bookmarks,
-                // the queue, and every Lab tool — hangs off the library tab.
-                return .library
-            },
+        Binding(
+            // A tabless destination is showing as a sheet OVER the library, so
+            // that is the tab that should stay lit underneath it.
+            get: { Self.iOSTab(for: selection) ?? .library },
             set: { selection = $0 }
         )
+    }
+
+    /// A destination that has no tab, raised over the current one.
+    ///
+    /// Same shape as `playerSheet` and `settingsSheet`, and for the same reason:
+    /// on a four-tab phone the alternative to presenting is not presenting.
+    private func destinationSheetView(_ item: SidebarItem) -> some View {
+        NavigationStack {
+            detailView(for: item)
+                .ambientSurface()
+                .navigationTitle(item.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(LS("lyrics.done")) { destinationSheet = nil }
+                    }
+                }
+        }
+        .nowPlayingBarDocked()
+        // Anything reached from in here (an empty state's "Maak een playlist")
+        // points at a tab BEHIND this sheet, so close it first.
+        .environment(\.navigateTo, NavigateAction { next in
+            destinationSheet = nil
+            go(to: next)
+        })
     }
     #endif
 
@@ -788,14 +869,23 @@ struct RootView: View {
         }
         .padding(10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(LS("Verbinding: \(client.connectionState.label)"))
+        .accessibilityLabel(String(format: LS("a11y.connection"), client.connectionState.label))
     }
 
-    /// Cmd+1…9 jump straight to a destination. Hidden but active (hardware keyboard).
+    /// Cmd+1…9 jump straight to a sidebar row. Hidden but active (hardware keyboard).
+    ///
+    /// Numbered off `SidebarSection.items` — what the sidebar actually shows, in
+    /// the order it shows it. It used to be `SidebarItem.allCases.prefix(9)`,
+    /// which is declaration order in an enum of 29 cases and has nothing to do
+    /// with the sidebar: ⌘4/5/6/9 landed on Vraag het, Genereer, Aanbevelingen and
+    /// DJ Set — four destinations with no row to highlight — while ⌘7/⌘8 hit rows
+    /// 4 and 5. A keyboard shortcut that doesn't match the menu it shadows is
+    /// worse than none, because you learn it wrong.
     private var tabShortcuts: some View {
-        ZStack {
-            ForEach(Array(SidebarItem.allCases.prefix(9).enumerated()), id: \.offset) { idx, item in
-                Button("") { selection = item }
+        let rows = SidebarSection.allCases.flatMap(\.items).prefix(9)
+        return ZStack {
+            ForEach(Array(rows.enumerated()), id: \.offset) { idx, item in
+                Button("") { go(to: item) }
                     .keyboardShortcut(KeyEquivalent(Character("\(idx + 1)")), modifiers: .command)
             }
         }
@@ -821,7 +911,7 @@ struct RootView: View {
                         .font(.caption)
                         .foregroundStyle(Color.roonGold)
                 }
-                .help(LS("Slaaptimer actief tot \(endsAt.formatted(date: .omitted, time: .shortened)) — tik om te annuleren"))
+                .help(String(format: LS("root.sleepTimerActiveUntil"), endsAt.formatted(date: .omitted, time: .shortened)))
             }
         }
         ToolbarItem(placement: .automatic) {

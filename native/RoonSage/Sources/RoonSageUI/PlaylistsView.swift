@@ -85,7 +85,7 @@ public struct PlaylistsView: View {
             Button(LS("playlists.cancel"), role: .cancel) { pendingDelete = nil }
         } message: {
             if let name = pendingDelete?.name {
-                LT("\(name) wordt definitief verwijderd.")
+                Text(String(format: LS("playlists.deleteConfirmBody"), name))
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -133,7 +133,7 @@ public struct PlaylistsView: View {
                             .padding(.vertical, 2)
                             .background(badge.color.opacity(0.18), in: Capsule())
                             .foregroundStyle(badge.color)
-                            .accessibilityLabel(LS("Bron: \(badge.text)"))
+                            .accessibilityLabel(String(format: LS("a11y.source"), badge.text))
                     }
                 }
                 Text("\(pl.trackCount) nummers · \(pl.createdAt.prefix(10))")
@@ -148,7 +148,7 @@ public struct PlaylistsView: View {
             .disabled(!client.hasActiveOutput)
             .accessibilityLabel(LS("playlists.playPlaylist"))
             .help(client.hasActiveOutput
-                  ? LS("Speel af in \(client.selectedZone?.displayName ?? localOutputLabel)")
+                  ? String(format: LS("playlists.playInZone"), client.selectedZone?.displayName ?? localOutputLabel)
                   : LS("playlists.chooseZoneFirst"))
 
             if client.qobuzConfigured {
@@ -177,7 +177,7 @@ public struct PlaylistsView: View {
             let tracks = await client.playlistTracks(id: pl.id)
             guard !tracks.isEmpty else { return }
             statusOK = nil
-            statusBanner = LS("“\(pl.name)” bewaren in Qobuz…")
+            statusBanner = String(format: LS("playlists.savingToQobuz"), pl.name)
             if let r = await client.saveToQobuz(name: pl.name, tracks: tracks) {
                 statusOK = true
                 statusBanner = "“\(pl.name)” → Qobuz: \(r.matched)/\(r.total) gematcht."
@@ -209,7 +209,7 @@ public struct PlaylistsView: View {
     private func play(_ pl: DatabaseManager.PlaylistSummary) async {
         Haptics.tap()
         statusOK = nil
-        statusBanner = LS("“\(pl.name)” starten…")
+        statusBanner = String(format: LS("playlists.starting"), pl.name)
         let played = await client.playPlaylist(id: pl.id)
         if played > 0 {
             statusOK = true
@@ -218,7 +218,7 @@ public struct PlaylistsView: View {
             Haptics.success()
         } else {
             statusOK = false
-            statusBanner = LS("“\(pl.name)” kon niet starten — geen van de tracks was beschikbaar.")
+            statusBanner = String(format: LS("playlists.startFailed"), pl.name)
             Haptics.error()
         }
     }

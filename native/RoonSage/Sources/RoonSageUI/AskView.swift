@@ -47,7 +47,7 @@ public struct AskView: View {
                 .listRowSeparator(.hidden)
             } else {
                 resultsActionsSection
-                Section(LS("Resultaten (\(results.count))")) {
+                Section(String(format: LS("section.results"), results.count)) {
                     ForEach(results, id: \.id) { track in
                         AIResultRow(title: track.title, subtitle: subtitle(track), imageKey: track.imageKey) {
                             HStack(spacing: Spacing.sm) {
@@ -58,14 +58,14 @@ public struct AskView: View {
                                 }
                                 .buttonStyle(.borderless)
                                 .disabled(!client.hasActiveOutput)
-                                .accessibilityLabel(LS("Zet \(track.title) als volgende in de wachtrij"))
+                                .accessibilityLabel(String(format: LS("a11y.queueNext"), track.title))
                                 Button { play([track]) } label: {
                                     Image(systemName: "play.fill")
                                         .tappable44()
                                 }
                                 .buttonStyle(.borderless)
                                 .disabled(!client.hasActiveOutput)
-                                .accessibilityLabel(LS("Speel \(track.title) nu"))
+                                .accessibilityLabel(String(format: LS("a11y.playNow"), track.title))
                             }
                         }
                     }
@@ -84,7 +84,7 @@ public struct AskView: View {
             Button(LS("ask.cancel"), role: .cancel) {}
             Button(LS("ask.save")) { save() }
         } message: {
-            LT("Bewaar \(results.count) nummers als lokale playlist.")
+            Text(String(format: LS("ask.saveBody"), results.count))
         }
     }
 

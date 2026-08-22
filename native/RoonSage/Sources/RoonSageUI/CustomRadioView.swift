@@ -226,7 +226,7 @@ public struct CustomRadioView: View {
 
                 let items = mgmt.radios.filter { $0.category == aiCategory.rawValue }
                 if items.isEmpty {
-                    LT("Geen \(aiCategory.label.lowercased())-radio's beschikbaar — analyseer eerst meer muziek.")
+                    Text(String(format: LS("customRadio.noneForCategory"), aiCategory.label.lowercased()))
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
                     ForEach(items) { aiRow($0) }
@@ -258,6 +258,7 @@ public struct CustomRadioView: View {
                     .foregroundStyle(hidden ? Color.secondary : Color.roonGold)
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel(hidden ? LS("customRadio.hiddenOnMain") : LS("customRadio.hideOnMain"))
             .help(hidden ? LS("customRadio.hiddenOnMain") : LS("customRadio.hideOnMain"))
 
             Button {
@@ -267,6 +268,7 @@ public struct CustomRadioView: View {
                 Image(systemName: "square.and.pencil")
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel(LS("customRadio.adoptAsEditable"))
             .help(LS("customRadio.adoptAsEditable"))
 
             Toggle("", isOn: aiSelectedBinding(item))

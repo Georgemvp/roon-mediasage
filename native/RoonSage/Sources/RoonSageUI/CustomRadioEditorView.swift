@@ -64,7 +64,7 @@ struct CustomRadioEditorView: View {
                     }
                     Slider(value: $config.adventurousness, in: 0...1, step: 0.05).tint(Color.roonGold)
                 }
-                Stepper(LS("Aantal tracks: \(config.targetCount)"), value: $config.targetCount, in: 8...100, step: 1)
+                Stepper(String(format: LS("customRadioEditor.trackCountStepper"), config.targetCount), value: $config.targetCount, in: 8...100, step: 1)
             } header: {
                 LT("customRadioEditor.tuningHeader")
             } footer: {
@@ -151,7 +151,7 @@ struct CustomRadioEditorView: View {
                 else { config.decades.append(d) }
             } label: {
                 HStack {
-                    Text(d >= 2000 ? LS("Jaren \(d)") : LS("Jaren \(d % 100)"))
+                    Text(String(format: LS("customRadioEditor.decade"), d >= 2000 ? d : d % 100))
                     Spacer()
                     if config.decades.contains(d) { Image(systemName: "checkmark").foregroundStyle(Color.roonGold) }
                 }
@@ -190,7 +190,7 @@ struct FacetMultiSelectView: View {
     var body: some View {
         List {
             if !selection.isEmpty {
-                Section(LS("Gekozen (\(selection.count))")) {
+                Section(String(format: LS("section.chosen"), selection.count)) {
                     Button(LS("customRadioEditor.clearSelection"), role: .destructive) { selection.removeAll() }
                         .font(.caption)
                 }

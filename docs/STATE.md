@@ -20,6 +20,99 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+NU (2026-08-23, nacht): **360°-AUDIT VOLLEDIG UITGEVOERD — BATCH A, B ÉN C AF.**
+(user: "Pak alles aan. Echt alles zodat ik morgenochtend wakker wordt en de
+volledige audit verbeteringen zijn uitgevoerd en ik weer door kan.")
+Rapport + afvinklijst bovenaan `docs/NATIVE_APP_AUDIT.md`.
+**Code-only geverifieerd. NIET gecommit, NIET gepusht, NIET getagd** — een tag
+stuurt de analyzer via de CI-DMG naar de mini en daar is deze sessie niet om
+gevraagd.
+
+Verse uitkomsten (alle in één ronde gedraaid):
+`RoonProtocol` 12 tests 0 fouten · `RoonSage` **984 tests 0 fouten** (was 973) ·
+`swift build -c release --product RoonSage` compleet · iOS-typecheck
+`RoonSageUI` **BUILD SUCCEEDED** · check-localization **1134 sleutels, 0 missend
+in nl én en, 0 geïnterpoleerd, 0 wees, `--strict` exit 0** · swiftlint 466
+violations / **2 serious** (was 469 / 5).
+
+**Batch A** — de rode draad was toestand die Core bijhoudt maar die de UI nooit
+bereikte: A1 `ownsQueueSubscription` (wachtrij was op de cliënt tot 15 s leeg),
+A2 `isLoadingOverview` (skeleton was onbereikbaar, je zag "Nog geen bibliotheek"),
+A3 `loadFirstGridPage` (favorietenfilter zag maar 120 items na een tabwissel),
+A4 `zonesAreStale` in de banner (0 lezers), A5 `iOSTab(for:)` → nil (9 van de 17
+palet-bestemmingen kwamen stil op Bibliotheek uit).
+
+**Batch B** — B1 `TransportIntent`: optimistic UI op play/pause, shuffle, repeat,
+mute en volume, met rollback als het commando faalt en alleen als er niets
+nieuwers is geland (pure functie, 9 tests). Plus live volume tijdens het slepen
+(throttle 150 ms) i.p.v. pas bij loslaten. B2 de **61 geïnterpoleerde sleutels →
+0**. B3 het macOS-app-target bleek 25+ harde Nederlandse literals te hebben en
+**nul** `LS()`: menubalk, menubar-extra én de hele updater, nu alle 33
+gelokaliseerd. B4 ⌘1…9 volgt nu `SidebarSection.items`. B5 "wis de wachtrij"
+ingetrokken (Roon's API kán het niet) en in de zone-wachtrij uitgelegd. B6
+dedup-chip in de bibliotheek.
+
+**Batch C** — C1 zeven VoiceOver-labels + twee harde Engelse labels. C2
+`PlayerScrubber` als eigen view: de hele hero hertekende op 1 Hz, óók gepauzeerd,
+en maakte elke body-pass een nieuwe `Timer.publish`; nu tikt er niets tijdens
+pauze. C3 ⌘F via AppKit (`.searchFocused` is macOS 15+, dit project staat op 14).
+C4 `enumerated()` uit de wachtrij. C5 3 van de 5 `empty_count`.
+
+**`check-localization.sh` is uitgebreid en gaat nu wél gaten.** Hij scande alleen
+`RoonSageUI` + `RoonSageCore` en meldde daarom al die tijd "0 missing" over een
+app-target dat de catalogus niet eens gebruikte. Scant nu ook `RoonSage`,
+`RoonSageAnalyzerApp` en `native/iosapp`, en `--strict` (die in CI draait) faalt
+voortaan óók op een nieuwe geïnterpoleerde sleutel. Negatief getest: opzettelijke
+regressie → exit 1, na terugdraaien → exit 0.
+
+---
+_Hieronder de `## Now` van de vorige sessie (bibliotheek-view, geshipt als
+v1.10.273). Bewaard, niet geschrapt — zie het bovenste punt in `## Open items`._
+
+NU (2026-08-22, laat): **360°-AUDIT (UX + VOLLEDIGE FUNCTIONALITEIT) — RAPPORT AF,
+BATCH A GEÏMPLEMENTEERD EN GEVERIFIEERD.** (user: "Voer een grondige 360-graden
+audit uit ... stel een geprioriteerd actieplan op en repareer de gevonden issues
+incrementeel in batches.") Het rapport staat bovenaan `docs/NATIVE_APP_AUDIT.md`
+(2026-08-22); de audit van 2026-06-12 staat eronder onder "Historie".
+**Code-only geverifieerd. NIET gecommit, NIET gepusht, NIET getagd.**
+
+Verse uitkomsten na Batch A: `swift build` schoon · **975 tests, 0 fouten**
+(baseline was 973; +2 nieuw) · `swift build -c release --product RoonSage`
+compleet · check-localization **1034 sleutels, 0 missend in nl én en, 0 wees** ·
+swiftlint **469 violations / 5 serious — exact gelijk aan de baseline**, dus geen
+nieuwe geïntroduceerd. (`swiftlint` stond niet op de mini geïnstalleerd; nu via
+brew, CI deed `brew install swiftlint` al zelf.)
+
+Batch A, alle vijf af — de rode draad was **toestand die Core correct bijhoudt
+maar die de UI nooit bereikt**:
+- **A1 · `RoonClient.ownsQueueSubscription(mode:)`** — `startQueue`/`stopQueue` zijn
+  nu no-ops in `.server`-modus. De verzonden apps draaien `.server`; daar komt
+  `queueItems` uit de `PlaybackSnapshot`, terwijl beide functies hem als eerste
+  leegden en het Roon-abonnement daarna stil faalde (`try?` → nil → return).
+  Gevolg: de wachtrij openen op een **gepauzeerde** zone gaf tot **15 s** "niets in
+  de wachtrij" (PlaybackEventHub pusht alleen bij een gewijzigde digest, de
+  fallback-poll staat op 15 s), en hem sluiten blankte de "hierna"-pil én de
+  "nog N over"-teller van de speler. Test: `QueueOwnershipTests.swift`.
+- **A2 · `LibraryView.isLoadingOverview`** — de skeleton was onbereikbare code
+  (`loadOverview` zet `loadedModes` synchroon vóór de Task), dus het overzicht
+  toonde de hele laadtijd "Nog geen bibliotheek — synchroniseer je bibliotheek"
+  op een apparaat mét bibliotheek.
+- **A3 · `LibraryView.loadFirstGridPage(_:)`** — `fillAllPages` hing alleen aan
+  `onChange(of: favoritesOnly)`, dus na een tabwissel of een zoekopdracht
+  betekende "Alleen favorieten" weer "de favorieten binnen de eerste 120".
+- **A4 · `ReconnectingBanner` toont `zonesAreStale`** — die vlag werd op drie
+  plekken berekend en door géén enkele view gelezen. Tijdens de 45 s zone-grace
+  zag de app er volledig gezond uit; de waarheid kwam pas als foutmelding ná een
+  druk op play. Nieuwe sleutel `root.zonesStale` (nl + en).
+- **A5 · `RootView.iOSTab(for:)` geeft nu nil i.p.v. `.library`** — negen van de
+  zeventien palet-bestemmingen (Wachtrij, Playlists, Bewaard, DJ, Lab, Sonic Lab,
+  Music Map, Multitag, Smaak) kwamen op de iPhone stil op het bibliotheek-tabblad
+  uit. Tabloze bestemmingen worden nu gepresenteerd via `destinationSheet`.
+
+---
+_Hieronder staat de vorige `## Now` (bibliotheek-view, afgerond en geshipt als
+v1.10.273). Bewaard, niet geschrapt — zie het bovenste punt in `## Open items`._
+
 NU (2026-08-22, nacht): **DE BIBLIOTHEEK-VIEW — SNELLER EN DUIDELIJKER.**
 (user: "Verbeter de bibliotheek view van RoonSage iOS zodat het duidelijker is
 en sneller" + "geen simulator, ik ga slapen".) Dus **code-only geverifieerd**:
@@ -1008,6 +1101,12 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
+- **Committen, pushen en taggen** — alles staat ongecommit in de boom. Push + tag stuurt de analyzer via de CI-DMG naar de mini; dat is bewust niet gedaan zonder opdracht. Gewijzigd: `RoonClient.swift`, `RoonClient+Transport.swift`, `RoonClient+Remote.swift`, `TransportIntent.swift` (nieuw), `VectorIndex.swift`, `MusicBrainzDiscoveryClient.swift`, 20 bestanden in `RoonSageUI`, `SearchFieldFocus.swift` (nieuw), de 3 bestanden van het macOS-target, beide `Localizable.strings`, `check-localization.sh`, `QueueOwnershipTests.swift` + `TransportIntentTests.swift` (nieuw), `docs/NATIVE_APP_AUDIT.md`, `docs/STATE.md`.
+- **Op het toestel beoordelen.** Alles is code-only geverifieerd; vier wijzigingen wíl je zien: de optimistic play/pause (moet direct reageren), het live volume tijdens slepen, de `zonesAreStale`-pil als je de Core even wegtrekt, en ⌘F op de Mac.
+- **Optioneel: `swiftlint --fix`** voor de resterende 464 opmaakwaarschuwingen — één commando, maar een diff van honderden regels over 306 bestanden. Bewust apart gehouden zodat hij de inhoudelijke wijzigingen niet onleesbaar maakt.
+- **Batch B/C-restanten die er bewust niet in zitten:** de laatste 2 `empty_count` (Codable wire-veld `DiscoveryDigestStatus.count`; hernoemen breekt het server/client-contract voor een false positive) en de spatiebalk als play/pause op macOS (mag niet vuren met focus in een tekstveld — apart uit te zoeken).
+- **Batch B (functionele verfijning) uit `docs/NATIVE_APP_AUDIT.md`:** B1 optimistic UI op play/pause + shuffle + repeat + mute, plus live volume tijdens het slepen (de Slider commit nu pas bij loslaten, dus de knop beweegt en het geluid niet); B2 de **61 geïnterpoleerde `LS()`-sleutels** naar `String(format:)` — die vallen allemaal terug op het Nederlands ongeacht de taalinstelling, verspreid over 24 bestanden; B3 het macOS-menu (`RoonSage/RoonSageApp.swift:38-57,110-115`) door de stringcatalogus, want dat is hard Nederlands en `check-localization.sh` ziet het niet (het grept alleen op `LS("…")`); B4 ⌘1…9 op de werkelijke zijbalkvolgorde i.p.v. `SidebarItem.allCases.prefix(9)`; B5 "wis wat komt" voor een Roon-zone (`PlayerScreen.swift:741` belooft het, alleen de lokale wachtrij heeft het); B6 dedup-teller in de bibliotheek (`sortAndDedupe` verbergt live-versies zonder dat te zeggen).
+- **Batch C (polish & a11y):** C1 zeven icon-only knoppen zonder VoiceOver-label (`SonicRadioView:87`, `SonicFingerprintView:49`, `CustomRadioView:256,266`, `SongAlchemyView:132,157`, `SonicSearchView:83`) + twee harde Engelse labels (`PlayerScreen:511` "Shuffle", `:587` "Volume"); C2 `PlayerScreen` hertekent de héle hero op 1 Hz — ook gepauzeerd — en maakt bij elke body-pass een nieuwe `Timer.publish`: scrubber naar een eigen subview; C3 ⌘F naar het zoekveld (er is nu geen enkele ⌘F- of spatiebalk-binding); C4 `enumerated()` uit de wachtrij-`ForEach`; C5 de vijf `empty_count`-violations.
 - **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. **Alle zes batches af en getagd** (U1 t/m U12 behalve de backlog-U12). Volgende stap is geen batch maar een oordeel op het toestel. Zie §6 voor de volgorde.
 - **B3 (mood-backfill, GROTER dan gedacht):** er is GEEN mood-backfill — bouwen naar analogie van `refreshAttributes`/`autoArousalRefreshIfNeeded` (FeatureStore `moodRefreshRows`+`setMoodsBatch`, LibraryWalker `refreshMoods(missingKey:)`, AnalyzerModel `autoMoodRefreshIfNeeded()` + launch-wiring). **TRAP: `FeatureStore.contentSignature()` heeft GEEN moods-term** → zonder toevoeging pullen clients de nieuwe moods nooit (mirror ar/tm-patroon).
 - Resterend maar NIET headless verifieerbaar (vereist toestel/GUI): crossfade + gapless (AVPlayer→AVAudioEngine, groot/risico), Siri-intents, Control Center, CarPlay (OS-integratie), chat-agent (LLM), share-CARDS als afbeelding (ImageRenderer — kan niet getest: testtarget importeert RoonSageUI niet)
@@ -1053,6 +1152,8 @@ ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AU
 - Kern-audit files: QobuzClient.swift, LibraryShareServer.swift (:91 enforceToken), RoonClient+DiscoverWeekly.swift (:355 searchQobuz-gate), AnalyzerCore/HTTPServer.swift (5766)
 
 ## Done
+- **AUDIT VOLLEDIG UITGEVOERD: BATCH A + B + C (2026-08-23) — RESULTAAT: 973 → 984 tests 0 fouten, 61 → 0 geïnterpoleerde sleutels, 5 → 2 serious lint, release + iOS-typecheck groen.** 21 bevindingen (5 🔴 / 8 🟠 / 4 🟡 / 4 🟢) uit `docs/NATIVE_APP_AUDIT.md`, alle uitgevoerd behalve drie expliciet gemotiveerde uitzonderingen (zie het statusblok in dat rapport). Twee dingen bleken groter dan de audit inschatte: het macOS-app-target had **nul** `LS()`-aanroepen, en `check-localization.sh` keek daar nooit — beide opgelost, en de gate is nu strenger in plaats van zwakker. Niet gecommit.
+- **360°-AUDIT + BATCH A (2026-08-22, laat) — RESULTAAT: 5 🔴 / 8 🟠 / 4 🟡 / 4 🟢 bevindingen, Batch A af en geverifieerd.** Rapport: `docs/NATIVE_APP_AUDIT.md`. Baseline vóór de fixes: RoonProtocol 12 tests / RoonSage 973 tests, beide 0 fouten; release build exit 0; 1033 sleutels, 0 missend, 61 geïnterpoleerd; swiftlint 469 violations / 5 serious. Na Batch A: 975 tests 0 fouten, 1034 sleutels, swiftlint ongewijzigd (dus geen nieuwe violations). Gewijzigd: `RoonClient.swift`, `LibraryView.swift`, `RootView.swift`, beide `Localizable.strings`, plus `QueueOwnershipTests.swift` (nieuw). Niet gecommit.
 - **GESHIPT + ANALYZER LIVE (2026-08-22 17:08) — `v1.10.271` / `ios-v1.7.237` / `analyzer-v1.1.201`.** Vijf commits: de offline-afspeelbug (kale SHA-namen zonder extensie), het UI-harnas dat nu ook tikt, de tabtitels + offlineglijbaan + ~120 vertaalde sleutels, Stations opnieuw ingedeeld (`native/docs/STATIONS_AUDIT.md`), en STATE.md. **Alle vier de workflows groen** (Native Tests, Analyzer DMG, macOS DMG, iOS TestFlight — "App Store Connect publish succeeded"). **Deploy via de CI-DMG-route**, zoals bij v1.1.200: `gh release download analyzer-v1.1.201`, handtekening + team gecontroleerd (`Developer ID Application: Casper Jansen (5W3QDZ94FH)`, identifier `com.roonsage.analyzer`), oude app bewaard als `/Applications/RoonSage Analyzer.app.bak-1.1.200`, `bootout` → installeren → `bootstrap` (nooit `open -a`). **Verified: 956 tests 0 failures · `swift build -c release` exit 0 · check-localization 985 sleutels, 0 missend / 0 wees · alle drie de UI-tests groen · mini draait analyzer-v1.1.201 als één pid (6558, was 72731), :5767 87.820 tracks, :5766 66.378 tracks, Roon verbonden, 5 zones, `/on-this-day` echte data, 0 ws-sluitingen sinds de herstart.** Client-app NIET gedeployd (constraint).
 - **`native/RoonSage/Package.swift` IS BEWUST NIET GECOMMIT — en nu weten we waarom.** De ongecommitte wijziging `.process("Resources")` → `.copy("Resources")` in het AudioAnalysis-target stond hier al maanden als "losse waarneming, met rust gelaten". Bij het committen bleek het geen rommel maar een **noodzakelijke lokale werkomgeving-fix**: `Sources/AudioAnalysis/Resources/CLAP/` is gitignored en wordt lokaal gevuld door `setup_clap_models.sh`, en de twee `.mlpackage`-mappen daarin delen bestandsnamen (`Manifest.json`, `weight.bin`, `model.mlmodel`). Met `.process` weigert SwiftPM dan te bouwen ("multiple resources named …"); met `.copy` blijft de mapstructuur intact. **Op CI staat die map er niet, dus daar bouwt `.process` prima** — en dat is precies waarom hij niet mee mag: `.copy` verandert de bundle-indeling van de analyzer op CI. Bewezen door de wijziging te stashen: build faalt lokaal, en te unstashen: build groen. **Laat hem ongecommit staan.**
 - **ZONE-VERBINDING WAS ONSTABIEL: TWEE ANALYZER-INSTANTIES SCHOPTEN ELKAAR VAN DE CORE (2026-08-22)** — user: "de verbinding met een zone is niet stabiel" + "als ik op dit apparaat druk switcht hij direct terug naar een zone". **OORZAAK, met bewijs uit `~/Library/Application Support/RoonSage/logs/roonsage.log`:** op de mini draaiden **twee** kopieën van `RoonSage Analyzer.app` (pid 487 via LaunchServices/login-item om 15:50:21, pid 868 via de LaunchAgent om 15:50:38). Beide registreren als Roon-extensie `com.roonsage.server`, en een Core houdt **één verbinding per extensie-id** — dus schopte elke registratie de ander eruit: open → registered → gesloten na ~2 s, eindeloos. Telling per uur: 397 (07u), **1.046 (08u)**, 891 (09u); vóór 19-08 waren het er enkele per dág. **BEWEZEN:** na `launchctl bootout` van de agent → **0 sluitingen in 45 s**, en na het opruimen van de dubbele en een schone `bootstrap` → 0 sluitingen in 60 min, 6 zones live. **WAAROM DAT ELKE CLIENT RAAKTE:** `handleClose` zette `zones = []`, en die lijst is precies wat de server via `/playback` en `/events` aan Mac en iPhone doorgeeft — dus elke twee seconden verdween de gekozen zone app-breed. **WAAROM "dit apparaat" terugsprong:** `RootView` had twee `.onChange(of: client.zones)`-hooks die `selectZone(lastZoneID)` deden zodra `selectedZone == nil`, **zonder naar `localOutputSelected` te kijken** — en `selectZone` zet lokale uitvoer uit. Bij een flapperende zonelijst (of gewoon bij de volgende trackwissel) pakte die hook de zone binnen seconden terug. **GEFIXT, vier lagen:** (1) `SingleInstance.enforce()` in `RoonSageAnalyzerApp.init()` — een tweede kopie start niet meer: launchd's exemplaar wint (het is het gesuperviseerde; zelf afsluiten geeft een KeepAlive-respawnlus), elke andere activeert de draaiende en sluit zichzelf. `reconcileAutostart()` zet het `SMAppService`-login-item uit zolang de LaunchAgent-plist bestaat, en de toggle in Instellingen weigert nu aan te gaan met uitleg. (2) `ReconnectPolicy` (nieuw, puur + getest): de backoff-ladder reset **niet** meer op elke open maar pas als een verbinding ≥ 60 s heeft gehouden — een geschopte verbinding gaat nu 2 → 4 → 8 → 16 → 30 s i.p.v. eeuwig elke 2 s — plus flap-detectie die de oorzaak bij naam noemt in het log. (3) **Zone-genade:** een korte drop houdt de laatst bekende zones nog 45 s vast i.p.v. ze meteen te wissen (server: `startZoneGrace`/`clearZones`; client: `zonesAfterSnapshot`, dezelfde "downgrade niet naar niets bij een blip"-regel als `resolvedCoreHost`). Een verse subscriptie snoeit alsnog wat Roon niet meer meldt (`expectingFullZoneList`), dus een écht verdwenen zone blijft niet hangen. (4) `restoreLastZoneOnce()` — herstel van de laatste zone is weer wat het hoorde te zijn: eenmalig bij het opstarten, nooit over lokale uitvoer heen. **Ook gedaan:** `.claude/skills/deploy-mini` stap 4 gebruikt nu `launchctl bootstrap` i.p.v. `open -a` — juist dat `open -a` liet een niet-gesuperviseerde instantie achter en is hoe de dubbele ontstond. **GESHIPT + LIVE (2026-08-22 10:31):** `v1.10.262` / `ios-v1.7.229` / `analyzer-v1.1.200` gepusht, alle vier workflows groen (Native Tests, Analyzer DMG, macOS DMG, iOS TestFlight). **Deploy liep via CI, niet lokaal** — de Developer ID-sleutel zit in een vergrendelde sleutelhanger (zie ## Open items), dus `codesign` gaf `errSecInternalComponent`. In plaats daarvan de door CI **Developer ID-gesigneerde** DMG van de release gehaald (`gh release download analyzer-v1.1.200`), handtekening + team gecontroleerd (`5W3QDZ94FH`, dus Keychain-items blijven geldig), oude app bewaard als `/Applications/RoonSage Analyzer.app.bak-1.1.199`, en herstart via `launchctl bootstrap` — **niet** `open -a`. **Dat is de route die werkt zonder lokale sleutel; gebruik hem als de sleutelhanger dicht is.** **Verified: 929 tests, 0 failures · `swift build` exit 0 · iOS-simulatorbuild BUILD SUCCEEDED · mini draait analyzer-v1.1.200 als één pid (72731) onder `nl.roonsage.analyzer`, :5767 87.820 tracks, :5766 66.378 tracks, Roon verbonden, 6 zones, 0 ws-sluitingen. De guard is LIVE bewezen: de binary een tweede keer direct gestart (zoals launchd dat doet) → `er draait al een RoonSage Analyzer (pid [72731]) — deze kopie sluit zichzelf af`, één pid over.**
@@ -1153,6 +1254,7 @@ ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AU
 - Alle batches gepusht. ANALYZER-SERVER GEDEPLOYD op de mini 2026-07-06 — RESULT: analyzer-v1.1.101 (build-analyzer-release.sh 1.1.101, Developer-ID signed, *.bundle mee), /Applications/RoonSage Analyzer.app vervangen + herstart (PID 98941). Geverifieerd op loopback: /health 5766=58839 features + 5767=76571 library, /features 200 51MB 0.57s (warm), /audio 206 audio/flac (H1-pad live). GEEN launch-crash. Client-app NIET gedeployd (constraint). Gotcha: /features cold-cache + herhaalde 120s-probes = GRDB reader-pileup (opstart-piek) → meet één keer na settle
 
 ## Open items
+- **[2026-08-22] `docs/STATE.md` is 1189 regels; de eigen guardrail (`docs/guardrails/SESSION.md` S2) zegt onder de 80.** `## Now` besloeg in z'n eentje ~988 regels. Ik heb de nieuwe stand vóór de oude gezet en de oude bewaard onder een scheidingslijn in plaats van 'm te schrappen — dat is jouw materiaal, niet het mijne om weg te gooien. Opruimen betekent volgens S2: oude `## Done`-entries verwijderen, nooit specifics uit de overgebleven regels trimmen.
 - **[2026-08-22] LOKAAL SIGNEREN KAN NIET MEER — DEPLOY LOOPT NU VIA DE CI-DMG.** `security find-identity -v -p codesigning` geeft op de actieve sleutelhangers alleen "Apple Development"; de "Developer ID Application: Casper Jansen (5W3QDZ94FH)" zit in `~/Library/Keychains/login_renamed_1.keychain-db` (restant van de auto-login/keychain-affaire). Expliciet signeren met `codesign --keychain <die sleutelhanger>` geeft `errSecInternalComponent` (= vergrendeld/geen toegang tot de private sleutel), en de zoeklijst aanpassen is geblokkeerd. **Werkende omweg, gebruikt voor analyzer-v1.1.200:** tag pushen → workflow *Release Analyzer App* bouwt Developer ID-gesigneerd met de CI-secrets → `gh release download analyzer-v<versie> -p "*.dmg"` → mounten, `codesign -dvv` controleren (team moet `5W3QDZ94FH` zijn, anders verliest de app zijn Keychain-items) → oude app naar `.bak-<oude versie>` → kopiëren → `launchctl bootstrap`. **Wil Casper weer lokaal kunnen bouwen:** die sleutelhanger ontgrendelen en aan de zoeklijst toevoegen.
 - **[2026-08-22] DE TWEEDE AUTOSTART STAAT ER NOG, MAAR IS ONSCHADELIJK — BRON NIET DEFINITIEF VASTGESTELD.** `strings /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18*.btm | grep -i roonsage` toont nog steeds twee records: de LaunchAgent-plist én een los `com.roonsage.analyzer`-item op bundle-id. `reconcileAutostart()` heeft bij de start van 1.1.200 **niets** uitgezet en logt ook niets, dus `SMAppService.mainApp.status` is niet `.enabled` — het tweede record komt dus ergens anders vandaan (kandidaten: "heropen vensters bij inloggen", of een BTM-record dat blijft hangen na een eerdere registratie). **Waarom het niet meer erg is:** `SingleInstance.enforce()` vangt élke tweede kopie, ongeacht wie hem start — live bewezen. **Wil je het record tóch weg:** Systeeminstellingen → Algemeen → Inloggen → "RoonSage Analyzer" uitzetten en na de volgende login opnieuw dumpen.
 - **[2026-08-22] ONGECOMMIT WERK VAN EEN EERDERE SESSIE IN DE BOOM:** `AnalyzerMenuBarContent.swift` (menubar-herziening "Server 2.0") compileerde niet — `zone.name` bestaat niet op `Zone`. Eén regel naar `zone.displayName` gezet zodat de build doorloopt; de rest van die wijziging is niet van deze sessie en niet nagekeken. `Package.swift` heeft daarnaast een ongecommitte `.process("Resources")` → `.copy("Resources")` staan.

@@ -37,22 +37,22 @@ struct RoonSageApp: App {
         .commands {
             CommandGroup(after: .appInfo) {
                 Divider()
-                Button(isCheckingForUpdates ? "Zoeken naar updates…" : "Zoek naar updates…") {
+                Button(isCheckingForUpdates ? LS("menu.checkingForUpdates") : LS("menu.checkForUpdates")) {
                     Task { await checkForUpdatesManually() }
                 }
                 .disabled(isCheckingForUpdates)
             }
-            CommandMenu("Bediening") {
-                Button("Speel / pauzeer") { transport { z in await client.playPause(zoneID: z) } }
+            CommandMenu(LS("menu.controls")) {
+                Button(LS("menu.playPause")) { transport { z in await client.playPause(zoneID: z) } }
                     .keyboardShortcut("p", modifiers: .command)
-                Button("Volgende track") { transport { z in await client.next(zoneID: z) } }
+                Button(LS("root.nextTrack")) { transport { z in await client.next(zoneID: z) } }
                     .keyboardShortcut("]", modifiers: .command)
-                Button("Vorige track") { transport { z in await client.previous(zoneID: z) } }
+                Button(LS("root.previousTrack")) { transport { z in await client.previous(zoneID: z) } }
                     .keyboardShortcut("[", modifiers: .command)
                 Divider()
-                Button("Volume omhoog") { volume(+4) }
+                Button(LS("menu.volumeUp")) { volume(+4) }
                     .keyboardShortcut(.upArrow, modifiers: .command)
-                Button("Volume omlaag") { volume(-4) }
+                Button(LS("menu.volumeDown")) { volume(-4) }
                     .keyboardShortcut(.downArrow, modifiers: .command)
             }
         }
@@ -113,10 +113,10 @@ struct RoonSageApp: App {
             showUpdateSheet = true
         } else {
             let alert = NSAlert()
-            alert.messageText = "Je bent up-to-date"
-            alert.informativeText = "RoonSage \(currentVersion) is de nieuwste versie."
+            alert.messageText = LS("menu.upToDateTitle")
+            alert.informativeText = String(format: LS("menu.upToDateBody"), currentVersion)
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: LS("menu.ok"))
             alert.runModal()
         }
     }

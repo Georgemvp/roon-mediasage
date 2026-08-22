@@ -171,7 +171,7 @@ struct CommandPaletteView: View {
                 }
             }
             if groupedCommands.isEmpty && trackResults.isEmpty {
-                LT("Geen resultaten voor '\(query)'")
+                Text(String(format: LS("commandPalette.noResultsFor"), query))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .listRowSeparator(.hidden)
@@ -337,7 +337,7 @@ struct CommandPaletteView: View {
         ]
         for item in primaryItems {
             out.append(PaletteCommand(
-                id: "nav-\(item.id)", title: LS("Ga naar \(item.title)"), icon: item.icon,
+                id: "nav-\(item.id)", title: String(format: LS("commandPalette.goTo"), item.title), icon: item.icon,
                 keywords: [item.title, "open", "ga naar", "navigatie"], group: "Navigatie",
                 run: { navigate(item) }))
         }
@@ -345,7 +345,7 @@ struct CommandPaletteView: View {
         // Sleep timer
         for minutes in [15, 30, 60, 120] {
             out.append(PaletteCommand(
-                id: "sleep-\(minutes)", title: LS("Slaaptimer: \(minutes) min"),
+                id: "sleep-\(minutes)", title: String(format: LS("commandPalette.sleepTimerMinutes"), minutes),
                 icon: "moon.zzz", keywords: ["slaap", "timer", "sleep", "\(minutes)"], group: "Slaaptimer",
                 run: { sleepTimer.schedule(minutes: minutes) { await client.pauseForSleep() } }))
         }
@@ -359,7 +359,7 @@ struct CommandPaletteView: View {
         // Theme presets
         for preset in ThemePreset.allCases {
             out.append(PaletteCommand(
-                id: "theme-\(preset.id)", title: LS("Thema: \(preset.label)"),
+                id: "theme-\(preset.id)", title: String(format: LS("commandPalette.theme"), preset.label),
                 icon: "paintpalette", keywords: ["thema", "kleur", preset.label], group: "Thema",
                 isActive: preset == themePreset,
                 run: { themePreset = preset }))

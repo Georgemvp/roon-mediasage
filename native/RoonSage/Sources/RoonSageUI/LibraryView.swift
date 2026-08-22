@@ -79,6 +79,15 @@ public struct LibraryView: View {
     @State private var artistsReachedEnd = false
     @State private var loadingMore = false
     @State private var seenTrackKeys = Set<String>()
+    /// How many rows the artist+title dedup has swallowed for the current query.
+    ///
+    /// The dedup is right for remasters and box-set copies, and wrong for a
+    /// studio-plus-live pair — and it gave no sign either way. "Selecteer alles →
+    /// bewaar als playlist" quietly dropped the hidden copies too, because
+    /// `selectedRecords()` filters `displayTracks`. A count you can tap is the
+    /// smallest honest version of that.
+    @State private var hiddenDuplicates = 0
+    @State private var showDuplicates = false
     private let pageSize = 200
     private let gridPageSize = 120
 
@@ -126,8 +135,18 @@ public struct LibraryView: View {
     /// recomputed only when `tracks` or `sort` actually change.
     @State private var displayTracks: [DatabaseManager.LibraryTrackRow] = []
 
+    /// The key two rows have to share to count as the same recording.
+    ///
+    /// Deliberately artist+title and NOT the album: that is the whole point (a
+    /// remaster, a deluxe edition and a box-set copy live on different albums).
+    /// It does mean a studio and a live take of one song collapse together,
+    /// which is why hiding them is now something the screen admits to.
+    nonisolated static func duplicateKey(_ t: DatabaseManager.LibraryTrackRow) -> String {
+        "\(t.artist?.lowercased() ?? "")|\(t.title.lowercased())"
+    }
+
     private nonisolated static func sortAndDedupe(
-        _ tracks: [DatabaseManager.LibraryTrackRow], by sort: SortField
+        _ tracks: [DatabaseManager.LibraryTrackRow], by sort: SortField, dedupe: Bool = true
     ) -> [DatabaseManager.LibraryTrackRow] {
         let sorted: [DatabaseManager.LibraryTrackRow]
         switch sort {
@@ -142,11 +161,9 @@ public struct LibraryView: View {
         }
         // Deduplicate: keep the first occurrence of each artist+title pair so
         // remasters, deluxe editions, and box-set copies don't all show up.
+        guard dedupe else { return sorted }
         var seen = Set<String>()
-        return sorted.filter { track in
-            let key = "\(track.artist?.lowercased() ?? "")|\(track.title.lowercased())"
-            return seen.insert(key).inserted
-        }
+        return sorted.filter { seen.insert(duplicateKey($0)).inserted }
     }
 
     public var body: some View {
@@ -270,6 +287,8 @@ public struct LibraryView: View {
         .onChange(of: selectedTag) { _, _ in reloadTracks() }
         // Every sort now orders in SQL and paginates, so a change is a full reload.
         .onChange(of: sort) { _, _ in reloadTracks() }
+        // The dedup happens as pages land, so showing/hiding is a refetch.
+        .onChange(of: showDuplicates) { _, _ in reloadTracks() }
         .onChange(of: viewMode) { _, _ in
             isSelectingAlbums = false
             albumSelection.removeAll()
@@ -690,6 +709,19 @@ public struct LibraryView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(LS("library.sort"))
+                    // Only once there is something to say. A chip reading
+                    // "0 dubbele versies verborgen" would be the chrome this
+                    // strip was cleaned of.
+                    if showDuplicates || hiddenDuplicates > 0 {
+                        Button { showDuplicates.toggle() } label: {
+                            chip(showDuplicates
+                                    ? LS("library.duplicatesShown")
+                                    : String(format: LS("library.duplicatesHidden"), hiddenDuplicates),
+                                 icon: showDuplicates ? "square.on.square.fill" : "square.on.square",
+                                 on: showDuplicates)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     ForEach(tags, id: \.tag) { item in
                         let isOn = selectedTag == item.tag
                         Button { selectedTag = isOn ? nil : item.tag } label: {
@@ -799,6 +831,7 @@ public struct LibraryView: View {
         tracks = []
         displayTracks = []
         seenTrackKeys = []
+        hiddenDuplicates = 0
         tracksReachedEnd = false
         isLoadingTracks = true
         Task { await loadTracksPage() }
@@ -815,13 +848,16 @@ public struct LibraryView: View {
     /// incrementally across pages (so remasters/duplicate editions don't repeat)
     /// while the SQL order stays stable for consistent paging.
     private func loadTracksPage() async {
-        let q = searchText, tag = selectedTag, currentSort = sort
+        let q = searchText, tag = selectedTag, currentSort = sort, dedupe = !showDuplicates
         if !isPaginable(currentSort) {
             let rows = await fetchBoundedTracks(query: q, tag: tag, sort: currentSort)
-            let display = await Task.detached { Self.sortAndDedupe(rows, by: currentSort) }.value
+            let display = await Task.detached {
+                Self.sortAndDedupe(rows, by: currentSort, dedupe: dedupe)
+            }.value
             guard currentSort == sort, q == searchText, tag == selectedTag else { return }
             tracks = rows
             displayTracks = display
+            hiddenDuplicates = rows.count - display.count
             tracksReachedEnd = true
             isLoadingTracks = false
             isSearching = false
@@ -833,8 +869,9 @@ public struct LibraryView: View {
         guard currentSort == sort, q == searchText, tag == selectedTag else { return }
         var appended: [DatabaseManager.LibraryTrackRow] = []
         for r in page {
-            let key = "\(r.artist?.lowercased() ?? "")|\(r.title.lowercased())"
-            if seenTrackKeys.insert(key).inserted { appended.append(r) }
+            let fresh = seenTrackKeys.insert(Self.duplicateKey(r)).inserted
+            if fresh || !dedupe { appended.append(r) }
+            if !fresh { hiddenDuplicates += 1 }
         }
         tracks.append(contentsOf: page)
         displayTracks.append(contentsOf: appended)
@@ -881,7 +918,7 @@ public struct LibraryView: View {
         albums = []
         albumsReachedEnd = false
         isLoadingGrid = true
-        Task { await loadAlbumsPage() }
+        Task { await loadFirstGridPage(.albums) }
     }
 
     private func loadMoreAlbums() async {
@@ -907,7 +944,31 @@ public struct LibraryView: View {
         artists = []
         artistsReachedEnd = false
         isLoadingGrid = true
-        Task { await loadArtistsPage() }
+        Task { await loadFirstGridPage(.artists) }
+    }
+
+    /// Page one of the named grid — and, with the star filter on, the rest too.
+    ///
+    /// `fillAllPages` used to hang off `onChange(of: favoritesOnly)` alone, so it
+    /// only ran when you flipped the switch. Every other route back to page one
+    /// skipped it: switching Albums → Artiesten with the filter already on, and
+    /// typing in the search box (which drops the three browse modes from
+    /// `loadedModes` and reloads). Since `loadMoreAlbums`/`loadMoreArtists`
+    /// deliberately pause paging while the filter is on, the grid then never grew
+    /// either — so "Alleen favorieten" quietly meant "the favourites among the
+    /// first 120", the exact failure `fillAllPages` was written to prevent.
+    /// Routing both entry points through here makes the guarantee hold on every
+    /// path instead of one.
+    ///
+    /// The mode is passed in rather than read from `viewMode`, so the fill can
+    /// never target a grid the user has meanwhile navigated away from.
+    private func loadFirstGridPage(_ mode: ViewMode) async {
+        switch mode {
+        case .albums:  await loadAlbumsPage()
+        case .artists: await loadArtistsPage()
+        default:       return
+        }
+        if favoritesOnly, viewMode == mode { await fillAllPages() }
     }
 
     private func loadMoreArtists() async {
@@ -974,6 +1035,7 @@ public struct LibraryView: View {
             await refreshOverview()
         case .tracks:
             tracks = []; displayTracks = []; seenTrackKeys = []; tracksReachedEnd = false
+            hiddenDuplicates = 0
             await loadTracksPage()
         case .albums:
             albums = []; albumsReachedEnd = false
@@ -1177,7 +1239,7 @@ public struct LibraryView: View {
                 }
                 browseTiles.plainCardRow()
                 collectionTiles.plainCardRow()
-            } else if !loadedModes.contains(.overview) {
+            } else if isLoadingOverview {
                 SkeletonRows().plainCardRow()
             } else {
                 overviewEmpty.plainCardRow()
@@ -1387,6 +1449,18 @@ public struct LibraryView: View {
         await performOverviewLoad()
     }
 
+    /// Its own flag, NOT `!loadedModes.contains(.overview)`.
+    ///
+    /// `loadOverview` inserts the mode synchronously — that insert IS the
+    /// once-per-library guard — and only then starts the seven queries. So by
+    /// the time the body re-evaluated, the "not loaded yet" branch was already
+    /// false while `stats` was still nil, and the skeleton it selects was
+    /// unreachable code. What every load actually showed was `overviewEmpty`:
+    /// "Nog geen bibliotheek — synchroniseer je bibliotheek", on a device with a
+    /// full library. Advice to do the one thing that cannot help, which is the
+    /// same failure `gridEmptyState` was split up to avoid.
+    @State private var isLoadingOverview = false
+
     /// Stats first (drives the hero + progressive reveal), then the shelves concurrently.
     ///
     /// Two of these queries used to be free money for nobody: the recently-added
@@ -1394,6 +1468,8 @@ public struct LibraryView: View {
     /// `libraryDurationSeconds()` — a SUM over the whole feature table — was
     /// awaited into a `@State` that no view ever read.
     private func performOverviewLoad() async {
+        isLoadingOverview = true
+        defer { isLoadingOverview = false }
         async let statsV = client.libraryStats()
         async let analyzedV = client.audioFeaturesStats()
         async let addedV = client.browseTracks(query: "", tag: nil, limit: overviewShelfSize,

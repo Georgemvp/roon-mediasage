@@ -224,12 +224,12 @@ public struct DiscoverWeeklyView: View {
     private func subtitle(_ pl: DiscoverWeeklyPlaylist) -> String {
         var parts: [String] = []
         if let date = Self.isoParser.date(from: pl.generatedAt) {
-            parts.append(LS("Gegenereerd op \(Self.dateFormatter.string(from: date))"))
+            parts.append(String(format: LS("discoverWeekly.generatedOn"), Self.dateFormatter.string(from: date)))
         } else if !pl.weekKey.isEmpty {
-            parts.append(LS("Week \(pl.weekKey)"))
+            parts.append(String(format: LS("discoverWeekly.week"), pl.weekKey))
         }
-        parts.append(LS("\(pl.tracks.count) tracks"))
-        if pl.discoveryCount > 0 { parts.append(LS("\(pl.discoveryCount) buiten je bibliotheek")) }
+        parts.append(String(format: LS("discoverWeekly.trackCount"), pl.tracks.count))
+        if pl.discoveryCount > 0 { parts.append(String(format: LS("discoverWeekly.outsideLibrary"), pl.discoveryCount)) }
         return parts.joined(separator: " · ")
     }
 

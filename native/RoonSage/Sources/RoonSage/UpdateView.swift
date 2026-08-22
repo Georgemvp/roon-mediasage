@@ -40,7 +40,7 @@ struct UpdateView: View {
             if case .installing = installer.state {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("App-bundel vervangen…")
+                    Text(LS("update.replacingBundle"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -107,26 +107,29 @@ struct UpdateView: View {
 
     var stateTitle: String {
         switch installer.state {
-        case .idle:             "Update beschikbaar"
-        case .downloading:      "Downloaden…"
-        case .readyToInstall:   "Klaar om te installeren"
-        case .installing:       "Installeren…"
-        case .error:            "Update mislukt"
+        case .idle:             LS("update.available")
+        case .downloading:      LS("update.downloading")
+        case .readyToInstall:   LS("update.readyToInstall")
+        case .installing:       LS("update.installing")
+        case .error:            LS("update.failed")
         }
     }
 
     var stateSubtitle: String {
         switch installer.state {
+        // `String(format:)`, never an LS key with the version interpolated in: baking a value into
+        // the key makes it unresolvable, so it would silently render the Dutch
+        // literal on an English Mac. See check-localization.sh.
         case .idle:
-            "RoonSage \(update.version) is beschikbaar."
+            String(format: LS("update.availableBody"), update.version)
         case .downloading:
-            "RoonSage \(update.version) wordt gedownload…"
+            String(format: LS("update.downloadingBody"), update.version)
         case .readyToInstall:
-            "De update is gedownload. Klik op Installeer om hem toe te passen\nen RoonSage automatisch te herstarten."
+            LS("update.readyBody")
         case .installing:
-            "Sluit de app niet af."
+            LS("update.doNotQuit")
         case .error:
-            "Er ging iets mis. Je kunt de update ook handmatig installeren."
+            LS("update.failedBody")
         }
     }
 
@@ -135,23 +138,23 @@ struct UpdateView: View {
         HStack(spacing: 12) {
             switch installer.state {
             case .idle:
-                Button("Later") { dismiss() }
+                Button(LS("update.later")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
 
-                Button("Releasenotities") {
+                Button(LS("update.releaseNotes")) {
                     if let url = URL(string: update.releasePageURL) {
                         NSWorkspace.shared.open(url)
                     }
                 }
 
                 if update.downloadURL.hasSuffix(".dmg") {
-                    Button("Download update") {
+                    Button(LS("update.download")) {
                         installer.download(from: update.downloadURL)
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
                 } else {
-                    Button("Bekijk release") {
+                    Button(LS("update.viewRelease")) {
                         if let url = URL(string: update.releasePageURL) {
                             NSWorkspace.shared.open(url)
                         }
@@ -161,16 +164,16 @@ struct UpdateView: View {
                 }
 
             case .downloading:
-                Button("Annuleer") {
+                Button(LS("update.cancel")) {
                     installer.cancelDownload()
                 }
                 .keyboardShortcut(.cancelAction)
 
             case .readyToInstall(let dmgURL):
-                Button("Later") { dismiss() }
+                Button(LS("update.later")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
 
-                Button("Installeer & herstart") {
+                Button(LS("update.installAndRestart")) {
                     Task { await installer.install(dmgURL: dmgURL) }
                 }
                 .buttonStyle(.borderedProminent)
@@ -180,10 +183,10 @@ struct UpdateView: View {
                 EmptyView()
 
             case .error:
-                Button("Later") { dismiss() }
+                Button(LS("update.later")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
 
-                Button("Installeer handmatig") {
+                Button(LS("update.installManually")) {
                     if let url = URL(string: update.downloadURL) {
                         NSWorkspace.shared.open(url)
                     }
@@ -191,7 +194,7 @@ struct UpdateView: View {
                 }
                 .buttonStyle(.borderedProminent)
 
-                Button("Probeer opnieuw") {
+                Button(LS("update.retry")) {
                     installer.download(from: update.downloadURL)
                 }
             }

@@ -35,6 +35,10 @@ public struct VectorIndex: Sendable {
     }
 
     public var count: Int { tracks.count }
+    /// The rule `empty_count` is right about this one: `count` here really is a
+    /// collection size, so callers asking "is there anything to search" should
+    /// say so rather than compare to zero.
+    public var isEmpty: Bool { tracks.isEmpty }
 
     /// A COPY of one row. Convenient, but it allocates `dim` floats every call —
     /// fine for one seed, ruinous per candidate. Use `row(forId:)` + `dot(_:row:)`
@@ -69,7 +73,7 @@ public struct VectorIndex: Sendable {
 
     /// k nearest tracks to a query vector (cosine), excluding `excludingIds`.
     public func nearest(to query: [Float], k: Int, excludingIds: Set<String> = []) -> [Hit] {
-        guard query.count == dim, count > 0 else { return [] }
+        guard query.count == dim, !isEmpty else { return [] }
         let q = Self.normalized(query)
         var scores = [Float](repeating: 0, count: count)
         // scores(count×1) = matrix(count×dim) · q(dim×1)

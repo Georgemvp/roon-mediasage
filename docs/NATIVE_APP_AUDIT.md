@@ -1,3 +1,401 @@
+# RoonSage Native — 360°-audit (UX + volledige functionaliteit)
+
+> Datum: 2026-08-22 · Scope: `native/RoonSage` (292 Swift-bestanden, ~65k regels), `native/RoonProtocol`, `native/iosapp`
+> Methode: baseline-verificatie, gerichte diepte-lezing van de gebruikersketens (bibliotheek, speler,
+> wachtrij, navigatie, verbinding) plus repo-brede sweeps op lokalisatie, a11y en Dynamic Type.
+>
+> **Eerlijk over de dekking:** de UI-laag en het Core-transport/remote-pad zijn regel voor regel gelezen
+> (`LibraryView`, `RootView`, `PlayerScreen`, `QueueView`, `NowPlayingSurface`, `CommandPalette`,
+> `RoonSageApp`, `RoonClient+Transport`, `RoonClient+Remote`, `PlaybackEventHub`, `LibraryShareServer`).
+> De AI-/DSP-kant (`RoonClient+Generate`, `Sonic/*`, `AnalyzerCore`) is steekproefsgewijs gelezen op de
+> vraag "kan dit iets voorstellen dat niet speelbaar is" — niet uitputtend. Alles hieronder is
+> geverifieerd tegen file:line, niet vermoed.
+
+## Baseline (vers gedraaid, 2026-08-22)
+
+| check | uitkomst |
+|---|---|
+| `cd native/RoonProtocol && swift test` | 12 tests, 0 failures |
+| `cd native/RoonSage && swift test` | **973 tests, 0 failures** |
+| `swift build -c release --product RoonSage` | exit 0 |
+| `swiftlint lint --config .swiftlint.yml` | 469 violations, **5 serious** (alle `empty_count`) |
+| `native/scripts/check-localization.sh` | 1033 sleutels · 0 missend · 0 wees · **61 geïnterpoleerd** |
+
+`swiftlint` stond niet lokaal geïnstalleerd (CI doet `brew install swiftlint`); nu wel.
+
+---
+
+## Eindoordeel in één alinea
+
+De app is in ongewoon goede staat: de reconnect-logica, de zone-grace, de FTS5-zoekindex, de
+paginering en de "library-first"-garantie zijn niet alleen aanwezig maar ook bewust ontworpen en in
+commentaar verantwoord. Wat er nog fout gaat, gaat bijna allemaal fout op één plek: **toestand die in
+Core correct wordt bijgehouden maar de UI nooit bereikt.** `zonesAreStale` wordt op drie plekken
+berekend en door geen enkele view gelezen; de wachtrij wordt op de cliënt uit een snapshot gevoed maar
+door een subscriptie-API leeggegooid die daar niet draait; de skeleton-loader van de bibliotheek is
+onbereikbaar omdat de laad-vlag vóór de laadactie wordt gezet. Dat zijn geen cosmetische kwesties —
+het zijn precies de gevallen waarin de app iets toont dat niet waar is. Daarnaast is de
+iPhone-navigatie onvolledig: negen van de zeventien bestemmingen van het commandopalet komen stil op
+het bibliotheek-tabblad uit.
+
+---
+
+## 🔴 Functionele gaten / bugs (broken flows & edge cases)
+
+### F1 — De wachtrij is op de cliënt tot 15 s leeg na het openen
+`RoonSageUI/QueueView.swift:84,353` · `RoonSageCore/RoonClient.swift:1041-1060`
+
+De verzonden apps draaien in `.server`-modus (`RoonSageApp.swift:17` → `useServerMode()`), dus
+`isRemote == true` en `queueItems` komt uit `applyPlaybackSnapshot` (`RoonClient+Remote.swift:428`).
+Maar `QueueView.onAppear` roept `restart()` → `client.startQueue(zoneID:)`, en die doet
+onvoorwaardelijk `queueItems = []` en abonneert daarna op een Roon-WebSocket die in remote-modus niet
+bestaat (`try? await transport.subscribe(...)` → nil → `return`).
+
+Gevolg, per pad:
+- **Spelend:** de snapshot-digest verandert elke tick (seek-positie), dus de wachtrij vult zich na
+  ~1,5 s. Zichtbare flits van "Niets in de wachtrij".
+- **Gepauzeerd:** de snapshot is statisch, `PlaybackEventHub.tick()` pusht alleen bij een gewijzigde
+  digest (`PlaybackEventHub.swift:99`), en de fallback-poll staat op **15 s** zolang de stream leeft
+  (`RoonClient+Remote.swift:232`). De wachtrij blijft dus tot 15 seconden leeg.
+
+`onDisappear { client.stopQueue() }` zet `queueItems = []` opnieuw, en `ZoneNowPlayingSurface.upNext`
++ `queueSummary` lezen datzelfde veld (`NowPlayingSurface.swift:298,309`) — dus na elk bezoek aan de
+wachtrij verdwijnen ook de "hierna"-pil en de "nog N over"-teller van de speler voor hetzelfde venster.
+
+### F2 — `zonesAreStale` wordt berekend en door niemand getoond
+`RoonSageCore/RoonClient.swift:356,962,992,1137` · `RoonClient+Remote.swift:426`
+
+Bij een wegvallende Roon-verbinding houdt de app de laatst bekende zones 45 s vast
+(`zoneGraceSeconds`) en markeert ze als verouderd — bewust, om te voorkomen dat een blip de hele UI
+leegt. Maar `zonesAreStale` heeft **nul lezers buiten Core**. De gebruiker ziet een volledig normale,
+volledig ingeschakelde interface; pas na een druk op play komt er een foutmelding
+("Afspelen/pauzeren mislukt — geen verbinding met Roon"). `ReconnectingBanner` dekt dit niet af: die
+toont alleen `!isConnected && !hasLiveSession && !offlineMode`, en tijdens de grace is
+`hasLiveSession` nog `true` (`RoonClient.swift:84`).
+
+Dit is exact het scenario uit de opdracht — "duidelijke statusmelding i.p.v. bevroren UI" — en de
+informatie ligt al klaar.
+
+### F3 — Bibliotheek-overzicht toont "Nog geen bibliotheek" tijdens het laden
+`RoonSageUI/LibraryView.swift:1157-1170` (weergave) en `:1378-1382` (`loadOverview`)
+
+```
+private func loadOverview() {
+    guard !loadedModes.contains(.overview) else { return }
+    loadedModes.insert(.overview)          // ← synchroon, vóór de Task
+    Task { await performOverviewLoad() }
+}
+```
+De weergave kiest `SkeletonRows()` alleen als `stats == nil && !loadedModes.contains(.overview)`. Die
+combinatie bestaat nooit: de vlag staat er al in vóórdat de zeven queries beginnen. De hele laadtijd
+lang toont het overzicht dus `overviewEmpty` — "Nog geen bibliotheek · synchroniseer je bibliotheek" —
+op een apparaat dat een volle bibliotheek heeft. Advies om precies het verkeerde te doen, en de
+skeleton-code die dit moest voorkomen is dode code.
+
+### F4 — "Alleen favorieten" filtert over 120 albums na een tabwissel of zoekopdracht
+`RoonSageUI/LibraryView.swift:274-277,872-878,890-895,935-968`
+
+`fillAllPages()` bestaat precies om te voorkomen dat de sterfilter "de favorieten binnen de eerste
+120 albums" betekent — het commentaar zegt dat ook met zoveel woorden. Maar hij wordt maar op één
+plek aangeroepen: `onChange(of: favoritesOnly)` bij het **aanzetten**. Alle andere paden die de grid
+terugzetten naar pagina 1 doen het niet:
+- `onChange(of: viewMode)` → `loadContentIfNeeded()` → `loadAlbums()`/`loadArtists()`
+- `onChange(of: searchText)` → `loadedModes.subtract(...)` → `reloadContent()`
+
+En omdat `loadMoreAlbums`/`loadMoreArtists` paginering pauzeren zolang `favoritesOnly` aan staat
+(`guard ... !favoritesOnly`), groeit de lijst daarna ook niet meer. Zet de filter aan bij Albums,
+tik naar Artiesten: je ziet de favorieten onder de eerste 120 artiesten, zonder enig teken dat de rest
+bestaat. Alleen `refresh()` (pull-to-refresh) doet het wél goed (`:986,990`) — wat bewijst dat de
+bedoeling helder was.
+
+### F5 — Negen van de zeventien palet-bestemmingen zijn dood op de iPhone
+`RoonSageUI/CommandPalette.swift:333-344` · `RoonSageUI/RootView.swift:733-751`
+
+Het commandopalet biedt 17 "Ga naar …"-commando's. `go(to:)` vangt op compact-iOS alleen
+`.nowPlaying` en `.settings` af (als sheet); de rest zet `selection`, en `iOSTabSelection` mapt dat op
+één van vier tabs. Alles wat niet in `searchItems`/`exploreItems`/`stationItems` zit, valt in de
+`default`-tak → `.library`.
+
+Dood op de iPhone: **`.queue`, `.playlists`, `.bookmarks`, `.dj`, `.lab`, `.sonicLab`, `.musicMap`,
+`.multitag`, `.tasteHub`**. Je tikt "Ga naar Wachtrij" en belandt op de bibliotheek. Dat is dezelfde
+klasse fout die elders in dit bestand juist zorgvuldig is opgelost ("otherwise you tap them and
+nothing appears to happen", `RootView.swift:707`).
+
+---
+
+## 🟠 UX-knelpunten & frictie
+
+### U1 — Geen optimistic UI op transport en volume
+`RoonSageCore/RoonClient+Transport.swift` (hele bestand) · `RoonSageUI/PlayerScreen.swift:506-546,577`
+
+Elke transport-actie (`playPause`, `next`, `previous`, `setShuffle`, `setRepeat`, `toggleMute`) stuurt
+het commando en wacht op de volgende snapshot voor de UI-verandering. Er is geen enkele optimistische
+mutatie. Over ZeroTier is dat een merkbare stilte tussen tik en respons op de grootste knop van het
+scherm. De architectuur ondersteunt het prima — `zoneMap` is lokaal en `applyPlaybackSnapshot`
+overschrijft toch — maar niemand doet het.
+
+De volumeschuif is een tweede geval: `Slider(...) { editing in ...; if !editing { vol.set(...) } }`
+stuurt pas bij **loslaten**. De knop beweegt, het geluid niet. Voor een afstandsbediening is dat het
+verkeerde model.
+
+### U2 — 61 gebruikersstrings negeren de taalinstelling
+Repo-breed, script-geverifieerd (`check-localization.sh`, en `grep -rn 'L[ST]("[^"]*\\('`)
+
+Sleutels met string-interpolatie erin kunnen per definitie nooit oplossen en vallen terug op het
+Nederlandse literal. Het bestand `RootView.swift:595` waarschuwt hier expliciet voor — en twee
+regels verderop staan er zelf twee (`:791` `LS("Verbinding: \(...)")`, `:824` de slaaptimer-tooltip).
+Verspreid over 24 bestanden; de meest zichtbare zijn `QueueView:30` (de lege wachtrij),
+`CommandPalette:340` (élk navigatie-commando), `DJSetView` (7×) en `DiscoverWeeklyView` (4×).
+
+### U3 — Het macOS-menu is ongelokaliseerd Nederlands
+`RoonSage/RoonSageApp.swift:38-57,110-115`
+
+`CommandMenu("Bediening")`, "Speel / pauzeer", "Volgende track", "Volume omhoog", "Zoek naar
+updates…", "Je bent up-to-date" — allemaal harde literals, geen `LS()`. `check-localization.sh` mist
+dit omdat het alleen op `LS("…")` grept. Op een Engelse Mac blijft de menubalk dus Nederlands terwijl
+het venster eronder vertaalt.
+
+### U4 — ⌘1…9 wijst naar een andere lijst dan de zijbalk
+`RoonSageUI/RootView.swift:795-802`
+
+`SidebarItem.allCases.prefix(9)` = nowPlaying, queue, library, ask, generate, recommend, playlists,
+bookmarks, djSet. De zijbalk toont (`SidebarSection.items`) nowPlaying, queue, library, playlists,
+bookmarks, sonicSearch, stationsHub, discovery, lab, tasteHub, settings. ⌘4/5/6/9 springen dus naar
+bestemmingen die niet in de zijbalk staan, waardoor de selectie nergens oplicht; ⌘7/⌘8 wijzen naar
+rij 4 en 5. De volgorde van een `CaseIterable` is een implementatiedetail, geen menu.
+
+### U5 — Geen ⌘F, geen spatiebalk op macOS
+`grep -rn keyboardShortcut native/RoonSage/Sources` — de enige globale bindingen zijn ⌘K, ⌘1-9,
+⌘P, ⌘[, ⌘], ⌘↑, ⌘↓.
+
+Twee conventies die een Mac-gebruiker zonder nadenken probeert ontbreken: **⌘F** zet de focus niet in
+het zoekveld van de bibliotheek, en de **spatiebalk** doet niets (play/pause zit op ⌘P). De
+spatiebalk is legitiem lastig — hij mag niet vuren terwijl er een tekstveld focus heeft — maar ⌘F is
+recht toe recht aan.
+
+### U6 — De speler belooft een "wis de wachtrij" die voor een Roon-zone niet bestaat
+`RoonSageUI/PlayerScreen.swift:741-744` (commentaar) · `QueueView.swift:270-300`
+
+"Stopping is still reachable from the mini-player, and the queue screen can clear what's upcoming."
+`clearUpcoming` zit alleen in `localQueueOptions` — de on-device wachtrij. Voor een Roon-zone heeft
+`queueOptions` alleen bewaren/shuffle/repeat. De belofte klopt voor één van de twee outputs.
+
+### U7 — Dedup verbergt nummers zonder dat te zeggen
+`RoonSageUI/LibraryView.swift:141-149`
+
+`sortAndDedupe` houdt per `artiest|titel` alleen de eerste rij. Bedoeld voor remasters en
+deluxe-edities, maar het geldt ook voor een studio- en een liveversie (`isLive` wordt wél
+bijgehouden en hier genegeerd) en voor covers op verzamelalbums. `selectedRecords()` filtert
+`displayTracks`, dus "selecteer alles → bewaar als playlist" laat de verborgen kopieën stil vallen.
+Er is geen teller en geen "toon duplicaten".
+
+### U8 — Zeven icon-only knoppen zonder VoiceOver-label
+Script-geverifieerd (label-body bevat alleen een `Image(systemName:)`, geen `accessibilityLabel`
+binnen 8 regels):
+
+| bestand:regel | icoon | betekenis |
+|---|---|---|
+| `SonicRadioView.swift:87` | `arrow.clockwise` | ververs |
+| `SonicFingerprintView.swift:49` | `arrow.clockwise` | ververs |
+| `CustomRadioView.swift:256` | `eye`/`eye.slash` | verberg/toon |
+| `CustomRadioView.swift:266` | `square.and.pencil` | bewerk |
+| `SongAlchemyView.swift:132,157` | `xmark.circle.fill` | verwijder |
+| `SonicSearchView.swift:83` | `xmark.circle.fill` | wis zoekopdracht |
+
+Daarnaast twee harde Engelse labels op een verder Nederlands scherm:
+`PlayerScreen.swift:511` `.accessibilityLabel("Shuffle")` en `:587` `.accessibilityLabel("Volume")`.
+
+---
+
+## 🟡 Performance, geheugen & batterij
+
+### P1 — De hele speler hertekent één keer per seconde, ook als er niets speelt
+`RoonSageUI/PlayerScreen.swift:213-218`
+
+```
+.onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+    guard !surface.positionIsContinuous, !isSeeking else { return }
+    displayPosition = NowPlayingModel.interpolatedPosition(...)
+}
+```
+Drie dingen tegelijk:
+1. `displayPosition` is `@State` van `PlayerHero`, gelezen door `scrubber` → de **hele** hero (art,
+   trackinfo, feature-badges, visualizer, scrubber, transport, volume, footer) hertekent op 1 Hz.
+   De opdracht noemt dit expliciet: "geen onnodige body re-evaluaties bij elke tick".
+2. De guard sluit een gepauzeerde speler niet uit. `interpolatedPosition` geeft dan het anker terug,
+   maar de toewijzing aan een `Double`-`@State` invalideert alsnog — een gepauzeerde iPhone hertekent
+   dus eeuwig op 1 Hz.
+3. `Timer.publish(...).autoconnect()` staat *in* `body`, dus elke evaluatie maakt een nieuwe
+   publisher aan die `onReceive` opnieuw moet abonneren. Zelf-versterkend met punt 1.
+
+De remedie is bekend en klein: de scrubber (plus de twee tijdlabels) in een eigen subview die
+`displayPosition` bezit.
+
+### P2 — `curateTracks` doet één round-trip per nummer, sequentieel
+`RoonSageCore/RoonClient+Transport.swift:85-99`
+
+Een playlist van 50 nummers = 50 opeenvolgende `playByBrowse`-aanroepen over ZeroTier. De volgorde
+móet behouden blijven, dus parallelliseren kan niet zomaar — maar de remote-timeout staat er niet
+voor niets op 180 s (`RoonClient+Remote.swift:541`). Waard om te meten voordat je eraan begint.
+
+### P3 — `fillAllPages()` kan 24.000 albums in het geheugen trekken
+`RoonSageUI/LibraryView.swift:947-968` — 200 iteraties × `gridPageSize` 120. Voor de doelbibliotheek
+prima; voor de >100k-tracks-vraag uit de opdracht is dit het enige punt waar de paginering bewust
+wordt opgeheven. Begrensd en gedocumenteerd, dus geen bug — wel het plafond.
+
+### P4 — `ForEach(Array(client.queueItems.enumerated()), id: \.element.id)`
+`RoonSageUI/QueueView.swift:39` — precies de constructie die in `LibraryView` is weggehaald omdat hij
+een volledige tuple-kopie per body-evaluatie kost. Begrensd op 200 items (`max_item_count`), dus
+klein bier, maar inconsistent met de rest.
+
+---
+
+## 🟢 Codekwaliteit, concurrency & architectuur
+
+### C1 — 5 "serious" lintfouten, allemaal `empty_count`
+`SettingsView.swift:933` plus vier in andere bestanden. CI draait `--lenient` dus ze breken niets,
+maar het zijn de enige violations boven waarschuwingsniveau. De overige 464 zijn opmaak
+(`comma` 132, `colon` 93, `statement_position` 70) — een `swiftlint --fix` zou het leeuwendeel
+oplossen, maar dat is een diff van honderden regels en hoort niet in een auditbatch.
+
+### C2 — `docs/STATE.md` is 1188 regels
+De eigen guardrail (`docs/guardrails/SESSION.md` S2) zegt "Keep it under 80 lines by deleting old
+Done entries". `## Now` beslaat in z'n eentje de regels 21–1008. Het bestand is daarmee precies wat
+S2 wil voorkomen: een toestandsbestand dat je moet doorzoeken in plaats van lezen. Niet gevaarlijk,
+wel zelfondermijnend.
+
+### C3 — `Package.swift` staat bewust ongecommit
+`.process("Resources")` → `.copy("Resources")` voor het `AudioAnalysis`-target: een lokale
+werkomgeving-fix, omdat de gitignored `Resources/CLAP/`-map twee `.mlpackage`-mappen met dezelfde
+bestandsnamen bevat en `.process` daarop weigert te bouwen. Volledig uitgelegd in STATE.md `## Done`.
+
+**Caveat die daar nog niet stond, gemeten in deze sessie:** met `.copy` faalt een lokale iOS-build op
+het codesignen van de resourcebundle —
+`RoonSage_AudioAnalysis.bundle: bundle format unrecognized, invalid, or unsuitable`. Dat is dezelfde
+gewijzigde bundle-indeling die de reden is om hem niet te committen; het is dus geen bug, maar het
+betekent wel dat een iOS-typecheck op deze machine `CODE_SIGNING_ALLOWED=NO` nodig heeft:
+
+```
+cd native/RoonSage && xcodebuild -scheme RoonSageUI \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+```
+Zonder die vlag leest de fout als "de iOS-build is stuk", en dat is hij niet.
+
+### C4 — Twee instellingenschermen op macOS
+`RoonSageApp.swift:59-63` opent de ⌘,-scene met `SettingsView()` (scope `.all`), terwijl de
+zijbalk-ingang `.settings` naar `SettingsHomeView()` gaat (twee deuren: apparaat/server). Bewust —
+het is in `SettingsHomeView` gedocumenteerd — maar het betekent wel dat dezelfde Mac twee verschillende
+indelingen van dezelfde instellingen toont, afhankelijk van hoe je binnenkomt.
+
+---
+
+## Wat gecontroleerd is en góed bleek (niet aankomen)
+
+- **Library-first is architectonisch afgedwongen, niet geprompt.** `generatePlaylist` bouwt de
+  kandidatenpool uit `radioLibrary()` (`RoonClient+Generate.swift:164-190`); het LLM rangschikt en
+  ordent, het verzint geen titels. `TitleGrounding.violations` doet een tweede pas op de titel/
+  beschrijving met één retry (`:901-907`).
+- **Reconnect + zone-grace.** Exponentiële backoff, flap-detectie met een diagnose in de log,
+  45 s zone-grace, `expectingFullZoneList` zodat een verse subscriptie de grace-lijst vervangt,
+  en een 10 s watchdog op een subscriptie waarvan de initiële state nooit aankomt. Grondig.
+- **`zonesAfterSnapshot` / `resolvedCoreHost`** — beide "nooit degraderen naar niets op een blip",
+  beide `nonisolated static` en dus getest.
+- **Paginering + FTS5** in de bibliotheek, inclusief het afvangen van een pagina die volledig
+  wegdedupliceert (`loadTracksPage` recurseert dan) en het verwerpen van een pagina waarvan de
+  query intussen veranderde.
+- **`PlaybackEventHub`** — één ticker voor alle cliënten, push alleen bij gewijzigde digest,
+  snapshot-then-deltas bij verbinden, keepalive per 30 s.
+- **Lege staten met een uitweg.** `gridEmptyState` onderscheidt drie oorzaken (niet verbonden /
+  geen favorieten / niets gevonden); de speler biedt "Ontdek muziek" en "Maak een playlist" in
+  plaats van dood te lopen; een mislukte zoekopdracht biedt de sonische zoektocht aan.
+
+---
+
+## Status — alle drie de batches uitgevoerd (2026-08-23)
+
+Batch A, B en C zijn geïmplementeerd en geverifieerd. Verse uitkomsten:
+
+| check | vóór | na |
+|---|---|---|
+| RoonProtocol tests | 12 / 0 fouten | 12 / 0 fouten |
+| RoonSage tests | 973 / 0 fouten | **984 / 0 fouten** (+11 nieuw) |
+| `swift build -c release` | exit 0 | exit 0 |
+| iOS-typecheck `RoonSageUI` | — | BUILD SUCCEEDED |
+| lokalisatiesleutels | 1033 | **1134** |
+| geïnterpoleerde sleutels | **61** | **0** — en nu een harde CI-gate |
+| wees-sleutels | 0 | 0 |
+| swiftlint serious | 5 | **2** (beide een Codable wire-veld, zie C1) |
+
+Twee dingen die tijdens het uitvoeren groter bleken dan de audit ze inschatte:
+
+- **B3 was niet "het menu" maar het hele macOS-app-target.** `Sources/RoonSage`
+  (3 bestanden) had **nul** `LS()`-aanroepen en 25+ harde Nederlandse literals:
+  de menubalk, de menubar-extra én de complete updater-dialoog. Allemaal
+  gelokaliseerd.
+- **`check-localization.sh` keek daar nooit.** De checker scande alleen
+  `RoonSageUI` + `RoonSageCore`, dus hij meldde al die tijd "0 missing" over een
+  target dat de catalogus niet eens gebruikte. Nu scant hij ook `RoonSage`,
+  `RoonSageAnalyzerApp` en `native/iosapp` — en omdat de achterstand op nul staat,
+  faalt `--strict` (die in CI draait) voortaan óók op een nieuwe geïnterpoleerde
+  sleutel. Negatief getest: een opzettelijk toegevoegde `LS("Test \(1) regressie")`
+  geeft exit 1, na terugdraaien weer exit 0.
+
+Wat bewust **niet** is gedaan, met reden:
+
+- **De overige 464 lintwaarschuwingen** zijn opmaak (`comma` 132, `colon` 93,
+  `statement_position` 70). `swiftlint --fix` zou het leeuwendeel oplossen, maar
+  dat is een diff van honderden regels over 306 bestanden die de inhoudelijke
+  wijzigingen onleesbaar maakt. Eén commando, apart te draaien wanneer je 'm wilt.
+- **De laatste 2 `empty_count`-violations.** Beide lezen
+  `DiscoveryDigestStatus.count`, een **Codable wire-veld** tussen server en
+  clients. Hernoemen breekt dat contract voor een regel die hier een false
+  positive is (het is een Int, geen collectie). De andere drie zijn wél opgelost,
+  en eerlijk: `VectorIndex` kreeg een echte `isEmpty` (daar hád de regel gelijk),
+  de MusicBrainz-tuple heet nu `votes` (het is een stemmenteller) en de
+  downloadteller in Settings heet `downloadedCount`.
+- **"Wis de wachtrij" voor een Roon-zone (B5).** Roon's Extension-API heeft er
+  geen verb voor — `TransportService` biedt control, play-from-here, volume, mute,
+  seek, shuffle en repeat, en dat is de hele lijst. In plaats van iets nep te
+  bouwen is de belofte in `PlayerScreen` ingetrokken en legt de zone-wachtrij nu
+  in één regel uit waarom herschikken/wissen op "dit apparaat" zit.
+
+---
+
+## Batchplan
+
+### Batch A — kritieke fixes & UX-blockers
+| # | bevinding | bestand | |
+|---|---|---|---|
+| A1 | F1 — wachtrij-abonnement alleen in `.direct`-modus | `QueueView.swift`, `RoonClient.swift` | ✅ |
+| A2 | F3 — skeleton bereikbaar maken tijdens het overzicht-laden | `LibraryView.swift` | ✅ |
+| A3 | F4 — `fillAllPages` ook na tabwissel en zoekopdracht | `LibraryView.swift` | ✅ |
+| A4 | F2 — `zonesAreStale` tonen | `RootView.swift` | ✅ |
+| A5 | F5 — palet-bestemmingen bereikbaar maken op de iPhone | `RootView.swift` | ✅ |
+
+### Batch B — functionele verfijning
+| # | bevinding | geleverd |
+|---|---|---|
+| B1 | U1 — optimistic UI op play/pause, shuffle, repeat, mute + live volume | ✅ `TransportIntent` (pure, 9 tests) + throttled live volume |
+| B2 | U2 — de 61 geïnterpoleerde sleutels naar `String(format:)` | ✅ 61 → 0, plus een CI-gate |
+| B3 | U3 — macOS-menu door de stringcatalogus | ✅ hele app-target, 33 sleutels |
+| B4 | U4 — ⌘1…9 op de werkelijke zijbalkvolgorde | ✅ `SidebarSection.items` |
+| B5 | U6 — "wis wat komt" voor een Roon-zone, of de belofte intrekken | ✅ ingetrokken + uitgelegd (API kan het niet) |
+| B6 | U7 — dedup-teller / "toon duplicaten" | ✅ chip in `browseBar` |
+
+### Batch C — polish & a11y
+| # | bevinding | geleverd |
+|---|---|---|
+| C1 | U8 — zeven VoiceOver-labels + twee Engelse labels | ✅ |
+| C2 | P1 — scrubber als eigen subview, timer buiten `body`, pauze-guard | ✅ `PlayerScrubber`; een gepauzeerde speler tikt niet meer |
+| C3 | U5 — ⌘F naar het zoekveld | ✅ via AppKit (`.searchFocused` is macOS 15+) |
+| C4 | P4 — `enumerated()` uit de wachtrij-`ForEach` | ✅ |
+| C5 | C1 — de vijf `empty_count`-violations | ✅ 3 van 5; 2 zijn een wire-veld — zie boven |
+
+---
+---
+
+# Historie — eerdere audits
+
 # RoonSage Native (macOS + iOS) — Volledige Code-, Performance-, Design- & Feature-audit
 
 > Datum: 2026-06-12 · Scope: `native/RoonSage`, `native/RoonProtocol`, `native/iosapp` (~108 Swift-bestanden, ~14k regels)

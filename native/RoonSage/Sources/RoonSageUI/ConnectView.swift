@@ -70,7 +70,7 @@ public struct ConnectView: View {
                     Button {
                         Task { await client.connect(host: saved, port: client.savedPort) }
                     } label: {
-                        // `LS("… \(saved)")` interpolated the host INTO the key,
+                        // Interpolating the host INTO an LS key baked it into the key,
                         // so it never resolved and silently fell back to the
                         // Dutch literal — visible on an English phone as one
                         // Dutch button between English ones. Format string, not

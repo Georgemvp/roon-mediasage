@@ -5,8 +5,8 @@
 # text. Found the hard way on 2026-08-10 from a user screenshot.
 #
 # Usage:  native/scripts/check-localization.sh [--strict]
-#         --strict  exit 1 when anything is missing (for a future CI gate; the
-#                   backlog must be empty first — see docs/STATE.md).
+#         --strict  exit 1 when anything is missing, when a key is interpolated,
+#                   or when the two catalogues disagree. Live in CI.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -14,12 +14,24 @@ UI="$ROOT/native/RoonSage/Sources/RoonSageUI"
 CORE="$ROOT/native/RoonSage/Sources/RoonSageCore"
 RES="$UI/Resources"
 
+# Every target that can call LS()/LT(), not just the shared UI library.
+#
+# The two app shells were outside this gate entirely, and it showed: the macOS
+# menu bar, the menubar extra and the whole updater dialog were 25 hard-coded
+# Dutch literals with not one LS() among them, on top of a 1000-key catalogue.
+# The checker reported "0 missing" the whole time — it simply never looked
+# there. A gate whose scope is narrower than the thing it guards reads as a
+# clean bill of health.
+LS_DIRS=("$UI" "$ROOT/native/RoonSage/Sources/RoonSage"
+         "$ROOT/native/RoonSage/Sources/RoonSageAnalyzerApp"
+         "$ROOT/native/iosapp")
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 # Only dot-keys: bare-literal LS("Speel alles") calls are a separate, deliberate
 # migration backlog (see the header of Localization.swift), not a rendering bug.
-grep -rhoE '\bL[ST]\("[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z0-9]+)+"\)' --include='*.swift' "$UI" \
+grep -rhoE '\bL[ST]\("[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z0-9]+)+"\)' --include='*.swift' "${LS_DIRS[@]}" \
   | sed -E 's/^L[ST]\("//; s/"\)$//' | sort -u > "$tmp/used"
 
 # Core cannot call LS (the catalogue is a RoonSageUI resource), so its own error
@@ -72,15 +84,19 @@ done
 # one Dutch line between English ones; the app's own main heading did exactly
 # that until a screenshot from native/scripts/ui-verify.sh caught it.
 #
-# Not gated yet: there are ~70, and a gate that fails from day one gets ignored.
-# Reported so the number can only go down, and so a new one is visible in the
-# diff of whoever adds it. The fix is always the same shape:
+# GATED since 2026-08-22: the backlog is empty (was 61), so a new one is a
+# regression rather than a known debt, and the reason not to gate — "a gate that
+# fails from day one gets ignored" — no longer applies. The fix is always the
+# same shape:
 #   String(format: LS("some.key"), value)   met %d / %@ in de catalogus.
-interp=$(grep -rhoE '\bL[ST]\("[^"]*\\\([^"]*"' --include='*.swift' "$UI" | sort -u || true)
+# Note this greps the SOURCE, so an example written out in a comment counts as a
+# real call. Describe the pitfall in prose instead of pasting an LS( literal.
+interp=$(grep -rhoE '\bL[ST]\("[^"]*\\\([^"]*"' --include='*.swift' "${LS_DIRS[@]}" | sort -u || true)
 interp_count=$(printf '%s' "$interp" | grep -c . || true)
 echo "── interpolated keys (kunnen nooit oplossen, vallen terug op het Nederlands): $interp_count"
-if [[ -n "${VERBOSE:-}" && -n "$interp" ]]; then
+if [[ "$interp_count" -gt 0 ]]; then
     printf '%s\n' "$interp" | sed 's/^/     /'
+    status=1
 fi
 
 # Orphans: defined but no longer referenced. Harmless at runtime, but they hide

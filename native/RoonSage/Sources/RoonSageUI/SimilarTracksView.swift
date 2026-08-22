@@ -89,7 +89,7 @@ struct SimilarTracksView: View {
                 let n = topRecords.count
                 Task {
                     await client.playToActiveOutput(topRecords)
-                    confirmation = LS("Mix gestart — \(n) tracks.")
+                    confirmation = String(format: LS("similar.mixStarted"), n)
                 }
             } label: {
                 Label(LS("similarTracks.playThisMix"), systemImage: "play.fill").frame(maxWidth: .infinity)
@@ -120,7 +120,7 @@ struct SimilarTracksView: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(!client.hasActiveOutput)
-                .accessibilityLabel(LS("Speel \(t.title)"))
+                .accessibilityLabel(String(format: LS("a11y.playTrack"), t.title))
 
                 AlbumArtView(imageKey: t.imageKey, size: 48)
                     .clipShape(RoundedRectangle(cornerRadius: Radius.sm))

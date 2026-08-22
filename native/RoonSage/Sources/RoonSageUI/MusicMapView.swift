@@ -49,7 +49,7 @@ public struct MusicMapView: View {
     private var mapBody: some View {
         VStack(spacing: Spacing.sm) {
             HStack {
-                LT("\(tracks.count) geanalyseerde tracks")
+                Text(String(format: LS("musicMap.analyzedTracks"), tracks.count))
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 (usingMap ? LT("musicMap.sonicSimilarity") : LT("musicMap.energyTempoAxes"))
@@ -153,14 +153,14 @@ public struct MusicMapView: View {
             } label: { Image(systemName: "dot.radiowaves.left.and.right").tappable44() }
             .buttonStyle(.borderless)
             .disabled(!client.hasActiveOutput)
-            .accessibilityLabel(LS("Start station vanaf \(t.title)"))
+            .accessibilityLabel(String(format: LS("a11y.startStationFrom"), t.title))
             .help(client.hasActiveOutput ? LS("musicMap.startStationHelp") : LS("musicMap.pickZoneFirst"))
             Button {
                 Task { await client.playTrack(id: t.id, title: t.title, artist: t.artist) }
             } label: { Image(systemName: "play.fill").tappable44() }
             .buttonStyle(.borderless)
             .disabled(!client.hasActiveOutput)
-            .accessibilityLabel(LS("Speel \(t.title)"))
+            .accessibilityLabel(String(format: LS("a11y.playTrack"), t.title))
             .help(client.hasActiveOutput ? LS("bm.playNow") : LS("musicMap.pickZoneFirst"))
         }
         .frame(width: 240)

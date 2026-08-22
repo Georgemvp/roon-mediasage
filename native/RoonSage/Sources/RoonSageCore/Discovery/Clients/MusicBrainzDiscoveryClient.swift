@@ -109,13 +109,16 @@ public actor MusicBrainzDiscoveryClient {
     private static func parseTags(_ artist: [String: Any]) -> [String] {
         guard let raw = artist["tags"] as? [[String: Any]] else { return [] }
         return raw
-            .compactMap { t -> (name: String, count: Int)? in
+            // `votes`, not `count`: MusicBrainz reports how many people applied
+            // the tag, which is a score — naming it `count` read as a collection
+            // size to every reader, the linter included.
+            .compactMap { t -> (name: String, votes: Int)? in
                 guard let name = (t["name"] as? String)?.lowercased().trimmingCharacters(in: .whitespaces),
                       !name.isEmpty else { return nil }
                 return (name, t["count"] as? Int ?? 0)
             }
-            .filter { $0.count > 0 }
-            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name < $1.name }
+            .filter { $0.votes > 0 }
+            .sorted { $0.votes != $1.votes ? $0.votes > $1.votes : $0.name < $1.name }
             .map(\.name)
     }
 

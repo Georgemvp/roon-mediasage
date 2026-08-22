@@ -27,7 +27,8 @@ public struct QueueView: View {
                     description: LT("queue.noZoneDescription"))
             } else if client.queueItems.isEmpty {
                 ContentUnavailableView(LS("queue.emptyTitle"), systemImage: "list.number",
-                    description: LT("Niets in de wachtrij van \(client.selectedZone?.displayName ?? "deze zone")."))
+                    description: Text(String(format: LS("queue.emptyForZone"),
+                                 client.selectedZone?.displayName ?? LS("queue.emptyForZoneFallback"))))
             } else {
                 List {
                     Section {
@@ -36,19 +37,26 @@ public struct QueueView: View {
                             .foregroundStyle(.secondary)
                             .listRowSeparator(.hidden)
                     }
-                    ForEach(Array(client.queueItems.enumerated()), id: \.element.id) { index, item in
+                    // The playing row is index 0 in Roon's queue, so "am I now
+                    // playing" is `item.id == first.id` — no enumeration needed.
+                    // `Array(...enumerated())` rebuilt a full tuple copy of the
+                    // list on every body evaluation purely to learn that one bit;
+                    // it is the same construction `LibraryView` was cleaned of.
+                    let nowPlayingID = client.queueItems.first?.id
+                    ForEach(client.queueItems) { item in
+                        let isNowPlaying = item.id == nowPlayingID
                         HStack(spacing: 10) {
                             AlbumArtView(imageKey: item.imageKey, size: 40)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.title)
                                     .lineLimit(1)
-                                    .fontWeight(index == 0 ? .semibold : .regular)
+                                    .fontWeight(isNowPlaying ? .semibold : .regular)
                                 if let s = item.subtitle {
                                     Text(s).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }
                             }
                             Spacer()
-                            if index == 0 {
+                            if isNowPlaying {
                                 Image(systemName: "speaker.wave.2.fill")
                                     .font(.caption).foregroundStyle(Color.roonGold)
                             } else if item.length > 0 {
@@ -66,8 +74,24 @@ public struct QueueView: View {
                         }
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.isButton)
-                        .accessibilityLabel(queueLabel(item, isNowPlaying: index == 0))
+                        .accessibilityLabel(queueLabel(item, isNowPlaying: isNowPlaying))
                         .accessibilityHint(LS("queue.playFromHereHint"))
+                    }
+                    // Say why this screen is poorer than the on-device one.
+                    //
+                    // The local queue reorders, removes and clears; a Roon zone
+                    // does none of that, because the Extension API has no verb
+                    // for it (`TransportService` exposes control, play-from-here,
+                    // volume, mute, seek, shuffle and repeat — that is the whole
+                    // list). Without a word here the difference reads as a bug in
+                    // this app, and the player's own overflow menu even hinted
+                    // that clearing was possible. An explained limit beats a
+                    // missing button.
+                    Section {
+                        Text(LS("queue.zoneReadOnly"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .listRowSeparator(.hidden)
                     }
                 }
                 .listStyle(.plain)
@@ -92,7 +116,7 @@ public struct QueueView: View {
                 newPlaylistName = ""
             }
         } message: {
-            LT("Bewaar de \(savableCount) tracks in de wachtrij als playlist. Afspelen zoekt ze later op titel + artiest terug in je bibliotheek.")
+            Text(String(format: LS("queue.saveBody"), savableCount))
         }
     }
 

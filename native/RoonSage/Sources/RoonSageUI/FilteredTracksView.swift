@@ -89,7 +89,7 @@ public struct FilteredTracksView: View {
             .listStyle(.plain)
         } empty: {
             ContentUnavailableView(LS("filteredTracks.emptyTitle"), systemImage: "line.3.horizontal.decrease.circle",
-                description: LT("Geen tracks voor “\(filter.title)”."))
+                description: Text(String(format: LS("filteredTracks.noneFor"), filter.title)))
         }
         .navigationTitle(filter.title)
         .task { await load() }

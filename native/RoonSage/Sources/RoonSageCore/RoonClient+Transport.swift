@@ -10,9 +10,21 @@ extension RoonClient {
     // All commands route through `runAction` so failures (or a missing
     // transport mid-reconnect) surface as a toast instead of a silent no-op.
 
+    /// Which zone owns an output. Volume and mute are addressed per OUTPUT, but
+    /// the optimistic update has to find the zone that carries it.
+    func zoneID(forOutput outputID: String) -> String {
+        zones.first { $0.outputs.contains { $0.id == outputID } }?.id ?? ""
+    }
+
+    func volumeInfo(forOutput outputID: String) -> VolumeInfo? {
+        zones.lazy.flatMap(\.outputs).first { $0.id == outputID }?.volume
+    }
+
     public func playPause(zoneID: String) async {
-        if isRemote { var c = RemoteCommand("playPause"); c.zoneID = zoneID; await remote(c); return }
-        await runAction("Afspelen/pauzeren") { _ = try await $0.control(.playpause, zoneID: zoneID) }
+        await withOptimistic(.togglePlayPause, zoneID: zoneID) {
+            if isRemote { var c = RemoteCommand("playPause"); c.zoneID = zoneID; return await remote(c) }
+            return await runAction("Afspelen/pauzeren") { _ = try await $0.control(.playpause, zoneID: zoneID) }
+        }
     }
 
     public func next(zoneID: String) async {
@@ -38,8 +50,10 @@ extension RoonClient {
     }
 
     public func setVolume(outputID: String, value: Int) async {
-        if isRemote { var c = RemoteCommand("setVolume"); c.outputID = outputID; c.value = value; await remote(c); return }
-        await runAction("Volume") { _ = try await $0.changeVolume(outputID: outputID, how: "absolute", value: value) }
+        await withOptimistic(.setVolume(value, outputID: outputID), zoneID: zoneID(forOutput: outputID)) {
+            if isRemote { var c = RemoteCommand("setVolume"); c.outputID = outputID; c.value = value; return await remote(c) }
+            return await runAction("Volume") { _ = try await $0.changeVolume(outputID: outputID, how: "absolute", value: value) }
+        }
     }
 
     public func seek(zoneID: String, seconds: Double) async {
@@ -48,24 +62,33 @@ extension RoonClient {
     }
 
     public func adjustVolume(outputID: String, delta: Int) async {
-        if isRemote { var c = RemoteCommand("adjustVolume"); c.outputID = outputID; c.delta = delta; await remote(c); return }
-        await runAction("Volume") { _ = try await $0.changeVolume(outputID: outputID, how: "relative", value: delta) }
+        let target = (volumeInfo(forOutput: outputID)?.value ?? 0) + delta
+        await withOptimistic(.setVolume(target, outputID: outputID), zoneID: zoneID(forOutput: outputID)) {
+            if isRemote { var c = RemoteCommand("adjustVolume"); c.outputID = outputID; c.delta = delta; return await remote(c) }
+            return await runAction("Volume") { _ = try await $0.changeVolume(outputID: outputID, how: "relative", value: delta) }
+        }
     }
 
     public func toggleMute(outputID: String, muted: Bool) async {
-        if isRemote { var c = RemoteCommand("toggleMute"); c.outputID = outputID; c.muted = muted; await remote(c); return }
-        await runAction(muted ? "Dempen" : "Dempen opheffen") { _ = try await $0.mute(outputID: outputID, muted: muted) }
+        await withOptimistic(.setMuted(muted, outputID: outputID), zoneID: zoneID(forOutput: outputID)) {
+            if isRemote { var c = RemoteCommand("toggleMute"); c.outputID = outputID; c.muted = muted; return await remote(c) }
+            return await runAction(muted ? "Dempen" : "Dempen opheffen") { _ = try await $0.mute(outputID: outputID, muted: muted) }
+        }
     }
 
     public func setShuffle(zoneID: String, enabled: Bool) async {
-        if isRemote { var c = RemoteCommand("setShuffle"); c.zoneID = zoneID; c.enabled = enabled; await remote(c); return }
-        await runAction("Shuffle") { _ = try await $0.setShuffle(zoneID: zoneID, enabled: enabled) }
+        await withOptimistic(.setShuffle(enabled), zoneID: zoneID) {
+            if isRemote { var c = RemoteCommand("setShuffle"); c.zoneID = zoneID; c.enabled = enabled; return await remote(c) }
+            return await runAction("Shuffle") { _ = try await $0.setShuffle(zoneID: zoneID, enabled: enabled) }
+        }
     }
 
     public func setRepeat(zoneID: String, mode: String) async {
-        if isRemote { var c = RemoteCommand("setRepeat"); c.zoneID = zoneID; c.mode = mode; await remote(c); return }
-        let rMode = TransportService.RepeatMode(rawValue: mode) ?? .off
-        await runAction("Herhalen") { _ = try await $0.setRepeat(zoneID: zoneID, mode: rMode) }
+        await withOptimistic(.setLoop(mode), zoneID: zoneID) {
+            if isRemote { var c = RemoteCommand("setRepeat"); c.zoneID = zoneID; c.mode = mode; return await remote(c) }
+            let rMode = TransportService.RepeatMode(rawValue: mode) ?? .off
+            return await runAction("Herhalen") { _ = try await $0.setRepeat(zoneID: zoneID, mode: rMode) }
+        }
     }
 
     /// Play a list of tracks by their Roon item_keys using the browse API.
