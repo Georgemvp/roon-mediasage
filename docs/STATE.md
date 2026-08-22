@@ -1,12 +1,16 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met "fix alles" uit de audit. Pak de VOLGENDE
-batch uit ## Next (het UX-speler-plan is AF; nu is een toestel-oordeel aan de beurt, zie native/docs/UX_PLAYER_PLAN.md §7b).
+batch uit ## Next. Het UX-speler-plan is AF en sinds 2026-08-22 ook interactief
+geverifieerd; wat nu bovenaan ligt zijn de vier punten onder "NOG OPEN" in het
+bovenste blok van ## Now.
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
 Laatst geshipt: v1.10.270 / ios-v1.7.236 / analyzer-v1.1.200 (getagd; de
 analyzer draait sinds 2c50e34 wél als v1.1.200 op de mini, via de CI-DMG).
+LET OP: de sessie van 22-08 (offline afspelen, tabtitels, lokalisatie, Stations)
+staat nog ONGECOMMIT in de working tree — bouwen/testen is groen, niet getagd.
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 ═══════════════════════════════════════════════════════════════════ -->
@@ -15,6 +19,192 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+NU (2026-08-22, eind middag): **STATIONS OPNIEUW INGEDEELD — audit in
+`native/docs/STATIONS_AUDIT.md`.** (user: "Kan je de UX van de stations view
+verbeteren? Doe een uitgebreide audit en maak het beter, overzichtelijker en
+professioneler.")
+
+**De diagnose in één zin:** Stations was geen scherm maar vier schermen die
+toevallig in dezelfde tab stonden — geen gedeelde kop, geen gedeelde kaartvorm,
+geen gedeelde plek voor de primaire actie, en twee van de vier eisten nog een
+Roon-zone en deden op dit toestel dus niets.
+
+**Wat er mis was, geteld:**
+- **Drie titelniveaus** boven elke inhoud: de tab heet "Stations", het segment
+  heet "Radios", en daaronder stond een kop "Sonic radios". Kosten: 315 pt chrome
+  op een scherm van 874, waarvan 112 pt aan die derde kop.
+- **Je zag geen enkel station zonder te scrollen.** De volgorde was kop → een
+  link naar een ánder scherm → een schuifregelaar die pas geldt bij het vólgende
+  station → filterpillen → *dan pas* de stations, rond 600 pt.
+- **Twee schakelaars lagen boven op elkaar** op DJ-modi. Echt kapot, en op de
+  eerste schermafdruk meteen zichtbaar: twee `Toggle`s met een `.caption`-label
+  in een `VStack(spacing: .xs)`. SwiftUI maakt de rij zo hoog als het lábel, en
+  een switch is 31 pt — die liep dus de rij eronder in.
+- **Journeys had drie interactiemodellen voor drie dingen die hetzelfde
+  beloven:** Album Radio was een blok tekst zónder enige actie, Time Machine had
+  een stepper met twee knoppen, The Bridge was een `NavigationLink` met een
+  handgetekende chevron náást die van de `List`.
+- **Time Machine werkte niet op dit apparaat** (`selectedZone == nil` →
+  uitgeschakeld, plus `curateTracks(zoneID:)`), net als de drie speel-verbs in
+  Genereer. Dat waren de laatste zone-only acties in de app.
+- **Nederlands op een Engelse telefoon:** `LS("Lengte: \(count) tracks")` en twee
+  broertjes — interpolaties in de sleutel, die per constructie nooit oplossen.
+
+**Wat er nu staat.** Eén kop: de segmentkiezer zegt waar je bent, één regel
+eronder zegt wat het is, daarna komt inhoud. Radio's zet de filterpillen direct
+boven de stations en schuift alles wat géén station is eronder. DJ-modi zet de
+zes persona's boven en het autoplay-instellingenblok onder. Journeys is één
+`journeyCard`-vorm: icoon, naam, één regel, en precies één knop — Album Radio
+heeft er nu ook een ("Kies een album", want dáár start je hem). Alles speelt op
+de actieve uitvoer.
+
+**Drie dingen kwamen pas boven toen de rest was opgeruimd.** (1) `List` reserveert
+~54 pt boven zijn eerste rij voor een sectiekop die een kaartenfeed niet heeft —
+onder de oude hoge koppen viel dat niet op, eronder werd het een gat
+(`cardFeedList()`). (2) Een `NavigationLink` in een `List` tekent zijn eigen
+chevron én negeert `.buttonStyle(.bordered)` op zijn label, dus de Bridge-actie
+was kale tekst met een losse "›" terwijl de twee kaarten erboven echte knoppen
+hadden — nu een `Button` + `navigationDestination(isPresented:)`. (3) Op Genereer
+zeiden de segmentregel, de sectiekop én de placeholder alle drie hetzelfde; de
+sectiekop is weg.
+
+**Gemeten (zelfde simulator, vóór en na):** chrome vóór de eerste inhoud
+315 → **223 pt** · eerste stationstegel ~600 → **~288 pt** · titelniveaus 3 → **2** ·
+overlappende bedieningselementen 2 → **0** · interactiemodellen op Journeys
+3 → **1** · zone-only acties 3 → **0** · interpolatie-sleutels in deze tab 3 → **0** ·
+persona's zichtbaar zonder scrollen 2 → **6**.
+
+**Verified: 956 tests 0 failures · `swift build -c release` exit 0 ·
+check-localization 985 sleutels, 0 missend / 0 wees (interpolaties app-breed
+67 → 64) · alle drie de UI-tests groen · alle vier de segmenten gefotografeerd.**
+
+**Nieuw hergebruikbaar:** `SettingToggle` (schakelaarrij met een hoogte die de
+switch aankan) en `cardFeedList()` (bovenmarge voor een `List` die kaarten toont
+in plaats van secties). Allebei bedoeld voor de andere hubs — Zoek en Ontdek
+hebben dezelfde vorm en dus waarschijnlijk hetzelfde gat.
+
+---
+
+NU (2026-08-22, middag): **DE APP INTERACTIEF NAGELOPEN — EN OFFLINE AFSPELEN
+BLEEK KAPOT.** (user: "ga nu mijn roonsage app na en kijk of de ux verbeterd is
+en kijk hoe je het nog meer kan verbeteren".) Alle zes UX-batches waren af, maar
+het harnas liep alleen langs de vier tabs. Zodra het ook op een tegel tikte, was
+het eerste wat eruit kwam geen UX-oordeel maar een storing.
+
+**OFFLINE AFSPELEN WERKTE NIET. GEEN ENKELE GEDOWNLOADE TRACK.**
+`LocalAudioCache.filename(forKey:variant:)` is een kale SHA-256 hex, dus een
+gedownload of gecachet bestand heeft **geen padextensie** — en `AVURLAsset` leest
+het mediatype van de extensie af en snuffelt niet in de inhoud. Bewezen met
+dezelfde bytes onder twee namen: `x.m4a` geeft `playable=true, audioTracks=1`,
+de extensieloze kopie geeft `Cannot Open` met onderliggende fout **-12847**, en
+dat is precies wat de speler in de simulator logde bij elke tik op een tegel.
+
+Waarom dit maanden kon overleven: **streamen raakt het niet.** Een HTTP-antwoord
+draagt `Content-Type`, een bestand op schijf draagt niets. De tier brak dus
+precies en uitsluitend wanneer het netwerk weg was — het ene geval waarvoor hij
+bestaat. AVFoundation's out-of-band MIME-sleutel bestaat wel, maar staat in geen
+enkele publieke header (alleen in de `.tbd`), dus die is bewust niet gebruikt.
+In plaats daarvan krijgt elk bestand de extensie die zijn eigen header aanwijst
+(`fileExtension(forHeader:)`, 7 formaten), en `locate(base:in:)` **hernoemt wat er
+al staat** bij het eerste gebruik — geen migratie, geen herdownload. Een
+onherkenbare header krijgt geen extensie: liever geen hint dan een verkeerde.
+7 tests, waaronder het hernoempad en "verwijderen laat geen tweede kopie achter".
+
+**DE VIER TABS HADDEN ALLE VIER DE VERKEERDE TITEL.** SwiftUI laat de *diepste*
+`navigationTitle` winnen, dus elk hub-kind hernoemde de tab waarin het stond:
+Stations las "Radio's", Ontdek "Herontdek", Zoek **"Bibliotheek (15 tracks)"** —
+en de naam veranderde mee met elke tik op de segmentkiezer. Opgelost met
+`ScreenTitle.swift`: `.screenTitle(_:)` titelt alleen wanneer het scherm op
+zichzelf staat, `.hubContent()` markeert de drie hubs. Tien schermen om.
+
+**DE APP BLEEF OP HET VERBINDSCHERM HANGEN — het "VERMOEDEN, ONBEWEZEN"
+hieronder is nu bewezen en gerepareerd.** `RoonClient+Remote.swift` zet na vijf
+mislukte polls `.disconnected`, terwijl de offlineglijbaan in
+`RoonClient.swift:88-92` alleen op `.failed` reageert. Met een onbereikbare
+server bleef je dus staren naar drie knoppen over servers, met een volle
+bibliotheek en 15 downloads achter je. Nu: vijf missers zónder ooit een sessie
+deze run én mét lokale bibliotheek → offline. De `hasLiveSession`-poort houdt een
+echte hapering thuis op het herverbindpad.
+
+**DE HELFT VAN DE APP SPRAK NEDERLANDS OP EEN ENGELSE TELEFOON.** Geteld en
+omgezet: ~30 literals in `SonicRadioView` (het Stations-scherm was vrijwel
+volledig Nederlands), **63 playlist-sjablonen + 8 categorieën**, de zeven
+radiocategorieën (via `CoreStrings`, want Core ligt onder de catalogus), de
+wachtrijteller ("1 nummer"), de aftelklok op het verbindscherm, en drie
+VoiceOver-teksten. Catalogus **859 → 981 sleutels, 0 missend, 0 wees.**
+Sjabloonnamen gaan via `LSDynamic("playlistTemplate.<id>")` — een sleutel die
+pas op runtime bestaat, dus `check-localization.sh` kent nu een lijst dynamische
+prefixen in plaats van 71 valse wezen te melden.
+
+**KLEINE DINGEN DIE DE FOTO'S LIETEN ZIEN:** dubbele chevrons (`> >`) op elke
+kaart in Stations — een `NavigationLink` in een `List` tekent er zelf al een ·
+"DJ-modi" en "Sonic Journeys" stonden er als kaart **én** als segment één rij
+hoger, dezelfde kastjesfout die batch 3 een niveau hoger opruimde · de
+moduskiezer op de bibliotheek was icoon-only (huis, lijst, raster, twee mensen —
+een woordenschat die je eerst moet leren) terwijl "Overzicht · Tracks · Albums ·
+Artiesten" gewoon past · de Zoek-tab zette de cursor niet in het zoekveld ·
+de schaallabels van de avontuurlijkheidsschuif botsten met de schakelaar eronder.
+
+**HET HARNAS IS VERDIEPT, EN DAT WAS DE VOORWAARDE VOOR AL HET BOVENSTAANDE.**
+`seed-demo-library.py` schrijft nu ook `track_audio_features` **en echte audio in
+de pinned-downloadmap** — zonder featurerij noemt `LocalPlayability` geen enkele
+track speelbaar, dus filterde elk speelwerkwoord de hele bibliotheek weg en was
+de speler per constructie onfotografeerbaar. Daar kwam de bug uit. De walk heeft
+er twee tests bij (speler + wachtrij, en de vier Stations-segmenten) en twee
+taalonafhankelijke handvatten (`cover.tile`, `nowplaying.bar`) naast het
+bestaande `gear.settings`.
+
+**DE LEGE GOUDEN KNOP WAS TWEE FOUTEN OVER ELKAAR.** De "Speel nu"-knop op beide
+hero-kaarten in Ontdek was een volkomen lege gouden pil — geen tekst, geen icoon.
+(1) Het waren de enige `.borderedProminent`-knoppen in de app zonder eigen
+`.tint(...)`; met de geërfde app-tint verdween de inhoud in de vulling. Dat
+maakte het **icoon** zichtbaar en verder niets. (2) Wat overbleef was `Label` dat
+in een knop terugvalt op icon-only. Pas met `.labelStyle(.titleAndIcon)` erbij
+staat er "▶ Play now". Eén symptoom, twee oorzaken — de eerste fix "werkte" en
+was toch niet klaar; alleen de foto liet dat zien.
+
+**EEN VERBETERING DIE IK HEB TERUGGEDRAAID, EN DAAROM WEET IK NU WAAROM.**
+Automatisch focussen van het zoekveld op de Zoek-tab lijkt gratis winst (Plexamp
+en ARC doen het). Gemeten: het toetsenbord neemt de tabbalk mee omhoog, en de
+walk kon daarna **geen enkele tab meer selecteren** — je landt op Zoek en komt er
+niet meer uit zonder een toetsenbord weg te vegen dat je niet gevraagd had.
+Teruggedraaid, met de meting in een comment. Dit was ook de echte oorzaak van de
+"Ontdek-tab werd niet geselecteerd" die eerder als los raadsel openstond.
+
+**VALKUIL IN HET HARNAS ZELF:** `restoreLastTab()` heropent de laatst gebruikte
+tab en de UserDefaults van de simulator overleven tussen testruns, dus de tweede
+run begon waar de eerste eindigde. Drie tests faalden tegelijk ("geen speelbare
+tegel", "tab niet geselecteerd") puur door die aanname. `startOnLibrary()` zet nu
+elke test op dezelfde begintoestand.
+
+**Verified: 956 tests 0 failures (was 949) · `swift build` exit 0 ·
+check-localization 981 sleutels, 0 missend / 0 wees · alle drie de UI-tests
+groen · in de simulator gefotografeerd: de speler speelt écht (0:03/-0:34, hoes,
+BPM+toonsoort, het "staat op dit toestel"-pijltje), de wachtrij als tweede
+pagina, Stations met de juiste titel en één chevron, "Library (15 tracks)" en
+"Overview · Tracks · Albums · Artists" in het Engels, en "▶ Play now" op de
+hero-kaart.**
+
+**NOG OPEN, met schermafdruk als bewijs:**
+- De wachtrijpagina is **licht** terwijl het spelerscherm ernaast **donker** is;
+  twee pagina's van hetzelfde blad die als twee apps aanvoelen.
+- De golfvorm op de speler is **fel groen** in een verder volledig gouden app.
+- 67 interpolated keys resteren (was 69).
+- De offlinebanner kost twee regels op élk scherm, permanent — ~10% van de
+  hoogte, op elke tab, ook als je alleen je downloads afspeelt.
+- `heroCard` en `albumOfDayCard` in `DiscoveryView` zijn twee bijna identieke
+  kopieën van 70 regels. Dezelfde vorm als de twee spelers die batch 1 opvouwde;
+  dat de knopfix hierboven op twee plekken moest, is er het bewijs van.
+
+**GUI-AUTOMATISERING OP DE MINI WERKT NU — en de valkuil zat niet in de rechten.**
+Screen Recording en Accessibility staan aan, maar `displaysleep` is 10 minuten en
+het schermslot volgt onmiddellijk; daarna geeft `screencapture -x` een volkomen
+zwart bestand zonder foutmelding en opent Simulator.app géén venster. Zie
+`~/gui-wakker.sh` (status/aan/uit). **Maar voor deze app blijft XCUITest de juiste
+route:** dat draait ín de simulator, heeft geen enkel systeemrecht nodig en werkt
+ook met een slapend scherm. De GUI-route is voor vrij rondkijken en live logs —
+zo is de -12847 gevonden.
+
 NU (2026-08-22): **UX-PLAN OM ROONSAGE ALS SPELER TE LATEN VOELEN** (user: "Kijk
 hoe je de ux van roonsage kan verbeteren zodat het als een locale player net als
 plexamp of roon arc kan functioneren en het niet te ingewikkeld is qua ui" →
