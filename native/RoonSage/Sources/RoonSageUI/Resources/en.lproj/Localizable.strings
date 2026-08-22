@@ -962,6 +962,11 @@
 "settings.syncedFeatures" = "Synced features";
 "settings.testConnection" = "Test connection";
 "settings.theme" = "Theme";
+"settings.thisDevice"         = "This device";
+"settings.thisDeviceSubtitle" = "Appearance, language, sound and what you take with you";
+"settings.serverAndServices"  = "Server & services";
+"settings.serverAndServicesSubtitle" = "Roon, library, analyzer and your accounts";
+"settings.splitFooter"        = "Everything that decides how it sounds here is under This device. Everything the server does is below that.";
 "settings.tracksInDatabase" = "Tracks in database";
 "settings.transcodeHelp" = "Has the server convert FLAC/lossless to AAC before streaming — far lighter over ZeroTier on mobile data. Below 128 kbps the server uses HE-AAC, which sounds much better than plain AAC at those bitrates. 96 kbps costs about 43 MB per hour, 256 kbps about 115 MB, FLAC about 400 MB. Sources already leaner than the chosen bitrate are left untouched. Applies from the next track.";
 "settings.transcodeToAAC" = "Transcode to AAC";

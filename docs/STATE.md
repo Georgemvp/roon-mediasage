@@ -1,11 +1,11 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met "fix alles" uit de audit. Pak de VOLGENDE
-batch uit ## Next (nu: UX-speler-plan batch 5 = U7, zie native/docs/UX_PLAYER_PLAN.md).
+batch uit ## Next (nu: UX-speler-plan batch 4 = U4+U5, zie native/docs/UX_PLAYER_PLAN.md).
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst geshipt: v1.10.266 / ios-v1.7.232 / analyzer-v1.1.200 (getagd; de
+Laatst geshipt: v1.10.267 / ios-v1.7.233 / analyzer-v1.1.200 (getagd; de
 analyzer draait sinds 2c50e34 wél als v1.1.200 op de mini, via de CI-DMG).
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
@@ -139,9 +139,41 @@ SUCCEEDED · check-localization 854 sleutels, 0 missend / 0 wees.**
 **NIET geverifieerd: hoe de vier tabs eruitzien** — zie de simulator-grens
 hierboven (geen tikken mogelijk).
 
-**VOLGENDE: batch 5 = U7** (SettingsView splitsen in "Dit apparaat" versus
-"Server & diensten"; de plaatsing is met batch 3 al gedaan, de splitsing niet).
-Daarna batch 4 = U4 + U5 (één routeknop, wachtrijknop) en batch 6 = U8 + U9.
+**BATCH 5 (U7) IS AF EN GETAGD — v1.10.267 / ios-v1.7.233.** Eén `Form` van 21
+secties werd twee deuren: **Dit apparaat** (uiterlijk, taal, loudness,
+transcode, cache, downloads, Qobuz lokaal, over — 8) en **Server & diensten**
+(Roon, serversync, bibliotheek, LLM, externe diensten, Discogs, Last.fm,
+Qobuz-account, analyzer — hoogstens 9, en 3 op een telefoon). `SettingsHomeView`
+is de menupagina, `SettingsView(scope:)` rendert de helft.
+
+**De as is verlegd, en dat is het punt.** De oude poort was `role` — server of
+client — en dat was de verkeerde vraag. Op 11-08 bleek dat vier secties over hoe
+audio op dít apparaat klinkt binnen `if role == .server` stonden en dus
+onzichtbaar waren op het enige apparaat waar ze toe doen (v1.10.257). Toen zijn
+vier secties uit één `if` gehaald; nu zit de les in de structuur: `SettingsScope`
+dwingt per sectie het antwoord af op "configureert dit de server, of hoe het hier
+klinkt".
+
+**Als modifier, niet als `if`.** `.scoped(.device, in: scope)` hangt per
+top-level sectie aan het sluithaakje. Een conditional om 500 regels heen zou de
+halve file opnieuw hebben ingesprongen en de echte wijziging in witruimte
+begraven. `scope: .all` blijft voor de twee plekken waar de instellingen al een
+paneel in een groter venster zijn: de macOS ⌘,-scene en het Server-tabblad van
+de analyzer-app.
+
+**VAL DIE IK ZELF MAAKTE EN GEVONDEN HEB:** mijn insertiescript plakte
+`.scoped(...)` bij twee blokken achter een regelcommentaar
+(`} // end role == .server.scoped(…)`), waardoor de poort ín het commentaar viel
+en dus **niets deed** — die twee blokken zouden op béíde pagina's zijn verschenen.
+Het compileert prima; alleen een telling van alle top-level kinderen mét hun
+scope liet het zien. Bij zulke mechanische bewerkingen is die telling het bewijs,
+niet de build.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 859 sleutels, 0 missend / 0 wees.**
+
+**VOLGENDE: batch 4 = U4 + U5** (één routeknop: dit apparaat / AirPlay / zones,
+en een wachtrijknop in de speler). Daarna batch 6 = U8 + U9.
 
 **DE MACOS-RELEASE VAN DEZE BATCH FAALDE TWEE KEER OP APPLE, NIET OP DE CODE**
 (v1.10.263). De build was compleet, de `.app` gesigneerd, notarisatie *Accepted*
@@ -446,7 +478,7 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batches 1-3 af en getagd (U1, U2+U6, U3+U10+U11); **volgende is batch 5 = U7** (SettingsView splitsen). Zie §6 voor de volgorde.
+- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. Batches 1-3 en 5 af en getagd (U1, U2+U6, U3+U10+U11, U7); **volgende is batch 4 = U4 + U5** (routeknop, wachtrijknop). Zie §6 voor de volgorde.
 - **B3 (mood-backfill, GROTER dan gedacht):** er is GEEN mood-backfill — bouwen naar analogie van `refreshAttributes`/`autoArousalRefreshIfNeeded` (FeatureStore `moodRefreshRows`+`setMoodsBatch`, LibraryWalker `refreshMoods(missingKey:)`, AnalyzerModel `autoMoodRefreshIfNeeded()` + launch-wiring). **TRAP: `FeatureStore.contentSignature()` heeft GEEN moods-term** → zonder toevoeging pullen clients de nieuwe moods nooit (mirror ar/tm-patroon).
 - Resterend maar NIET headless verifieerbaar (vereist toestel/GUI): crossfade + gapless (AVPlayer→AVAudioEngine, groot/risico), Siri-intents, Control Center, CarPlay (OS-integratie), chat-agent (LLM), share-CARDS als afbeelding (ImageRenderer — kan niet getest: testtarget importeert RoonSageUI niet)
 - B7b Architectuur (groot/risico): RoonClient god-object-split, alleen build-verifieerbaar

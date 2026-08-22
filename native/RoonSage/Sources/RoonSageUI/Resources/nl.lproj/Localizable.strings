@@ -962,6 +962,11 @@
 "settings.syncedFeatures" = "Gesyncte kenmerken";
 "settings.testConnection" = "Test verbinding";
 "settings.theme" = "Thema";
+"settings.thisDevice"         = "Dit apparaat";
+"settings.thisDeviceSubtitle" = "Uiterlijk, taal, geluid en wat je meeneemt";
+"settings.serverAndServices"  = "Server & diensten";
+"settings.serverAndServicesSubtitle" = "Roon, bibliotheek, analyzer en je accounts";
+"settings.splitFooter"        = "Alles wat bepaalt hoe het hier klinkt staat bij Dit apparaat. Alles wat de server doet staat daaronder.";
 "settings.tracksInDatabase" = "Tracks in database";
 "settings.transcodeHelp" = "Laat de server FLAC/lossless omzetten naar AAC vóór het streamen — veel lichter over ZeroTier op mobiele data. Onder 128 kbps gebruikt de server HE-AAC, dat op die bitrates veel beter klinkt dan gewone AAC. 96 kbps kost ongeveer 43 MB per uur, 256 kbps ongeveer 115 MB, FLAC ongeveer 400 MB. Bronnen die al zuiniger zijn dan de gekozen bitrate worden ongemoeid gelaten. Geldt vanaf de volgende track.";
 "settings.transcodeToAAC" = "Transcodeer naar AAC";

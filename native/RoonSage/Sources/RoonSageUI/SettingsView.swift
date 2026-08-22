@@ -12,9 +12,41 @@ public enum SettingsRole: Sendable {
     case client
 }
 
+/// Which half of the settings a page shows.
+///
+/// The old screen was one `Form` of 21 sections gated by `role`, and that gate
+/// was the wrong axis: on 2026-08-11 four sections about how audio sounds on
+/// THIS device (loudness, the cellular transcode, the audio cache, offline
+/// downloads) sat inside `if role == .server` and were therefore invisible on
+/// the phone — the only device they exist for (v1.10.257). The distinction that
+/// matters isn't "server or client" but **"does this configure the server, or
+/// how it sounds here"**, and those two run straight through each other in that
+/// list. Making it a scope rather than a role puts the answer in the type.
+public enum SettingsScope: Sendable {
+    /// How the app looks and sounds on this device.
+    case device
+    /// Roon, the library, the analyzer and the external accounts.
+    case server
+    /// Both, in one page. macOS keeps this; the phone splits.
+    case all
+}
+
+extension View {
+    /// Shows this section only when it belongs to the page being rendered.
+    ///
+    /// A modifier rather than an `if` around each block on purpose: wrapping 500
+    /// lines in a conditional would have re-indented most of the file and buried
+    /// the actual change in whitespace.
+    @ViewBuilder
+    func scoped(_ section: SettingsScope, in page: SettingsScope) -> some View {
+        if page == .all || page == section { self }
+    }
+}
+
 @MainActor
 public struct SettingsView: View {
     private let role: SettingsRole
+    private let scope: SettingsScope
     @Environment(RoonClient.self) private var client
     @Environment(\.openURL) private var openURL
     @AppStorage("themePreset") private var themePreset: ThemePreset = .custom
@@ -34,8 +66,9 @@ public struct SettingsView: View {
     @State private var settingsSyncBusy = false
     @State private var settingsSyncStatus: String?
 
-    public init(role: SettingsRole = .client) {
+    public init(role: SettingsRole = .client, scope: SettingsScope = .all) {
         self.role = role
+        self.scope = scope
     }
 
     /// "21 + 452 via MusicBrainz" — the coarse Roon buckets plus the fine-grained MB
@@ -137,7 +170,7 @@ public struct SettingsView: View {
                 Picker(LS("settings.language"), selection: $appLanguage) {
                     ForEach(LocalePreference.allCases) { Text($0.label).tag($0) }
                 }
-            }
+            }.scoped(.device, in: scope)
 
             // Ambient backdrop (C6): dial the album-art wash + optional wallpaper.
             Section(LS("settings.background")) {
@@ -154,7 +187,7 @@ public struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Toggle(LS("settings.albumArtBackground"), isOn: $ambientWallpaper)
-            }
+            }.scoped(.device, in: scope)
 
             // Connection
             Section(LS("settings.roonConnection")) {
@@ -173,8 +206,9 @@ public struct SettingsView: View {
                     }
                     .disabled(!client.connectionState.isConnected)
                 }
-            }
+            }.scoped(.server, in: scope)
 
+            Group {
             if role == .client {
                 // The remote apps work like a remote: pick the server (the
                 // always-on analyzer/server) and pull settings + library +
@@ -221,6 +255,7 @@ public struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            }.scoped(.server, in: scope)
 
             // Library — counts always; sync/share controls only on the server.
             Section(LS("settings.library")) {
@@ -275,8 +310,9 @@ public struct SettingsView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
-            }
+            }.scoped(.server, in: scope)
 
+            Group {
             if role == .server {
             // LLM
             Section("LLM / Playlist AI") {
@@ -532,6 +568,7 @@ public struct SettingsView: View {
             }
 
             } // end role == .server
+            }.scoped(.server, in: scope)
 
             // Also device-local: `qobuz_local_stream_enabled` is UserDefaults on
             // THIS device, so behind the server gate a phone could never turn it
@@ -552,8 +589,9 @@ public struct SettingsView: View {
                 LT("settings.qobuzLocalHelp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
+            }.scoped(.device, in: scope)
 
+            Group {
             if role == .server {
             // Audio analyzer — configures the analyzer host itself, so it stays
             // server-only; a client receives the results through settings sync.
@@ -587,6 +625,7 @@ public struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             } // end role == .server
+            }.scoped(.server, in: scope)
 
             // Playback on THIS device — deliberately outside the server gate.
             //
@@ -595,13 +634,13 @@ public struct SettingsView: View {
             // AAC transcode, the audio cache and offline downloads were all
             // hidden on the one device they exist for. Nothing here configures
             // the server; every setting is about how audio plays right here.
-            LoudnessSettingsSection()
+            LoudnessSettingsSection().scoped(.device, in: scope)
 
-            TranscodeSettingsSection()
+            TranscodeSettingsSection().scoped(.device, in: scope)
 
-            AudioCacheSettingsSection()
+            AudioCacheSettingsSection().scoped(.device, in: scope)
 
-            OfflineDownloadsSection()
+            OfflineDownloadsSection().scoped(.device, in: scope)
 
             // About
             Section(LS("settings.about")) {
@@ -618,15 +657,27 @@ public struct SettingsView: View {
                     Label(LS("settings.viewShareLog"), systemImage: "doc.text.magnifyingglass")
                 }
             }
-        }
+        }.scoped(.device, in: scope)
         .formStyle(.grouped)
-        .navigationTitle("Instellingen")
+        .navigationTitle(scopeTitle)
         #if os(macOS)
         .frame(width: 440)
         #endif
-        .task { afStats = await client.audioFeaturesStats() }
+        // A DB read for the analyzer section; pointless on the device page.
+        .task {
+            guard scope != .device else { return }
+            afStats = await client.audioFeaturesStats()
+        }
         .onAppear { loadSettingsState() }
         .onChange(of: client.isSyncing) { _, _ in refreshLastSync() }
+    }
+
+    private var scopeTitle: String {
+        switch scope {
+        case .device: LS("settings.thisDevice")
+        case .server: LS("settings.serverAndServices")
+        case .all:    LS("nav.settings")
+        }
     }
 
     /// Loads every field from UserDefaults + Keychain into local @State. Called

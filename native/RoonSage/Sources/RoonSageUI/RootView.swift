@@ -634,7 +634,7 @@ struct RootView: View {
 
     private var settingsSheet: some View {
         NavigationStack {
-            SettingsView()
+            SettingsHomeView()
                 .navigationTitle(LS("nav.settings"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -734,7 +734,7 @@ struct RootView: View {
         case .multitag:    MultitagView()
         case .discover, .discovery: DiscoverHubView()
         case .fingerprint, .recent, .taste, .tasteHub, .yearInReview: TasteHubView()
-        case .settings:    SettingsView()
+        case .settings:    SettingsHomeView()
         }
     }
 

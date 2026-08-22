@@ -240,7 +240,7 @@ automatiseren is — het bureaublad heeft geen Screen-Recording-TCC):
 | Verzonnen eigennamen in het navigatiepad | 9 (Sonic Lab, Music Map, Sonic DNA, Song Paths, Alchemy, Multitag, Journeys, DJ-modi, Ontdek Wekelijks) | **0 in de tabbalk** (Bibliotheek · Zoek · Ontdek · Stations); Lab is één kaart, en daarbinnen krijgt elk gereedschap een regel gewone taal — gehaald (U3) |
 | Bestemmingen in de tabbalk | 5, waarvan 3 kastjes | **4 echte** — gehaald (U3) |
 | Regels Nu-speelt-code | 1.421 in 2 bestanden | **< 900 in 1** — gehaald: 704 (U1) |
-| Secties in het eerste instellingenscherm | 21 | **≤ 10 per scherm, 2 schermen** |
+| Secties in het eerste instellingenscherm | 21 | **≤ 10 per scherm, 2 schermen** — gehaald: 8 en ≤ 9 (U7) |
 
 **Eén maat is bij de uitvoering geschrapt: "tikken naar Sonic Search".** Dat was
 2 en werd 2 — de winst zat nooit in het aantal tikken maar in wat je onderweg
@@ -346,7 +346,26 @@ door. Los uit te zoeken; het raakt P9 (half-offline zichtbaar maken).
       Sidebar 29 items → **11**, met dezelfde vijf woorden als de telefoon.
       Catalogus 846 → 854 (14 nieuw, 6 wezen van de gesloopte kastjes weg).
 - [ ] Batch 4 — U4 + U5
-- [ ] Batch 5 — U7
+- [x] Batch 5 — U7 · v1.10.267 / ios-v1.7.233.
+      Eén `Form` van 21 secties werd twee deuren: **Dit apparaat** (uiterlijk,
+      taal, loudness, transcode, cache, downloads, Qobuz lokaal, over — 8) en
+      **Server & diensten** (Roon, serversync, bibliotheek, LLM, externe
+      diensten, Discogs, Last.fm, Qobuz-account, analyzer — hoogstens 9, en 3 op
+      een telefoon). `SettingsHomeView` is de menupagina; `SettingsView(scope:)`
+      rendert de gefilterde helft.
+      **De as is bewust verlegd.** De oude poort was `role` — server of client —
+      en dat was de verkeerde vraag: op 11-08 bleek dat vier secties over hoe
+      audio op dít apparaat klinkt binnen `if role == .server` stonden en dus
+      onzichtbaar waren op de telefoon (v1.10.257). Toen zijn vier secties uit
+      één `if` gehaald; nu zit de les in de structuur, want `SettingsScope`
+      dwingt per sectie het antwoord af op "configureert dit de server, of hoe
+      het hier klinkt".
+      **Als modifier, niet als `if`:** `.scoped(.device, in: scope)` per
+      top-level sectie. Een conditional om 500 regels heen zou de halve file
+      opnieuw hebben ingesprongen en de echte wijziging in witruimte begraven.
+      `scope: .all` blijft bestaan voor de twee plekken waar de instellingen al
+      een paneel in een groter venster zijn: de macOS ⌘,-scene en het
+      Server-tabblad van de analyzer-app.
 - [ ] Batch 6 — U8 + U9
 - [ ] Backlog — U12
 
