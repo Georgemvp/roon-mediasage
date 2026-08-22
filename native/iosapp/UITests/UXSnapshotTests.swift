@@ -126,6 +126,114 @@ final class UXSnapshotTests: XCTestCase {
         }
     }
 
+    /// Every mode of the library screen, plus one album and one artist detail.
+    ///
+    /// The overview was the only library surface anyone had ever seen; tracks,
+    /// albums and artists are three more screens with their own empty states,
+    /// sort controls and row layouts.
+    func testLibraryModes() throws {
+        try enterOfflineMode()
+
+        // The mode picker is the first segmented control on this screen.
+        let modes = app.segmentedControls.firstMatch
+        guard modes.waitForExistence(timeout: 15) else {
+            snap("30-geen-moduskiezer")
+            throw XCTSkip("Bibliotheek toont geen moduskiezer")
+        }
+        for index in 0..<modes.buttons.count {
+            let seg = modes.buttons.element(boundBy: index)
+            let label = seg.label
+            seg.tap()
+            _ = app.staticTexts.firstMatch.waitForExistence(timeout: 3)
+            snap(String(format: "%02d-bibliotheek-%@", 30 + index, label))
+        }
+
+        // Albums mode is on index 2; open the first one for the detail screen.
+        if modes.buttons.count > 2 {
+            modes.buttons.element(boundBy: 2).tap()
+            let firstAlbum = app.cells.firstMatch
+            if firstAlbum.waitForExistence(timeout: 10) {
+                firstAlbum.tap()
+                _ = app.navigationBars.firstMatch.waitForExistence(timeout: 5)
+                snap("34-album-detail")
+                app.navigationBars.buttons.element(boundBy: 0).tap()
+            }
+        }
+        if modes.buttons.count > 3 {
+            modes.buttons.element(boundBy: 3).tap()
+            let firstArtist = app.cells.firstMatch
+            if firstArtist.waitForExistence(timeout: 10) {
+                firstArtist.tap()
+                _ = app.navigationBars.firstMatch.waitForExistence(timeout: 5)
+                snap("35-artiest-detail")
+            }
+        }
+    }
+
+    /// The three ways this app can find music, and the three Discover surfaces.
+    func testSearchAndExploreSegments() throws {
+        try enterOfflineMode()
+        let tabs = app.tabBars.buttons
+
+        tabs.element(boundBy: 1).tap()          // Zoek
+        XCTAssertTrue(tabs.element(boundBy: 1).wait(for: \.isSelected, toEqual: true, timeout: 5))
+        try photographSegments(prefix: 40, screen: "zoek")
+
+        tabs.element(boundBy: 2).tap()          // Ontdek
+        XCTAssertTrue(tabs.element(boundBy: 2).wait(for: \.isSelected, toEqual: true, timeout: 5))
+        try photographSegments(prefix: 50, screen: "ontdek")
+    }
+
+    /// Settings, both doors, scrolled — 8 and ≤9 sections that nobody had looked
+    /// at since they were split.
+    func testSettingsBothDoors() throws {
+        try enterOfflineMode()
+        let gear = app.buttons["gear.settings"]
+        guard gear.waitForExistence(timeout: 10) else { throw XCTSkip("geen tandwiel") }
+        gear.tap()
+        _ = app.cells.firstMatch.waitForExistence(timeout: 5)
+
+        for door in 0..<2 {
+            let cell = app.cells.element(boundBy: door)
+            guard cell.waitForExistence(timeout: 5) else { continue }
+            cell.tap()
+            _ = app.navigationBars.firstMatch.waitForExistence(timeout: 5)
+            snap("6\(door)-instellingen-deur-\(door)")
+            app.swipeUp()
+            snap("6\(door)-instellingen-deur-\(door)-onder")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            _ = app.cells.firstMatch.waitForExistence(timeout: 5)
+        }
+    }
+
+    /// The library overview scrolled to its end — the Lab card, the saved
+    /// playlists and the downloads live below the fold and had never been seen.
+    func testLibraryOverviewScrolled() throws {
+        try enterOfflineMode()
+        for step in 1...3 {
+            app.swipeUp()
+            snap("7\(step)-overzicht-scroll-\(step)")
+        }
+    }
+
+    /// Photograph every segment of whatever segmented control this screen leads
+    /// with. Index-based: the labels are localised and the simulator's language
+    /// is not ours to assume.
+    private func photographSegments(prefix: Int, screen: String) throws {
+        let control = app.segmentedControls.firstMatch
+        guard control.waitForExistence(timeout: 10) else {
+            snap("\(prefix)-geen-segmenten-\(screen)")
+            return
+        }
+        for index in 0..<control.buttons.count {
+            let seg = control.buttons.element(boundBy: index)
+            let label = seg.label
+            seg.tap()
+            _ = app.staticTexts.firstMatch.waitForExistence(timeout: 3)
+            snap(String(format: "%02d-%@-%@", prefix + index, screen, label))
+        }
+    }
+
     // MARK: - Steps
 
     /// The connect screen is the gate. With a library on disk the app usually
