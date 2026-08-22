@@ -42,10 +42,22 @@ thin clients. GUI automation on the mini is blocked — drive everything from th
    rm -rf "/Applications/RoonSage Analyzer.app"
    cp -R "native/build/RoonSage Analyzer.app" /Applications/
    ```
-4. **Restart** and wait for the port to listen:
+4. **Restart via launchd** — bootstrap the agent back, do NOT `open -a`:
    ```
-   open -a "/Applications/RoonSage Analyzer.app"
+   launchctl bootstrap gui/$UID ~/Library/LaunchAgents/nl.roonsage.analyzer.plist
+   pgrep -f "RoonSage Analyzer.app/Contents/MacOS"      # MUST print exactly one pid
    ```
+   `open -a` starts an instance LaunchServices owns while the agent stays booted out:
+   unsupervised, and at the next login both autostarts fire. That is what happened on
+   2026-08-22 — two copies, both registering as Roon extension `com.roonsage.server`. A Core
+   keeps one connection per extension id, so they kicked each other every ~2 s (1.046 closes
+   in one hour) and every client kept losing its zone. **Exactly one pid, always.**
+
+   Same reason: the app's own "Start bij inloggen" (`SMAppService`) must stay OFF while the
+   LaunchAgent is installed — two autostart routes is two servers. Newer builds enforce this
+   themselves (`SingleInstance.reconcileAutostart`), but check with
+   `strings /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v*.btm | grep -i roonsage`:
+   one hit for the plist is right, a second one for the `.app` bundle is the duplicate.
 5. **Verify on loopback** (token-exempt). Expect no launch-crash and real data:
    ```
    curl -s localhost:5767/health   ;  curl -s localhost:5766/health

@@ -11,6 +11,14 @@ struct RoonSageAnalyzerApp: App {
     @State private var client: RoonClient
 
     init() {
+        // FIRST, before anything opens a socket: make sure this is the only
+        // analyzer on the machine. Two copies both register as
+        // `com.roonsage.server`, and a Roon Core keeps one connection per
+        // extension id — they kick each other in a ~2 s loop and every client
+        // loses its zone. Does not return when this is the redundant copy.
+        SingleInstance.enforce()
+        SingleInstance.reconcileAutostart()
+
         // Register as the distinct "RoonSage Server" Roon extension before the
         // shared client is touched, so we don't clash with the client apps.
         RoonClient.useServerIdentity()

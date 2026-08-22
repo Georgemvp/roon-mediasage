@@ -326,8 +326,22 @@ public final class RoonClient {
 
     // Reconnect state
     var intentionalDisconnect = false
-    var reconnectAttempt = 0
+    /// Backoff + flap bookkeeping (see `ReconnectPolicy`): the ladder resets on
+    /// a connection that HELD, not on every open, so a kick loop backs off
+    /// instead of hammering the Core every 2 s.
+    var reconnectPolicy = ReconnectPolicy()
+    /// When the current websocket opened — feeds the "was it stable?" rule.
+    var connectionOpenedAt: Date?
     var reconnectTask: Task<Void, Never>?
+    /// Clears the kept-alive zone list when a drop turns out not to be brief.
+    var zoneGraceTask: Task<Void, Never>?
+    /// True while the zones on screen are the last-known set from a dropped
+    /// connection rather than live state.
+    public internal(set) var zonesAreStale = false
+    /// Set when a fresh zone subscription is issued: the first full `zones`
+    /// frame after it replaces the kept list instead of merging into it, so a
+    /// zone that disappeared during the outage doesn't linger.
+    var expectingFullZoneList = false
     var attemptHost: String?
     var attemptPort: UInt16 = 9330
 
@@ -747,7 +761,7 @@ public final class RoonClient {
         guard !intentionalDisconnect, let host = savedHost else { return }
         switch connectionState {
         case .disconnected, .failed:
-            reconnectAttempt = 0
+            reconnectPolicy.reset()
             Task { await connect(host: host, port: savedPort) }
         default:
             break   // connected / connecting / discovering / awaitingAuthorization
@@ -782,8 +796,8 @@ public final class RoonClient {
         browseService = nil
         syncService = nil
         connectionState = .disconnected
-        zones = []
-        zoneMap = [:]
+        reconnectPolicy.reset()
+        clearZones()
     }
 
     public func clearAndReauthorize() async {
@@ -810,7 +824,10 @@ public final class RoonClient {
     }
 
     func handleOpen(host: String) async {
-        reconnectAttempt = 0
+        // Deliberately NOT resetting the backoff here: an open that gets kicked
+        // two seconds later is not proof of a healthy link. `ReconnectPolicy`
+        // resets once the connection has actually held (see its doc comment).
+        connectionOpenedAt = Date()
         let ts = TransportService(transport: transport)
         let bs = BrowseService(transport: transport)
         transportService = ts
@@ -895,22 +912,67 @@ public final class RoonClient {
         browseService = nil
         coreHost = nil
         connectionState = .disconnected
-        zones = []
-        zoneMap = [:]
 
-        guard !intentionalDisconnect, shouldReconnect, let host else { return }
+        let outcome = reconnectPolicy.connectionClosed(openedAt: connectionOpenedAt)
+        connectionOpenedAt = nil
+        if outcome.isFlapping {
+            // Naming the usual suspect here saves an evening of log reading: a
+            // Roon Core keeps ONE connection per extension id, so a second copy
+            // of this app (login item + LaunchAgent both starting it) makes the
+            // two kick each other forever. That is exactly how 2026-08-22 looked.
+            Log.warning("""
+                Roon-verbinding flappert: \(outcome.closesInWindow) sluitingen in \
+                \(Int(ReconnectPolicy.flapWindow))s. Draait er een tweede RoonSage-server? \
+                De Core laat maar één verbinding per extensie toe en schopt de oudste eruit.
+                """, category: .roon)
+        }
 
-        // Exponential backoff: 2 → 4 → 8 → 16 → 30s (stays at 30s after that).
-        let delays: [UInt64] = [2, 4, 8, 16, 30]
-        let delay = delays[min(reconnectAttempt, delays.count - 1)]
-        reconnectAttempt += 1
+        guard !intentionalDisconnect, shouldReconnect, let host else {
+            // Not coming back — drop the zones now rather than showing a list
+            // that will never refresh.
+            clearZones()
+            return
+        }
+
+        // KEEP the last-known zones for a grace window instead of clearing them
+        // here. Every close used to blank `zones`, and since the server hands
+        // that same list to every client, a two-second blip made the chosen zone
+        // vanish app-wide (buttons disabled, Now Playing empty, the zone picker
+        // back to "kies een zone"). The snapshot still reports roonConnected =
+        // false, so nothing pretends the link is up.
+        zonesAreStale = !zones.isEmpty
+        startZoneGrace()
 
         reconnectTask?.cancel()
         reconnectTask = Task {
-            try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: outcome.delaySeconds * 1_000_000_000)
             guard !Task.isCancelled, !self.intentionalDisconnect else { return }
             await self.connect(host: host, port: port)
         }
+    }
+
+    /// How long a dropped connection may keep showing its last-known zones.
+    /// Longer than the first few backoff steps (2 + 4 + 8 s) so an ordinary
+    /// reconnect never blanks the UI, short enough that a Core that stays away
+    /// stops pretending.
+    static let zoneGraceSeconds: UInt64 = 45
+
+    private func startZoneGrace() {
+        guard !zones.isEmpty else { return }
+        zoneGraceTask?.cancel()
+        zoneGraceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.zoneGraceSeconds * 1_000_000_000)
+            guard !Task.isCancelled, let self, !self.connectionState.isConnected else { return }
+            self.clearZones()
+        }
+    }
+
+    func clearZones() {
+        zoneGraceTask?.cancel()
+        zoneGraceTask = nil
+        zonesAreStale = false
+        zones = []
+        zoneMap = [:]
     }
 
     func subscribeZones() async {
@@ -921,6 +983,11 @@ public final class RoonClient {
         // link) is detected by a 10s watchdog that re-issues the
         // subscription. A re-issue uses a fresh subscription_key; should the
         // old stream come alive after all, applyZoneUpdate is idempotent.
+        // The next full `zones` frame belongs to a FRESH subscription: it must
+        // replace whatever we kept during the grace window (see handleClose),
+        // otherwise a zone that disappeared while we were away lingers forever
+        // because applyZoneUpdate only ever merges.
+        expectingFullZoneList = true
         guard let stream = try? await transport.subscribe(
             service: RoonService.transport,
             endpoint: "zones"
@@ -1034,6 +1101,21 @@ public final class RoonClient {
         // A seek-only frame carries no structural change — returning early avoids
         // reassigning the observable `zones` array on every tick.
         if toUpdate.isEmpty && toRemove.isEmpty { return }
+
+        // First full list after a (re)subscribe: drop anything Roon no longer
+        // reports, so the grace-window list can't outlive the zone itself.
+        if expectingFullZoneList, let full = body["zones"] as? [[String: Any]] {
+            expectingFullZoneList = false
+            let live = Set(full.compactMap { $0["zone_id"] as? String })
+            for gone in zoneMap.keys where !live.contains(gone) {
+                zoneMap.removeValue(forKey: gone)
+                liveSeek.removeValue(forKey: gone)
+                lastNowPlaying.removeValue(forKey: gone)
+            }
+        }
+        zoneGraceTask?.cancel()
+        zoneGraceTask = nil
+        zonesAreStale = false
 
         for dict in toUpdate {
             let zone = Zone(from: dict)

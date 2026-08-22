@@ -439,6 +439,15 @@ final class AnalyzerModel {
 
     private func applyLaunchAtLogin(_ on: Bool) {
         guard #available(macOS 13.0, *) else { status = "Start-bij-inloggen vereist macOS 13 of nieuwer."; return }
+        // Turning this on next to the LaunchAgent gives TWO autostarts, hence two
+        // servers, hence a Roon Core that kicks one of them off every two seconds
+        // (2026-08-22). launchd already starts and supervises this app; say so
+        // instead of quietly creating the duplicate.
+        if on, FileManager.default.fileExists(atPath: SingleInstance.launchAgentPlistURL.path) {
+            launchAtLogin = false
+            status = "Niet nodig: \(SingleInstance.launchAgentLabel) start de analyzer al bij inloggen."
+            return
+        }
         do {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
         } catch {

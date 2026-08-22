@@ -394,9 +394,26 @@ extension RoonClient {
     /// by the `/playback` poll and the `/events` stream, so both paths produce
     /// exactly the same result — the stream is a transport change, not a
     /// behaviour change.
+    /// Which zone list a snapshot should leave on screen.
+    ///
+    /// A server whose Roon link is momentarily down reports zero zones. Taking
+    /// that literally blanks the picker, disables every play button and empties
+    /// Now Playing for the two seconds of a reconnect — the same "never
+    /// downgrade to nothing on a blip" rule `resolvedCoreHost` already applies
+    /// to the artwork host. An EMPTY list from a *connected* server is real
+    /// (every zone actually gone) and is passed through.
+    nonisolated static func zonesAfterSnapshot(incoming: [Zone], current: [Zone],
+                                               roonConnected: Bool) -> [Zone] {
+        if !roonConnected, incoming.isEmpty { return current }
+        return incoming
+    }
+
     func applyPlaybackSnapshot(_ snap: PlaybackSnapshot, base: String, serverHost: String?) {
-        zones = snap.zones
-        zoneMap = Dictionary(uniqueKeysWithValues: snap.zones.map { ($0.id, $0) })
+        let freshZones = Self.zonesAfterSnapshot(incoming: snap.zones, current: zones,
+                                                 roonConnected: snap.roonConnected)
+        zonesAreStale = !snap.roonConnected && !freshZones.isEmpty
+        zones = freshZones
+        zoneMap = Dictionary(uniqueKeysWithValues: freshZones.map { ($0.id, $0) })
         queueItems = snap.queueItems
         // The server reports the Core host as it sees it; when the Core runs on
         // the server itself that's loopback — or its LAN address, which is one

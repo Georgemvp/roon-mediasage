@@ -364,6 +364,8 @@ struct RootView: View {
     @State private var showPalette = false
     @State private var showShortcuts = false
     @AppStorage("lastZoneID") private var lastZoneID: String = ""
+    /// One-shot guard for the "restore the last zone" hook below.
+    @State private var didRestoreZone = false
 
     /// `List` selection must be optional on iOS; the rest of the view keeps a
     /// non-optional `selection` (needed by `TabView`), so bridge the two.
@@ -462,13 +464,27 @@ struct RootView: View {
         .navigationTitle("")
         .toolbar { navToolbar }
         .background { tabShortcuts }
-        .onChange(of: client.zones) { _, zones in
-            // Restore the last-used zone once zones are available.
-            if client.selectedZone == nil, !lastZoneID.isEmpty {
-                client.selectZone(lastZoneID)
-            }
-        }
+        .onChange(of: client.zones) { _, _ in restoreLastZoneOnce() }
         .task { await autoPullFromServerIfEmpty() }
+    }
+
+    /// Restore the last-used zone once the zone list arrives — and ONLY then.
+    ///
+    /// Two bugs lived in the old inline version. It fired on every `zones`
+    /// change (which is every track change, every play/pause, and — while the
+    /// connection was flapping — every two seconds), and it didn't look at
+    /// `localOutputSelected`. So picking "dit apparaat" held for exactly as long
+    /// as it took the next zone update to arrive, at which point `selectZone`
+    /// silently switched the output back to Roon. Restoring is a launch-time
+    /// convenience, so it happens at most once per session and never overrides
+    /// on-device output.
+    private func restoreLastZoneOnce() {
+        guard !didRestoreZone, !client.localOutputSelected,
+              client.selectedZone == nil, !lastZoneID.isEmpty,
+              client.zones.contains(where: { $0.id == lastZoneID })
+        else { return }
+        didRestoreZone = true
+        client.selectZone(lastZoneID)
     }
 
     /// First-run convenience: when the local library is still empty, pull
@@ -552,11 +568,7 @@ struct RootView: View {
             .tabItem { Label { LT("nav.settings") } icon: { Image(systemName: "gearshape") } }
             .tag(SidebarItem.settings)
         }
-        .onChange(of: client.zones) { _, _ in
-            if client.selectedZone == nil, !lastZoneID.isEmpty {
-                client.selectZone(lastZoneID)
-            }
-        }
+        .onChange(of: client.zones) { _, _ in restoreLastZoneOnce() }
         .environment(\.navigateTo, NavigateAction { selection = $0 })
         .task { await autoPullFromServerIfEmpty() }
     }
