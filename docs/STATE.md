@@ -19,6 +19,62 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+NU (2026-08-22, avond): **FUNCTIONELE AUDIT VAN STATIONS + PLAN —
+`native/docs/STATIONS_PLAN.md`.** (user: "Controleer alle functies, kijk of de
+functies wel slim zijn of kunnen opgaan in andere functies … kijk of alles snel
+is. Maak een plan om deze view veel professioneler te maken.") De vorige ronde
+ging over vorm; deze over functie. **Geschreven, nog niets gebouwd.**
+
+**De diagnose:** onder Stations zit **één motor** (`startRadio →
+buildRadioCandidates → top-up`) met **vier deuren** die elkaar niet kennen. Een
+DJ-persona is per eigen doc-comment "a thin preset, not a new engine". Een
+categorie-radio zet dezelfde drie knoppen vanuit een bucket, een opgeslagen
+"Mijn radio" vanuit een `RadioConfig` — en dát model is de **superset van alle
+andere drie**: `genre:house` ís `RadioConfig(genres:["house"])`, een persona ís
+`RadioConfig(trackKeys:[seed])` + preset, Album Radio ís een config met
+albumtracks.
+
+**Gevolgen, geteld:** de avontuurlijkheidsdial bestaat **vijf keer** (globale
+schuif · persona-preset · `RadioConfig.adventurousness` · het stuurveld "verras
+me" · `generatePlaylist(adventurousness:)`) · **vier namen** voor hetzelfde
+concept (Sonic radios / My radios / AI radios on Qobuz / DJ modes) · **twee
+lijsten van dezelfde artiesten** onder elkaar op één scherm (live stations en de
+Qobuz-spiegel, zelfde seeds, aparte pijplijnen) · en de motor accepteert
+`djMode` op **élke** station-start terwijl de UI persona's alleen op de
+nu-spelende track aanbiedt.
+
+**Snelheid, gemeten tegen de draaiende analyzer (87.820 tracks):** `/ai-radios`
+**6,08 s koud / 0,91 s warm** — en die call draait bij élke opening van het
+Radio's-segment, voor een sectie die onderaan staat. `dailyRadios()` wordt bij
+elke segmentwissel volledig herberekend (`@State loaded` gaat mee met de view)
+terwijl het resultaat per `rotationStamp()` constant is; er is geen cache op dat
+niveau. En het **tonen** van een stationslijst trekt de hele geanalyseerde
+bibliotheek mét 512-dim CLAP-embeddings in RAM (~2,5 kB/track → **~165 MB bij
+66.378 tracks**) terwijl daar geen enkele embedding voor nodig is — dat is
+dezelfde druk die de analyzer vandaag "sonische caches vrijgegeven" liet loggen.
+
+**Het plan is vier fasen, los te shippen:** (1) snelheid — lijstcache per
+rotatiebucket, Qobuz-spiegel pas laden als hij in beeld komt, `radioLibraryLight()`
+zonder embeddings; (2) één woordenschat + de Qobuz-spiegel in de kaarten vouwen +
+Journeys splitsen op eindig/eindeloos; (3) de persona overal beschikbaar maken en
+één zichtbare dial met expliciete overrides; (4) `RadioConfig` als enig
+stationsmodel, waarna "bewaar dit als station" overal kan en Genereer "een station
+met een einde" wordt. Fase 4 pas ná 1-3.
+
+**LET OP — DIT WERK ZETTE DE SERVER-OF-RECORD ONDER DRUK.** Zwaar simulator- en
+buildwerk op deze mini heeft de swap tot 5,3 GB gevuld; de zojuist gedeployde
+analyzer werd **uitgeswapt en hing** (pid 6558: 0% CPU, RSS 1,2 MB, poort in
+LISTEN maar geen enkel antwoord binnen 60 s). Hersteld met bootout → bootstrap →
+nieuwe pid 17098, `:5767` 87.820 tracks. **Dit is exact de les van 2026-07-23 die
+al in ## Done staat ("draai de sim/builds NIET op de mini") en die vandaag opnieuw
+is opgelopen.** Nasleep: Simulator.app start sindsdien niet meer met een venster
+(`_LSOpenURLsWithCompletionHandler … -1712`), ook niet na een herstart van
+`CoreSimulatorService` — dus GUI-automatisering was deze sessie niet bruikbaar en
+de UI-observaties komen uit de XCUITest-afdrukken van de vorige ronde. XCUITest
+zelf werkt wél en heeft geen venster nodig; gebruik dat.
+
+---
+
 NU (2026-08-22, eind middag): **STATIONS OPNIEUW INGEDEELD — audit in
 `native/docs/STATIONS_AUDIT.md`.** (user: "Kan je de UX van de stations view
 verbeteren? Doe een uitgebreide audit en maak het beter, overzichtelijker en
