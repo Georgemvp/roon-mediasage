@@ -96,25 +96,37 @@ Wat nu nog via de analyzer loopt en naar Plex kan:
 De `thumb` wordt al bij de sync opgeslagen. **Vereist Plex Pass** voor
 transcode-sessies en de sync/download-API.
 
-### Fase 5 — de analyzer krimpt tot een kleine server (OPEN)
+### Fase 5 — de share-server wordt optioneel, niet weg (OPEN)
 
-> **Correctie (2026-08-23).** Een eerdere versie zei "de analyzer stopt met server
-> zijn". Dat klopt niet: een iPhone kan de 66.239 embeddings niet zinnig lokaal
-> houden (~135 MB) en het CLAP-tekstmodel al helemaal niet. Hij wordt geen
-> batchjob — hij wordt een **kleine** server.
+> **Tweede correctie (2026-08-23).** Dit stuk zei eerst "de analyzer stopt met
+> server zijn", daarna "krimpt tot ~4 endpoints". Allebei te optimistisch. Ik heb
+> de 44 endpoints van `LibraryShareServer` geteld in plaats van geschat:
 
 ```
-nu:      :5767  44 endpoints  +  :5766  8 endpoints   = 52
-straks:  :5766  ~4 endpoints  (/features, /embeddings, /text-embed, /health)
+Plex vervangt          3   /library  /playlists  /playlist-tracks
+Roon-besturing         3   /command  /playback  /events
+beheer / health        8
+curatie (= analyzer)  30   /discovery/*  /ai-radios  /artist-radios  /generate
+                           /discover-weekly*  /radio-*  /taste-*  /year-review
+                           /on-this-day  /lyrics*  /feedback  /track-feedback
+                           /favorite(s)  /bookmark(s)  /play-stats  /history
 ```
 
-Wat vervalt: de bibliotheek-mirror (`LibraryShareServer`, 1.172 regels), de
-playback-proxy, de offline-wachtrij, `/audio`, `/artwork`, en de
-apparaatgoedkeuring voor audio.
+Plex neemt dus **3 van de 44** over. De overige 30 zijn geen "mirror" — dat ÍS de
+analyzer: ontdekken, radio's, smaakprofiel, LLM-curatie, songteksten, feedback.
+Die blijven omdat Casper Alchemy/Song Paths/Sonic DNA houdt.
 
-Het tokenprobleem verdwijnt niet volledig — de resterende endpoints hebben nog
-auth — maar wel waar het pijn doet: bij een auth-storing valt dan een aanbeveling
-weg in plaats van dat de muziek stopt.
+De share-server **verdwijnt dus niet**. Wat er gebeurt is dat hij verandert van
+*vereiste* in *uitbreiding*: zonder hem is de app een volwaardige Plex-speler
+(bibliotheek, afspelen, hoezen, offline, vergelijkbaar via Plex' eigen analyse),
+mét hem komen de curatiefuncties erbij. Dat is precies wat "de analyzer is
+optioneel" betekent.
+
+Wat wél vervalt: de bibliotheek-mirror zelf, `/audio`, `/artwork` en de
+apparaatgoedkeuring voor audio — het pad waar een verlopen token nu de muziek
+laat stoppen. Roon-besturing blijft over de server lopen, tenzij de client ooit
+zijn eigen Roon-extensie registreert (dat kan, maar twee extensies met hetzelfde
+id schoppen elkaar eruit — zie de memory).
 
 ### Openstaand vóór fase 5: waar gaat de gebruikersdata heen?
 
