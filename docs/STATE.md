@@ -1,3 +1,14 @@
+<!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
+Lees docs/STATE.md en pak de eerstvolgende open stap uit de genummerde lijst hieronder.
+Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build && swift test
+→ commit → (push+tag alleen als Casper daar in dat gesprek om vraagt) → STATE.md bijwerken.
+Houd dit bestand onder ~70 regels. Historie staat in docs/STATE-archief-2026-08-23.md.
+═══════════════════════════════════════════════════════════════════ -->
+
+## Goal
+Van monoliet naar een snelle, stabiele Plexamp/Symfonium-achtige client. Maatstaf is
+iOS: snel en zonder bugs. Snoeien is het middel, niet het doel.
+
 ## Now
 Snoeiprogramma loopt. Vier batches af en lokaal gecommit, **nog niet gepusht/getagd**:
 `e464bdd` CLAP uit de clients (iOS-bundel 793 MB -> 96 MB) · `3c9e3cb` STATE.md 1656 -> 70
@@ -5,8 +16,7 @@ regels · `7ad4a0b` Plex als bibliotheekbron (exacte join op bestandspad) · `57
 RadioEngine.Context. 1088 tests, 4 skipped, 0 failures; release-build groen; lint 474 =
 baseline.
 
-<!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
-Lees docs/STATE.md en ga verder met het snoeiprogramma in ## Next
+## Next
 1. ~~CLAP-modellen uit de clients~~ AF · 2. ~~STATE opschonen~~ AF
 3. ~~PlexLibrarySource prototype~~ AF (`7ad4a0b`) — maar **niets roept ingestPlexTracks aan**.
    Volgende stap: een PlexSyncService in de analyzer die periodiek importeert, plus een
