@@ -1350,3 +1350,8 @@
 "library.emptyPlexBody" = "Koppel met Plex om je muziek te laden. Dat is genoeg om te beginnen — een RoonSage-server is optioneel.";
 "library.emptyPlexAction" = "Koppel met Plex";
 "a11y.playingFormat" = "Formaat: %@";
+"library.emptyPlexRetry" = "Opnieuw proberen";
+"core.plex.noToken" = "Nog niet met Plex gekoppeld.";
+"core.plex.noSection" = "Deze Plex-server heeft geen muzieksectie.";
+"core.plex.failed" = "Plex-import mislukt: %@";
+"core.plex.empty" = "Plex gaf geen nummers terug.";

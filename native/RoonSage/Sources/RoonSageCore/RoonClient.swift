@@ -206,6 +206,13 @@ public final class RoonClient {
 
     public func requestPlexLink() { showPlexLinkSheet = true }
 
+    /// Uitkomst van de laatste Plex-import, in gewone taal.
+    ///
+    /// Bestaat omdat een mislukte import tot nu toe volledig stil was: een
+    /// gekoppeld toestel bleef op 0 nummers staan zonder één aanwijzing waarom.
+    /// De lege bibliotheek toont deze regel.
+    public internal(set) var plexLastSyncMessage: String?
+
     /// Has the user been through the first-run welcome once?
     ///
     /// **This, not `savedHost == nil`, gates the welcome.** Bonjour discovery

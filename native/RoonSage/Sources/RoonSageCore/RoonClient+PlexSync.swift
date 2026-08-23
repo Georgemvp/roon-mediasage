@@ -144,6 +144,25 @@ extension RoonClient {
     /// is a two-pass protocol that buys nothing here.
     @discardableResult
     public func runPlexSync() async -> PlexSyncOutcome {
+        let outcome = await performPlexSync()
+        plexLastSyncMessage = Self.describe(outcome)
+        return outcome
+    }
+
+    /// Leesbare samenvatting voor de lege-bibliotheek-melding.
+    static func describe(_ outcome: PlexSyncOutcome) -> String? {
+        switch outcome {
+        case .disabled:        return nil
+        case .noToken:         return CoreStrings.s("core.plex.noToken", "Nog niet met Plex gekoppeld.")
+        case .noMusicSection:  return CoreStrings.s("core.plex.noSection", "Deze Plex-server heeft geen muzieksectie.")
+        case let .failed(msg): return String(format: CoreStrings.s("core.plex.failed", "Plex-import mislukt: %@"), msg)
+        case let .imported(r): return r.total == 0
+            ? CoreStrings.s("core.plex.empty", "Plex gaf geen nummers terug.")
+            : nil
+        }
+    }
+
+    private func performPlexSync() async -> PlexSyncOutcome {
         // De schakelaar beschermt een BESTAANDE Roon-catalogus tegen verdringing.
         // Een standalone client heeft die niet — daar is Plex de enige bron, dus
         // daar hoort de import gewoon te lopen zonder dat je eerst een vinkje moet

@@ -1350,3 +1350,8 @@
 "library.emptyPlexBody" = "Link with Plex to load your music. That is enough to begin — a RoonSage server is optional.";
 "library.emptyPlexAction" = "Link with Plex";
 "a11y.playingFormat" = "Format: %@";
+"library.emptyPlexRetry" = "Try again";
+"core.plex.noToken" = "Not linked with Plex yet.";
+"core.plex.noSection" = "This Plex server has no music section.";
+"core.plex.failed" = "Plex import failed: %@";
+"core.plex.empty" = "Plex returned no tracks.";

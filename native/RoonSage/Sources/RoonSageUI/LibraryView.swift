@@ -1265,7 +1265,13 @@ public struct LibraryView: View {
     @ViewBuilder
     private var overviewContent: some View {
         List {
-            if let stats {
+            // `stats != nil` is NOT "there is a library": an empty database still
+            // returns a stats object, just full of zeroes. So a device that had
+            // synced nothing rendered the whole feed — a hero saying "0 tracks ·
+            // 0 albums", then a row of empty shelves — instead of saying what was
+            // wrong. Seen on a real phone (user, 2026-08-23: "Na de laatste update
+            // nog steeds geen muziek hierin").
+            if let stats, stats.totalTracks > 0 {
                 statsHero(stats).plainCardRow()
                 if let entry = onThisDayEntry { todaySection(entry).plainCardRow() }
                 if !recentPlayed.isEmpty {
@@ -1639,10 +1645,23 @@ public struct LibraryView: View {
             ContentUnavailableView {
                 Label(LS("library.emptyPlexTitle"), systemImage: "link")
             } description: {
-                Text(LS("library.emptyPlexBody"))
+                VStack(spacing: Spacing.xs) {
+                    Text(LS("library.emptyPlexBody"))
+                    // Waarom het niet lukte, als er iets te melden is. Zonder dit
+                    // is een mislukte import niet te onderscheiden van "nog niet
+                    // geprobeerd".
+                    if let why = client.plexLastSyncMessage {
+                        Text(why).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
             } actions: {
                 Button(LS("library.emptyPlexAction")) { client.requestPlexLink() }
                     .buttonStyle(.borderedProminent)
+                if client.plexLinked {
+                    Button(LS("library.emptyPlexRetry")) {
+                        Task { await client.runPlexSync() }
+                    }
+                }
             }
         } else {
             ContentUnavailableView(

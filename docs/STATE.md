@@ -74,6 +74,7 @@ historie-import, dus verhuizen zou die data vernietigen.
 - Metingen 2026-08-23: 85.948 regels eigen Swift / 454 bestanden · 82 views · 50 migraties · 17 externe API's · 1 dependency (GRDB) · 1074 tests.
 
 ## Open items
+- FLAKE: `NotificationServiceTests.testRejectedDeliveryIsCountedNotSwallowed` — faalde één keer in de volledige suite, 3/3 groen geïsoleerd (2026-08-23)
 - Feed: "Beste albums van de 2000's" en "Meer in pop/rock" ontbreken — er is geen generator voor (2026-08-23)
 - Qobuz `playlist/get` geeft 503 → AI-radio-sync landt niet (sinds 2026-07-19)
 - `dedup-migrate.sql` moet periodiek herdraaien tot de walker updatet i.p.v. dupliceert; `markAllForReanalysis` (FeatureStore.swift:428) maakt duplicaten
