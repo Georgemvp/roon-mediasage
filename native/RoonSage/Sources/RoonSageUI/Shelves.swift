@@ -42,32 +42,60 @@ public func coverGridColumns(compact: Bool) -> [GridItem] {
     [GridItem(.adaptive(minimum: compact ? 112 : 150), spacing: Spacing.md)]
 }
 
-/// A section header: gold-tinted icon + title on the left, caller-supplied trailing
-/// control (a shuffle button, "play all", or `EmptyView()`) on the right.
+/// A section header: the title in small caps over a hairline rule, with a
+/// caller-supplied trailing control (a chevron into the full list, a shuffle
+/// button, or `EmptyView()`).
+///
+/// The gold icon that used to sit in front of every title is gone. With eight
+/// sections stacked in one feed it read as eight competing marks rather than
+/// eight labels, and half the vocabulary had to be learned (a house, a clock, a
+/// grid) before it said anything. Small caps on a rule is the quieter form: it
+/// separates the sections without decorating them.
 @MainActor @ViewBuilder
 public func sectionHeader<Trailing: View>(
-    _ title: String, _ icon: String, @ViewBuilder trailing: () -> Trailing
+    _ title: String, @ViewBuilder trailing: () -> Trailing
 ) -> some View {
-    HStack {
-        Label {
-            Text(title).font(.headline).lineLimit(1)
-        } icon: {
-            Image(systemName: icon).foregroundStyle(Color.roonGold)
+    VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            Text(title.uppercased())
+                .font(.subheadline.weight(.semibold))
+                .kerning(0.6)
+                .lineLimit(1)
+            Spacer(minLength: Spacing.sm)
+            trailing()
         }
-        Spacer(minLength: Spacing.sm)
-        trailing()
+        Divider().opacity(0.35)
     }
+}
+
+/// The chevron that opens a section's full list — the trailing control most
+/// feed sections want.
+///
+/// A Button, never a `NavigationLink`: these headers sit inside `List` rows, and
+/// a `NavigationLink` anywhere in a row makes the List draw its OWN disclosure
+/// indicator at the far edge — so the section header rendered two chevrons, one
+/// after the title and one against the screen edge. The caller pushes.
+@MainActor
+public func sectionChevron(_ action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        Image(systemName: "chevron.right")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.leading, Spacing.sm)
+            .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
 }
 
 /// A horizontal shelf: a `sectionHeader` above a horizontally scrolling row of
 /// `coverTile`s. `zoneAvailable` gates the tiles' remote-play affordance.
 @MainActor @ViewBuilder
 public func shelf<Trailing: View>(
-    _ title: String, _ icon: String, covers: [Cover], zoneAvailable: Bool,
+    _ title: String, covers: [Cover], zoneAvailable: Bool,
     @ViewBuilder trailing: () -> Trailing
 ) -> some View {
-    VStack(alignment: .leading, spacing: Spacing.sm) {
-        sectionHeader(title, icon, trailing: trailing)
+    VStack(alignment: .leading, spacing: Spacing.md) {
+        sectionHeader(title, trailing: trailing)
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: Spacing.md) {
                 ForEach(covers) { coverTile($0, zoneAvailable: zoneAvailable) }
@@ -75,6 +103,77 @@ public func shelf<Trailing: View>(
             .padding(.horizontal, 2)
         }
     }
+}
+
+/// The feed's other row type: four compact rows under one header, each a small
+/// square thumb with title, subtitle and an overflow menu.
+///
+/// A feed of nothing but cover shelves reads as one texture repeated — you
+/// cannot tell "recently added" from "most played" without reading every
+/// heading. Alternating a shelf with a list gives the page a rhythm, and a list
+/// row can carry a long album title that a 130 pt tile has to truncate.
+@MainActor @ViewBuilder
+public func compactRows<Trailing: View, Menu: View>(
+    _ title: String, covers: [Cover], zoneAvailable: Bool,
+    @ViewBuilder trailing: () -> Trailing,
+    @ViewBuilder menu: @escaping (Cover) -> Menu
+) -> some View {
+    VStack(alignment: .leading, spacing: Spacing.md) {
+        sectionHeader(title, trailing: trailing)
+        VStack(spacing: 0) {
+            ForEach(covers) { cover in
+                compactRow(cover, zoneAvailable: zoneAvailable, menu: menu)
+            }
+        }
+    }
+}
+
+@MainActor
+private func compactRow<Menu: View>(
+    _ c: Cover, zoneAvailable: Bool, @ViewBuilder menu: @escaping (Cover) -> Menu
+) -> some View {
+    HStack(spacing: Spacing.md) {
+        Button {
+            Haptics.tap()
+            c.play()
+        } label: {
+            HStack(spacing: Spacing.md) {
+                AlbumArtView(imageKey: c.imageKey, size: 46, cornerRadius: Radius.md)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(c.title).font(.body).lineLimit(1)
+                    if let sub = c.subtitle {
+                        Text(sub).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!zoneAvailable)
+        SwiftUI.Menu {
+            menu(c)
+        } label: {
+            // Rotated, because SF Symbols has no vertical ellipsis: the upright
+            // form is what an overflow menu looks like in a list. `.tint` as well
+            // as `.foregroundStyle`, or the menu label inherits the app's gold
+            // accent and the control reads as an action instead of a handle.
+            Image(systemName: "ellipsis")
+                .font(.body)
+                .rotationEffect(.degrees(90))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 36)
+                .contentShape(Rectangle())
+        }
+        .tint(.secondary)
+        .accessibilityLabel(LS("library.moreActions"))
+    }
+    .padding(.vertical, 6)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(c.subtitle.map {
+        String(format: LS("shelf.playTitleByArtist"), c.title, $0)
+    } ?? String(format: LS("shelf.playTitle"), c.title))
+    .accessibilityIdentifier("compact.row")
 }
 
 /// A single cover: artwork with a play badge, title, and subtitle. Tapping plays to
@@ -89,11 +188,16 @@ public func coverTile(_ c: Cover, zoneAvailable: Bool) -> some View {
             AlbumArtView(imageKey: c.imageKey, size: 130)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.md))
                 .shadow(color: .roonShadow, radius: 4, y: 2)
+                // Smaller and white-on-scrim rather than a gold disc. At `.title2`
+                // in gold it was the loudest thing in a feed of eight shelves —
+                // the badge competed with the artwork it sat on. It still has to
+                // be there: tapping a cover plays, and an invisible affordance is
+                // worse than a loud one.
                 .overlay(alignment: .bottomTrailing) {
                     Image(systemName: "play.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.white, Color.roonGold)
-                        .shadow(radius: 3)
+                        .font(.body)
+                        .foregroundStyle(.white, .black.opacity(0.35))
+                        .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
                         .padding(6)
                 }
             Text(c.title).font(.caption.weight(.medium)).lineLimit(1)

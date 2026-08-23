@@ -455,6 +455,11 @@
 "library.playAll"                = "Speel alle";
 "library.playlistName"           = "Naam playlist";
 "library.recentlyAdded"          = "Recent toegevoegd";
+"library.today"                  = "Vandaag";
+"library.yearsAgoOne"            = "%d jaar geleden";
+"library.yearsAgoMany"           = "%d jaar geleden";
+"library.moreFromLabel"          = "Meer van %@";
+"library.mostPlayedIn"           = "Meest gespeeld in %@";
 "library.recentlyPlayedShelf"    = "Onlangs gespeeld";
 "library.recommendSubtitle"      = "Beschrijf een vibe → albums uit je bibliotheek.";
 "library.save"                   = "Bewaar";

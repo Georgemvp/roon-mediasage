@@ -22,6 +22,36 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+NU (2026-08-23, begin middag): **HET BIBLIOTHEEKOVERZICHT IS EEN FEED GEWORDEN.**
+(user: "Ga door library view heen, het is nu heel chaotisch het moet meer gaan
+lijken op dit" + vier schermafdrukken van Plexamp.) Wat de referentie doet en wij
+niet deden: kleinkapitaal-koppen op een haarlijn met een chevron rechts, en
+afwisselend een hoezenplank en een compacte lijst — acht planken achter elkaar
+lezen als één herhaalde textuur, en dat was precies het "chaotisch".
+
+**Gewijzigd.** `sectionHeader` is nu kleinkapitaal + kerning boven een `Divider`,
+zónder het gouden icoon (met acht secties in één feed waren dat acht concurrerende
+merktekens); `shelf` verloor datzelfde icoon; nieuw is `compactRows` — vier rijen
+met een 46 pt-thumb en een verticaal ⋮-menu. De speelbadge op een hoes is van een
+gouden `.title2`-schijf naar een witte `.body` op een zwarte scrim gegaan.
+Drie nieuwe secties, allemaal op data die er al was maar nergens in de bibliotheek
+stond: **VANDAAG** ("2 jaar geleden", uit `onThisDay()` — dat voedde alleen de
+deelkaart en de serversamenvatting), **MEEST GESPEELD IN <MAAND>** (`playStats(since:)`
+→ `tracksByMatchKeys`) en **MEER VAN <PLATENLABEL>** (`labelOfTheWeek()`, per week
+deterministisch). De feed-volgorde is bewust afwisselend: Vandaag → plank → lijst →
+plank → lijst → plank → chips → tegels.
+
+**Twee dingen die het verifiëren opleverde.** (1) De labeltabellen waren léég —
+0 rijen in `label` en `album_label` terwijl 31.119 feature-rijen wél een label
+dragen; `ensureLabelsBuilt()` draaide alleen als je de labelverkenner in de Lab
+opende. Het overzicht roept hem nu aan, ná alle zichtbare secties, en de functie
+keert vanzelf vroeg terug zodra de tabellen gevuld zijn. (2) De labelsectie tekende
+**twee** chevrons: een `NavigationLink` ergens in een `List`-rij laat de List zijn
+eigen disclosure-indicator aan de rand zetten. `sectionChevron` is daarom een
+`Button` en de push loopt via `navigationDestination(isPresented:)`.
+
+────────────────────────────────────────────────────────────────────────
+
 
 NU (2026-08-23, middag): **BIBLIOTHEEK- EN ARTIESTPAGINA HERZIEN, VISUEEL
 GEVERIFIEERD OP DE SIMULATOR MET DE ECHTE BIBLIOTHEEK.** (user: "Gebruik de gui
@@ -1404,6 +1434,7 @@ ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AU
 - Kern-audit files: QobuzClient.swift, LibraryShareServer.swift (:91 enforceToken), RoonClient+DiscoverWeekly.swift (:355 searchQobuz-gate), AnalyzerCore/HTTPServer.swift (5766)
 
 ## Done
+- **BIBLIOTHEEKOVERZICHT ALS FEED (2026-08-23) — RESULTAAT: één sectiegrammatica (kleinkapitaal + haarlijn + chevron) over Bibliotheek én Ontdek, afwisselend plank/lijst, en drie secties erbij uit bestaande data.** Gewijzigd: `Shelves.swift` (`sectionHeader` zonder icoon, `sectionChevron`, `compactRows`, zachtere speelbadge), `LibraryView.swift` (feed-volgorde, `todaySection`, `labelSection`, `trackRows`, `seeAllButton`, `topOfMonthRows`, `loadLabelSpotlight`), `DiscoveryView.swift` (sweep: 6 aanroepen), beide `Localizable.strings` (5 sleutels). **Verified: `swift build` exit 0 · `swift test` "Executed 1032 tests, with 3 tests skipped and 0 failures (0 unexpected)" · `swift build -c release --product RoonSage` exit 0 · swiftlint 466 violations / 2 serious (= baseline) · `native/scripts/check-localization.sh --strict` exit 0, 1140 sleutels, 0 missend / 0 wees · visueel op iPhone 17-simulator tegen de live analyzer (`/tmp/rs_ui/51.png`, `56.png`, `58.png`).**
 - **BIBLIOTHEEK + ARTIESTPAGINA HERZIEN (2026-08-23) — RESULTAAT: drie hoezen per iPhone-rij i.p.v. twee, en de Queen-pagina eindigt na ~4 schermen i.p.v. ~30.** Gewijzigd: `Shelves.swift` (`coverGridColumns(compact:)`), `AlbumArtView.swift` (vierkante `fillingWidth`-variant), `LibraryView.swift` (raster + `LibraryTrackRow(showsArtist:)` + `AlbumGridCell(showsArtist:)` + twee niet-bestaande SF Symbols), `LibraryDetailViews.swift` (artiestkop, begrensde discografie + `ArtistAlbumsGridView`, albumkop), beide `Localizable.strings` (`libraryDetail.showAllReleases`). **Verified: `swift build` exit 0 · `swift test` "Executed 1032 tests, with 3 tests skipped and 0 failures (0 unexpected)" (gelijk aan baseline) · `swift build -c release --product RoonSage` exit 0 · swiftlint 466 violations / 2 serious (gelijk aan baseline) · visueel op iPhone 17-simulator (iOS 26.5) tegen de live analyzer op 192.168.178.59:5767, schermafdrukken in `/tmp/rs_ui/`.** **GESHIPT 2026-08-23 12:43: commit `005db57`, gepusht naar `main`, getagd `v1.10.279` / `ios-v1.7.245` / `analyzer-v1.1.209`, alle vier de workflows groen (Native Tests 3m52s, Release macOS DMG 3m56s, Release iOS TestFlight 3m53s, Release Analyzer App 3m07s)** (user: "Commit push en tag"). `native/RoonSage/Package.swift` bewust buiten de commit gehouden.
 - **AUDIT VOLLEDIG UITGEVOERD: BATCH A + B + C (2026-08-23) — RESULTAAT: 973 → 984 tests 0 fouten, 61 → 0 geïnterpoleerde sleutels, 5 → 2 serious lint, release + iOS-typecheck groen.** 21 bevindingen (5 🔴 / 8 🟠 / 4 🟡 / 4 🟢) uit `docs/NATIVE_APP_AUDIT.md`, alle uitgevoerd behalve drie expliciet gemotiveerde uitzonderingen (zie het statusblok in dat rapport). Twee dingen bleken groter dan de audit inschatte: het macOS-app-target had **nul** `LS()`-aanroepen, en `check-localization.sh` keek daar nooit — beide opgelost, en de gate is nu strenger in plaats van zwakker. Niet gecommit.
 - **360°-AUDIT + BATCH A (2026-08-22, laat) — RESULTAAT: 5 🔴 / 8 🟠 / 4 🟡 / 4 🟢 bevindingen, Batch A af en geverifieerd.** Rapport: `docs/NATIVE_APP_AUDIT.md`. Baseline vóór de fixes: RoonProtocol 12 tests / RoonSage 973 tests, beide 0 fouten; release build exit 0; 1033 sleutels, 0 missend, 61 geïnterpoleerd; swiftlint 469 violations / 5 serious. Na Batch A: 975 tests 0 fouten, 1034 sleutels, swiftlint ongewijzigd (dus geen nieuwe violations). Gewijzigd: `RoonClient.swift`, `LibraryView.swift`, `RootView.swift`, beide `Localizable.strings`, plus `QueueOwnershipTests.swift` (nieuw). Niet gecommit.
@@ -1507,6 +1538,7 @@ ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AU
 - Alle batches gepusht. ANALYZER-SERVER GEDEPLOYD op de mini 2026-07-06 — RESULT: analyzer-v1.1.101 (build-analyzer-release.sh 1.1.101, Developer-ID signed, *.bundle mee), /Applications/RoonSage Analyzer.app vervangen + herstart (PID 98941). Geverifieerd op loopback: /health 5766=58839 features + 5767=76571 library, /features 200 51MB 0.57s (warm), /audio 206 audio/flac (H1-pad live). GEEN launch-crash. Client-app NIET gedeployd (constraint). Gotcha: /features cold-cache + herhaalde 120s-probes = GRDB reader-pileup (opstart-piek) → meet één keer na settle
 
 ## Open items
+- **[2026-08-23] "BESTE ALBUMS VAN DE 2000'S" EN "MEER IN POP/ROCK" ONTBREKEN NOG IN DE FEED — ER IS GEEN GERANGSCHIKTE ALBUMS-PER-FACET-QUERY.** De referentie heeft die twee secties; ik heb ze bewust NIET gebouwd. `filterTracks(options:)` (`DatabaseManager+Filter.swift:24`) geeft tracks, geen albums, met `ORDER BY t.artist, t.year, t.title LIMIT ?` — dus een venster aan het begin van het alfabet. Client-side groeperen op album zou dus altijd dezelfde A-artiesten tonen, en dat is geen "beste albums van". Wat het nodig heeft: een `albumsForFilter(options:orderedBy:)` in `DatabaseManager+Filter.swift` die op album groepeert en op afspeelaantal of jaar rangschikt.
 - **[2026-08-22] `docs/STATE.md` is 1189 regels; de eigen guardrail (`docs/guardrails/SESSION.md` S2) zegt onder de 80.** `## Now` besloeg in z'n eentje ~988 regels. Ik heb de nieuwe stand vóór de oude gezet en de oude bewaard onder een scheidingslijn in plaats van 'm te schrappen — dat is jouw materiaal, niet het mijne om weg te gooien. Opruimen betekent volgens S2: oude `## Done`-entries verwijderen, nooit specifics uit de overgebleven regels trimmen.
 - **[2026-08-22] LOKAAL SIGNEREN KAN NIET MEER — DEPLOY LOOPT NU VIA DE CI-DMG.** `security find-identity -v -p codesigning` geeft op de actieve sleutelhangers alleen "Apple Development"; de "Developer ID Application: Casper Jansen (5W3QDZ94FH)" zit in `~/Library/Keychains/login_renamed_1.keychain-db` (restant van de auto-login/keychain-affaire). Expliciet signeren met `codesign --keychain <die sleutelhanger>` geeft `errSecInternalComponent` (= vergrendeld/geen toegang tot de private sleutel), en de zoeklijst aanpassen is geblokkeerd. **Werkende omweg, gebruikt voor analyzer-v1.1.200:** tag pushen → workflow *Release Analyzer App* bouwt Developer ID-gesigneerd met de CI-secrets → `gh release download analyzer-v<versie> -p "*.dmg"` → mounten, `codesign -dvv` controleren (team moet `5W3QDZ94FH` zijn, anders verliest de app zijn Keychain-items) → oude app naar `.bak-<oude versie>` → kopiëren → `launchctl bootstrap`. **Wil Casper weer lokaal kunnen bouwen:** die sleutelhanger ontgrendelen en aan de zoeklijst toevoegen.
 - **[2026-08-22] DE TWEEDE AUTOSTART STAAT ER NOG, MAAR IS ONSCHADELIJK — BRON NIET DEFINITIEF VASTGESTELD.** `strings /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18*.btm | grep -i roonsage` toont nog steeds twee records: de LaunchAgent-plist én een los `com.roonsage.analyzer`-item op bundle-id. `reconcileAutostart()` heeft bij de start van 1.1.200 **niets** uitgezet en logt ook niets, dus `SMAppService.mainApp.status` is niet `.enabled` — het tweede record komt dus ergens anders vandaan (kandidaten: "heropen vensters bij inloggen", of een BTM-record dat blijft hangen na een eerdere registratie). **Waarom het niet meer erg is:** `SingleInstance.enforce()` vangt élke tweede kopie, ongeacht wie hem start — live bewezen. **Wil je het record tóch weg:** Systeeminstellingen → Algemeen → Inloggen → "RoonSage Analyzer" uitzetten en na de volgende login opnieuw dumpen.

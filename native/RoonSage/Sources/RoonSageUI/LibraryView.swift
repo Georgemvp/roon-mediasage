@@ -61,6 +61,16 @@ public struct LibraryView: View {
     @State private var recentPlayed: [DatabaseManager.LibraryTrackRow] = []
     @State private var forgotten: [TrackRecord] = []
     @State private var facets: RoonClient.RadioFacetOptions?
+    /// One play from this calendar day in an earlier year, newest first.
+    @State private var onThisDayEntry: DatabaseManager.OnThisDayEntry?
+    /// This calendar month's most-played rows, ranked by play count.
+    @State private var topOfMonth: [DatabaseManager.LibraryTrackRow] = []
+    /// The week's spotlit record label plus its albums — deterministic per week.
+    @State private var spotlightLabel: DatabaseManager.LabelRow?
+    @State private var labelAlbums: [DatabaseManager.AlbumResult] = []
+    /// Drives the label section's chevron. Pushed with `isPresented` rather than
+    /// a `NavigationLink` in the row — see `sectionChevron`.
+    @State private var showLabelAlbums = false
 
     /// Which browse modes already hold data for the current query.
     ///
@@ -193,6 +203,9 @@ public struct LibraryView: View {
         .navigationDestination(for: DatabaseManager.AlbumResult.self) { AlbumDetailView(album: $0) }
         .navigationDestination(for: DatabaseManager.ArtistResult.self) { ArtistDetailView(artist: $0) }
         .navigationDestination(for: LibraryFilter.self) { FilteredTracksView(filter: $0) }
+        .navigationDestination(isPresented: $showLabelAlbums) {
+            if let spotlightLabel { LabelAlbumsView(label: spotlightLabel) }
+        }
         .screenTitle(String(format: LS("library.titleWithCount"), client.trackCount))
         .searchable(text: $searchText, prompt: searchPrompt)
         // NOT auto-focused on the Zoek tab, though it is tempting: raising the
@@ -1225,23 +1238,32 @@ public struct LibraryView: View {
     /// "voor jou" recommendation shelves, and browse-by tiles. A List-as-feed (like
     /// DiscoveryView) lazily hosts the shelves and dodges the iOS 26 NavigationStack
     /// + custom-ScrollView layout bug.
+    /// The feed alternates deliberately: shelf, list, shelf, list. Eight cover
+    /// shelves in a row read as one repeated texture — you had to read every
+    /// heading to tell "onlangs toegevoegd" from "meest gespeeld" — which is
+    /// what made the screen feel busy without actually holding much.
     @ViewBuilder
     private var overviewContent: some View {
         List {
             if let stats {
                 statsHero(stats).plainCardRow()
-                if !recentlyAdded.isEmpty {
-                    // Not `clock.badge.plus`: that name does not exist, so this
-                    // one shelf header rendered without an icon while every
-                    // other one had one — the row read as a different kind of
-                    // section than its neighbours.
-                    trackShelf(LS("library.recentlyAdded"), "plus.circle", recentlyAdded).plainCardRow()
-                }
+                if let entry = onThisDayEntry { todaySection(entry).plainCardRow() }
                 if !recentPlayed.isEmpty {
-                    trackShelf(LS("library.recentlyPlayedShelf"), "play.circle", recentPlayed).plainCardRow()
+                    trackShelf(LS("library.recentlyPlayedShelf"), recentPlayed,
+                               seeAll: .recentlyPlayed).plainCardRow()
+                }
+                if !topOfMonth.isEmpty {
+                    trackRows(monthlyTitle, topOfMonth, seeAll: .mostPlayed).plainCardRow()
+                }
+                if !recentlyAdded.isEmpty {
+                    trackShelf(LS("library.recentlyAdded"), recentlyAdded,
+                               seeAll: .recentlyAdded).plainCardRow()
+                }
+                if let label = spotlightLabel, !labelAlbums.isEmpty {
+                    labelSection(label).plainCardRow()
                 }
                 if forgotten.count > 1 {
-                    recordShelf(LS("library.forgottenFavorites"), "clock.arrow.circlepath", forgotten).plainCardRow()
+                    recordShelf(LS("library.forgottenFavorites"), forgotten).plainCardRow()
                 }
                 browseTiles.plainCardRow()
                 collectionTiles.plainCardRow()
@@ -1253,6 +1275,72 @@ public struct LibraryView: View {
         }
         .listStyle(.plain)
         .refreshable { await refreshOverview() }
+    }
+
+    /// "Vandaag — 12 jaar geleden": one play from this calendar day in an earlier
+    /// year. `onThisDay()` already backed a share card and the server's daily
+    /// summary; the library never showed it, which is the one screen where a
+    /// look back is an invitation rather than a statistic.
+    private func todaySection(_ entry: DatabaseManager.OnThisDayEntry) -> some View {
+        let years = max(1, Calendar.current.component(.year, from: Date()) - entry.year)
+        return VStack(alignment: .leading, spacing: Spacing.md) {
+            sectionHeader(LS("library.today")) { EmptyView() }
+            Button {
+                Haptics.tap()
+                Task {
+                    await client.playToActiveOutput([TrackRecord(
+                        id: "onthisday::\(entry.year)::\(entry.title)",
+                        title: entry.title, artist: entry.artist, album: entry.album,
+                        year: nil, isLive: false, imageKey: nil)])
+                }
+            } label: {
+                HStack(spacing: Spacing.lg) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(String(format: years == 1 ? LS("library.yearsAgoOne")
+                                                       : LS("library.yearsAgoMany"), years).uppercased())
+                            .font(.caption.weight(.semibold))
+                            .kerning(0.6)
+                            .foregroundStyle(Color.roonGold)
+                        Text(entry.title).font(.title3.weight(.semibold)).lineLimit(2)
+                        if let a = entry.artist {
+                            Text(a).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Text(String(entry.year)).font(.subheadline).foregroundStyle(.tertiary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(Spacing.lg)
+                .background(Color.platformQuaternaryFill.opacity(0.5),
+                            in: RoundedRectangle(cornerRadius: Radius.lg))
+                .contentShape(RoundedRectangle(cornerRadius: Radius.lg))
+            }
+            .buttonStyle(.plain)
+            .disabled(!client.hasActiveOutput)
+        }
+    }
+
+    /// "Meer van <platenlabel>" — the label browse dimension surfaced where you
+    /// pick something to play, instead of only inside the Lab's label explorer.
+    /// `labelOfTheWeek` is deterministic per week, so the section is stable for
+    /// seven days rather than reshuffling on every refresh.
+    private func labelSection(_ label: DatabaseManager.LabelRow) -> some View {
+        compactRows(String(format: LS("library.moreFromLabel"), label.name),
+                    covers: labelAlbums.prefix(4).map(albumCover),
+                    zoneAvailable: client.hasActiveOutput) {
+            sectionChevron { showLabelAlbums = true }
+        } menu: { cover in
+            PlayActionsMenu(fetch: { [client] in
+                await client.tracksForAlbum(cover.id).map(\.asTrackRecord)
+            })
+        }
+    }
+
+    /// "Meest gespeeld in februari" — capitalised month in the app's language.
+    private var monthlyTitle: String {
+        let f = DateFormatter()
+        f.locale = LocalePreference.current.locale ?? Locale.current
+        f.setLocalizedDateFormatFromTemplate("MMMM")
+        return String(format: LS("library.mostPlayedIn"), f.string(from: Date()))
     }
 
     // MARK: Overview — hero + shelves
@@ -1276,15 +1364,59 @@ public struct LibraryView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func trackShelf(_ title: String, _ icon: String,
-                            _ rows: [DatabaseManager.LibraryTrackRow]) -> some View {
-        shelf(title, icon, covers: rows.map(trackCover),
+    /// A cover shelf whose chevron switches the browse mode and sort, so "toon
+    /// alles" lands on the same rows in a full list instead of a second screen
+    /// that has to fetch them again.
+    private func trackShelf(_ title: String, _ rows: [DatabaseManager.LibraryTrackRow],
+                            seeAll: SortField? = nil) -> some View {
+        shelf(title, covers: rows.map(trackCover),
+              zoneAvailable: client.hasActiveOutput) {
+            if let seeAll { seeAllButton(seeAll) }
+        }
+    }
+
+    private func trackRows(_ title: String, _ rows: [DatabaseManager.LibraryTrackRow],
+                           seeAll: SortField? = nil) -> some View {
+        compactRows(title, covers: rows.prefix(4).map(trackCover),
+                    zoneAvailable: client.hasActiveOutput) {
+            if let seeAll { seeAllButton(seeAll) }
+        } menu: { cover in
+            if let row = rows.first(where: { $0.id == cover.id }) {
+                PlayActionsMenu(fetch: { [row.asTrackRecord] }, trackRadioSeed: row.asTrackRecord)
+            }
+        }
+    }
+
+    private func recordShelf(_ title: String, _ recs: [TrackRecord]) -> some View {
+        shelf(title, covers: recs.map(recordCover),
               zoneAvailable: client.hasActiveOutput) { EmptyView() }
     }
 
-    private func recordShelf(_ title: String, _ icon: String, _ recs: [TrackRecord]) -> some View {
-        shelf(title, icon, covers: recs.map(recordCover),
-              zoneAvailable: client.hasActiveOutput) { EmptyView() }
+    /// The chevron on a shelf header. Not a `NavigationLink`: these sections all
+    /// live in this same screen's Tracks mode, so it flips the mode and the sort
+    /// rather than pushing a duplicate list.
+    private func seeAllButton(_ order: SortField) -> some View {
+        Button {
+            sort = order
+            viewMode = .tracks
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, Spacing.sm)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(format: LS("search.showAll"), LS("library.tracks").lowercased()))
+    }
+
+    private func albumCover(_ a: DatabaseManager.AlbumResult) -> Cover {
+        Cover(id: a.albumKey, title: a.album, subtitle: a.artist, imageKey: a.imageKey) {
+            Task {
+                let rows = await client.tracksForAlbum(a.albumKey).map(\.asTrackRecord)
+                await client.playToActiveOutput(rows)
+            }
+        }
     }
 
     private func trackCover(_ t: DatabaseManager.LibraryTrackRow) -> Cover {
@@ -1309,7 +1441,7 @@ public struct LibraryView: View {
     @ViewBuilder
     private var browseTiles: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader(LS("library.browseBy"), "square.grid.2x2") { EmptyView() }
+            sectionHeader(LS("library.browseBy")) { EmptyView() }
             if let facets, !facets.genres.isEmpty {
                 filterChipRow(LS("library.genres"), facets.genres.prefix(16).map {
                     LibraryFilter(kind: .genre($0.key), title: $0.label.capitalized)
@@ -1374,7 +1506,7 @@ public struct LibraryView: View {
     /// half the height, and one heading that says what the group is.
     private var collectionTiles: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader(LS("library.collection"), "square.stack") { EmptyView() }
+            sectionHeader(LS("library.collection")) { EmptyView() }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: Spacing.sm),
                                 GridItem(.flexible(), spacing: Spacing.sm)],
                       spacing: Spacing.sm) {
@@ -1483,6 +1615,8 @@ public struct LibraryView: View {
         async let playedV = recentPlayedRows()
         async let forgottenV = client.forgottenFavorites()
         async let facetsV = client.radioFacetOptions()
+        async let todayV = client.onThisDay()
+        async let monthV = topOfMonthRows()
 
         stats = await statsV
         let a = await analyzedV
@@ -1492,6 +1626,40 @@ public struct LibraryView: View {
         recentPlayed = await playedV
         forgotten = await forgottenV
         facets = await facetsV
+        onThisDayEntry = await todayV.first
+        topOfMonth = await monthV
+        // Last, and deliberately after everything visible has been assigned: the
+        // label tables are seeded lazily, and on a library that has never opened
+        // the Lab's label explorer they are empty (measured: 0 rows in `label`
+        // and `album_label` against 31.119 feature rows that DO carry a label).
+        // `ensureLabelsBuilt()` early-returns once they exist, so this is one
+        // write, once, ever — and it happens below the fold either way.
+        await loadLabelSpotlight()
+    }
+
+    /// The week's label plus its albums. Separated from `performOverviewLoad` so
+    /// the seeding write can never sit in front of the first paint.
+    private func loadLabelSpotlight() async {
+        _ = await client.ensureLabelsBuilt()
+        let label = await client.labelOfTheWeek()
+        spotlightLabel = label
+        labelAlbums = label == nil ? [] : await client.albumsForLabel(label!.id)
+    }
+
+    /// Rows played most often since the first of this calendar month.
+    ///
+    /// `playStats` is keyed on `match_key` and carries no artwork, so the top
+    /// keys are resolved to full library rows — the same two-step the
+    /// recently-played shelf uses.
+    private func topOfMonthRows() async -> [DatabaseManager.LibraryTrackRow] {
+        var comps = Calendar.current.dateComponents([.year, .month], from: Date())
+        comps.day = 1
+        guard let start = Calendar.current.date(from: comps) else { return [] }
+        let iso = ISO8601DateFormatter().string(from: start)
+        let stats = await client.playStats(since: iso)
+        let keys = stats.sorted { $0.count > $1.count }
+            .map(\.matchKey).filter { !$0.isEmpty }
+        return await client.tracksByMatchKeys(Array(keys.prefix(overviewShelfSize)))
     }
 
     /// How many covers a horizontal shelf holds. One number, used by the fetch as

@@ -38,7 +38,7 @@ public struct DiscoveryView: View {
                 summaryCards(stats).plainCardRow()
                 if let aotd = albumOfDay { albumOfDayCard(aotd).plainCardRow() }
                 if !undiscovered.isEmpty {
-                    shelf(LS("discovery.shelfNeverHeard"), "sparkles",
+                    shelf(LS("discovery.shelfNeverHeard"),
                           covers: undiscovered.map(albumCover),
                           zoneAvailable: client.hasActiveOutput) {
                         Button { Task {
@@ -53,7 +53,7 @@ public struct DiscoveryView: View {
                     .plainCardRow()
                 }
                 if !dormant.isEmpty {
-                    shelf(LS("discovery.shelfPlayAgain"), "clock.arrow.circlepath",
+                    shelf(LS("discovery.shelfPlayAgain"),
                           covers: dormant.map(albumCover),
                           zoneAvailable: client.hasActiveOutput) {
                         Button { Task {
@@ -68,7 +68,7 @@ public struct DiscoveryView: View {
                     .plainCardRow()
                 }
                 if !topTracks.isEmpty {
-                    shelf(LS("discovery.shelfTopTracks"), "star.fill",
+                    shelf(LS("discovery.shelfTopTracks"),
                           covers: topTracks.map(trackCover),
                           zoneAvailable: client.hasActiveOutput) {
                         playAllButton(topTracks)
@@ -76,7 +76,7 @@ public struct DiscoveryView: View {
                     .plainCardRow()
                 }
                 if forgotten.count > 1 {
-                    shelf(LS("discovery.shelfForgottenFavorites"), "clock.arrow.circlepath",
+                    shelf(LS("discovery.shelfForgottenFavorites"),
                           covers: forgotten.dropFirst().map(trackCover),
                           zoneAvailable: client.hasActiveOutput) {
                         playAllButton(Array(forgotten))
@@ -358,7 +358,7 @@ public struct DiscoveryView: View {
     @ViewBuilder
     func decadeCard(_ stats: DatabaseManager.LibraryStats) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader(LS("discovery.decadeCardTitle"), "chart.xyaxis.line") { EmptyView() }
+            sectionHeader(LS("discovery.decadeCardTitle")) { EmptyView() }
 
             Chart(stats.tracksByDecade, id: \.decade) { item in
                 AreaMark(
@@ -421,7 +421,7 @@ public struct DiscoveryView: View {
     func genreCard(_ stats: DatabaseManager.LibraryStats) -> some View {
         let genres = Array(stats.topGenres.prefix(12))
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader(LS("discovery.topGenres"), "guitars.fill") { EmptyView() }
+            sectionHeader(LS("discovery.topGenres")) { EmptyView() }
 
             Chart(genres, id: \.genre) { item in
                 BarMark(

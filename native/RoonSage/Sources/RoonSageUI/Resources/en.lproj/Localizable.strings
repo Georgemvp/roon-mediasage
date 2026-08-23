@@ -455,6 +455,11 @@
 "library.playAll"                = "Play all";
 "library.playlistName"           = "Playlist name";
 "library.recentlyAdded"          = "Recently added";
+"library.today"                  = "Today";
+"library.yearsAgoOne"            = "%d year ago";
+"library.yearsAgoMany"           = "%d years ago";
+"library.moreFromLabel"          = "More from %@";
+"library.mostPlayedIn"           = "Most played in %@";
 "library.recentlyPlayedShelf"    = "Recently played";
 "library.recommendSubtitle"      = "Describe a vibe → albums from your library.";
 "library.save"                   = "Save";
