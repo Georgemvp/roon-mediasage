@@ -64,6 +64,47 @@ final class PlexLibrarySourceTests: XCTestCase {
         XCTAssertEqual(rows.map { $0["source"] as String? }, ["plex", "plex"])
     }
 
+    /// Artwork must resolve through the analyser's /artwork, not through Plex:
+    /// a thin client holds no Plex token. The `local::` prefix here is the
+    /// resolution scheme `imageURL(forKey:)` switches on, not a provenance claim.
+    func testArtworkKeyUsesTheAnalyserResolutionScheme() async throws {
+        try await db.ingestPlexTracks([plex("1", artist: "A", title: "T", album: "Al",
+                                            thumb: "/library/metadata/9/thumb/1")])
+        let imageKey = try await db.pool.read { db in
+            try String.fetchOne(db, sql: "SELECT image_key FROM tracks WHERE id = 'plex::1'")
+        }
+        let expected = DatabaseManager.localKeyPrefix
+            + TrackIdentity.matchKey(artist: "A", album: "Al", title: "T")
+        XCTAssertEqual(imageKey, expected)
+        XCTAssertFalse(imageKey?.hasPrefix(DatabaseManager.plexKeyPrefix) ?? true,
+                       "de Plex-thumb mag hier niet staan — clients hebben geen Plex-token")
+    }
+
+    // MARK: - Sync wiring
+
+    /// The import displaces Roon rows, so it must never start by itself. Nothing
+    /// in start-up may write this key.
+    func testPlexSyncIsOffUntilExplicitlyEnabled() {
+        XCTAssertNil(UserDefaults.standard.object(forKey: "plex_sync_enabled"),
+                     "plex_sync_enabled mag niet gezet zijn zonder dat de user hem aanzet")
+    }
+
+    func testLibraryRowMapsEveryFieldTheIngestNeeds() {
+        let track = PlexClient.Track(
+            ratingKey: "174626", guid: "plex://track/abc", title: "Mandy",
+            artist: "10cc", album: "Classic", albumRatingKey: "90244", year: 2012,
+            filePath: "/Volumes/4tbdrive/Muziek/10cc/04 - Mandy.flac",
+            duration: 321120, thumb: "/library/metadata/90244/thumb/1")
+        let row = RoonClient.libraryRow(track)
+        XCTAssertEqual(row.ratingKey, "174626")
+        XCTAssertEqual(row.title, "Mandy")
+        XCTAssertEqual(row.artist, "10cc")
+        XCTAssertEqual(row.album, "Classic")
+        XCTAssertEqual(row.albumRatingKey, "90244")
+        XCTAssertEqual(row.year, 2012)
+        XCTAssertEqual(row.filePath, "/Volumes/4tbdrive/Muziek/10cc/04 - Mandy.flac")
+    }
+
     func testAlbumKeyFallsBackWhenPlexHasNoAlbumID() async throws {
         try await db.ingestPlexTracks([
             plex("1", artist: "Solti", title: "Elektra", album: "Strauss"),
@@ -205,7 +246,30 @@ final class PlexLibrarySourceTests: XCTestCase {
 
     func testParseTrackRejectsRowsWithoutKeyOrTitle() {
         XCTAssertNil(PlexClient.parseTrack(["title": "geen ratingKey"]))
-        XCTAssertNil(PlexClient.parseTrack(["ratingKey": "1"]))
+        XCTAssertNil(PlexClient.parseTrack(["ratingKey": "1"]), "geen titel én geen bestand")
+        XCTAssertNil(PlexClient.parseTrack(["ratingKey": "1", "title": "   "]))
+    }
+
+    /// 184 van de 65.719 tracks hebben in Plex een lege titel (vinyl-siderips,
+    /// 5.1-AC3-stems). Die mogen niet onzichtbaar worden — het bestand heeft wél
+    /// een bruikbare naam.
+    func testBlankTitleFallsBackToTheFilename() throws {
+        let track = try XCTUnwrap(PlexClient.parseTrack([
+            "ratingKey": "94073",
+            "title": "",
+            "grandparentTitle": "Depeche Mode",
+            "Media": [["Part": [["file": "/M/Depeche Mode - Spirit - Side A.flac"]]]],
+        ]))
+        XCTAssertEqual(track.title, "Depeche Mode - Spirit - Side A")
+    }
+
+    func testTitleFromFilenameStripsTrackNumbersButNeverEverything() {
+        XCTAssertEqual(PlexClient.titleFromFilename("/m/06 - Back In Black.flac"), "Back In Black")
+        XCTAssertEqual(PlexClient.titleFromFilename("/m/02-03-Allegiance to Denethor.ac3"),
+                       "03-Allegiance to Denethor")
+        XCTAssertEqual(PlexClient.titleFromFilename("/m/11 Another Brick.flac"), "Another Brick")
+        // Alleen een nummer: strippen zou niets overlaten, dus blijft het staan.
+        XCTAssertEqual(PlexClient.titleFromFilename("/m/07.flac"), "07")
     }
 
     // MARK: - Live server (opt-in)
@@ -241,6 +305,50 @@ final class PlexLibrarySourceTests: XCTestCase {
         }
         print("[plex live] sectie '\(section.title)' — \(page.count) tracks in pagina 1, "
               + "\(withPath.count) met pad, \(page.filter { $0.albumRatingKey != nil }.count) met album-id")
+    }
+
+    /// The whole fase-1 path at real scale: live Plex → paging → ingest.
+    ///
+    /// Runs against a COPY of the real `library.db`, never the live one — the
+    /// ingest displaces Roon rows, and that is the user's call to make, not a
+    /// test run's. Off by default.
+    ///
+    /// `ROONSAGE_PLEX_LIVE=1 swift test --filter testLiveFullImport`
+    func testLiveFullImportAgainstACopyOfTheRealLibrary() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["ROONSAGE_PLEX_LIVE"] == "1",
+                          "opt-in: zet ROONSAGE_PLEX_LIVE=1")
+        let live = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/RoonSage/library.db")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: live.path),
+                          "geen echte library.db op deze machine")
+
+        let copy = dbURL.deletingLastPathComponent().appendingPathComponent("live-copy.db")
+        try FileManager.default.copyItem(at: live, to: copy)
+        let real = try DatabaseManager(url: copy)
+        let roonBefore = try await real.pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tracks WHERE source = 'roon'") ?? 0
+        }
+
+        let token = try XCTUnwrap(PlexClient.localToken())
+        let client = PlexClient(baseURL: URL(string: "http://127.0.0.1:32400")!, token: token)
+        let found = try await client.musicSection()
+        let section = try XCTUnwrap(found)
+
+        var rows: [DatabaseManager.PlexTrackRow] = []
+        try await client.allTracks(inSection: section.key) { page in
+            rows.append(contentsOf: page.map(RoonClient.libraryRow))
+        }
+        XCTAssertGreaterThan(rows.count, 1000, "een echte muzieksectie levert veel meer dan een pagina")
+
+        let result = try await real.ingestPlexTracks(rows)
+        let withPath = rows.filter { $0.filePath != nil }.count
+        print("[plex live] \(rows.count) tracks opgehaald (\(withPath) met pad) → "
+              + "\(result.inserted) nieuw, \(result.reclaimed) Roon-rijen verdrongen "
+              + "(van \(roonBefore)), \(result.total) Plex-rijen totaal")
+
+        XCTAssertEqual(result.inserted, rows.count, "een lege bibliotheek moet ze allemaal opnemen")
+        XCTAssertGreaterThan(result.reclaimed, 0, "Plex hoort Roon-rijen te verdringen")
+        XCTAssertGreaterThan(withPath, rows.count / 2, "de meeste rijen moeten een bestandspad hebben")
     }
 
     func testTokenIsReadFromPreferencesXML() {

@@ -604,6 +604,7 @@ public final class RoonClient {
         startDigestSchedule()
         startDiscoverWeeklySchedule()
         startServerFeatureSync()
+        startPlexSync()
         startLyricsBackfill()
         startRecapGeneration()
         startMaintenance()

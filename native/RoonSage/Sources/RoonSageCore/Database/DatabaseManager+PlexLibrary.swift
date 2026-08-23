@@ -194,10 +194,18 @@ extension DatabaseManager {
                         // joins on it, and the exact file_path join is an
                         // addition, not a replacement.
                         Self.plexMatchKey(c),
-                        // Artwork resolves from Plex, not from the Roon Core.
-                        // Carrying the thumb path here means a resolver needs no
-                        // second round-trip to find it.
-                        c.thumb.map { Self.plexKeyPrefix + $0 },
+                        // Artwork resolves through the analyser's /artwork, which
+                        // reads the cover out of the file — the same file Plex
+                        // shows a cover for.
+                        //
+                        // Deliberately the `local::` prefix on a `source='plex'`
+                        // row: that prefix is a RESOLUTION SCHEME, not a claim
+                        // about provenance (`imageURL(forKey:)` switches on it).
+                        // Using Plex's own `thumb` would be marginally faster —
+                        // Plex pre-resizes and caches — but it would require
+                        // every thin client to hold a Plex token, which they
+                        // don't and shouldn't. This path already works on iOS.
+                        Self.plexMatchKey(c).isEmpty ? nil : Self.localKeyPrefix + Self.plexMatchKey(c),
                         albumKey,       // album_fp
                         Self.plexSource,
                         c.filePath,

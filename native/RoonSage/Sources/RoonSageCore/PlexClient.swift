@@ -180,16 +180,25 @@ public struct PlexClient: Sendable {
         return out
     }
 
-    /// Map one Plex `Metadata` entry. nil when it has no ratingKey or title —
-    /// there is nothing to key or show, so the row is unusable rather than partial.
+    /// Map one Plex `Metadata` entry. nil only when there is no ratingKey, or no
+    /// title AND no filename to derive one from — then there is genuinely nothing
+    /// to key or show.
     static func parseTrack(_ d: [String: Any]) -> Track? {
-        guard let ratingKey = stringValue(d["ratingKey"]), let title = d["title"] as? String else { return nil }
+        guard let ratingKey = stringValue(d["ratingKey"]) else { return nil }
         // Plex nests the file two levels down and both levels are arrays; a track
         // with several media versions still has one path per part, so take the first.
         var file: String?
         if let media = d["Media"] as? [[String: Any]], let parts = media.first?["Part"] as? [[String: Any]] {
             file = parts.first?["file"] as? String
         }
+        // Plex leaves `title` empty on 184 of this library's 65.719 tracks
+        // (measured 2026-08-23): vinyl side-rips ("… - Side A.flac"), 5.1 AC3
+        // stems, some box-set discs. Dropping them would make real, playable,
+        // analysed files invisible — the exact failure this source exists to fix.
+        // The filename always carries a usable name, so fall back to its stem.
+        let rawTitle = (d["title"] as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
+        let title = rawTitle.isEmpty ? (file.map(Self.titleFromFilename) ?? "") : rawTitle
+        guard !title.isEmpty else { return nil }
         return Track(
             ratingKey: ratingKey,
             guid: d["guid"] as? String,
@@ -205,6 +214,22 @@ public struct PlexClient: Sendable {
             duration: intValue(d["duration"]),
             thumb: d["thumb"] as? String
         )
+    }
+
+    /// Last-resort display title for a track Plex left untitled: the filename
+    /// without its directory or extension, with a leading track number stripped
+    /// ("06 - Back In Black.flac" → "Back In Black"). Empty when the path yields
+    /// nothing usable, which makes the caller reject the row.
+    static func titleFromFilename(_ path: String) -> String {
+        let stem = (path as NSString).lastPathComponent
+        let noExt = (stem as NSString).deletingPathExtension
+        // Leading "06 - ", "06-", "06 " — the common rip conventions. Only when
+        // something survives it, so a file literally named "07.flac" keeps "07"
+        // rather than becoming untitled.
+        let stripped = noExt.replacingOccurrences(
+            of: #"^\s*\d{1,3}\s*[-._ ]\s*"#, with: "", options: .regularExpression)
+        let candidate = stripped.trimmingCharacters(in: .whitespaces)
+        return candidate.isEmpty ? noExt.trimmingCharacters(in: .whitespaces) : candidate
     }
 
     /// Unicode-normalise a path to NFC before it is ever compared or stored.
