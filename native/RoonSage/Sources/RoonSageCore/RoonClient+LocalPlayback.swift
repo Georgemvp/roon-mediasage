@@ -113,6 +113,13 @@ extension RoonClient {
         // tracks. Best-effort: any that don't resolve simply stay blocked.
         let qobuzURLs = await resolveQobuzStreams(for: part.blocked)
 
+        // Fase 4 (PLEX_MIGRATION): stream straight from Plex when this device is
+        // signed in and direct play is on. Preferred over the analyser's /audio
+        // because it removes the dependency entirely — Plex Remote Access reaches
+        // it over the internet, where :5766 needs ZeroTier. Empty map = off, not
+        // signed in, or nothing resolvable, and everything below is unchanged.
+        let plexURLs = await plexStreamURLs(for: tracks)
+
         // Loudness references for normalization (LMS-style, applied client-side).
         // Cheap lookups against the already-synced feature rows; empty maps when
         // nothing is measured — the engine then falls back to its assumed level.
@@ -127,14 +134,20 @@ extension RoonClient {
         for rec in tracks {
             let key = LocalPlayability.matchKey(for: rec)
             let artist = rec.artist ?? "", album = rec.album ?? ""
-            if playableKeys.contains(key) {
+            if let url = plexURLs[key] {
+                items.append(.init(id: key, title: rec.title, artist: artist, album: album,
+                                   imageKey: rec.imageKey, durationSec: nil, streamURLOverride: url,
+                                   lufs: lufsByKey[key], albumLufs: albumLufs[album]))
+            } else if playableKeys.contains(key) {
                 items.append(.init(id: key, title: rec.title, artist: artist, album: album,
                                    imageKey: rec.imageKey, durationSec: nil,
                                    lufs: lufsByKey[key], albumLufs: albumLufs[album]))
             } else if let url = qobuzURLs[key] {
+                // Geen bestand: een Qobuz-URL is een verlopende CDN-link.
                 items.append(.init(id: key, title: rec.title, artist: artist, album: album,
                                    imageKey: rec.imageKey, durationSec: nil, streamURLOverride: url,
-                                   lufs: lufsByKey[key], albumLufs: albumLufs[album]))
+                                   lufs: lufsByKey[key], albumLufs: albumLufs[album],
+                                   isPinnable: false))
             } else {
                 blockedTitles.append(rec.title)
             }

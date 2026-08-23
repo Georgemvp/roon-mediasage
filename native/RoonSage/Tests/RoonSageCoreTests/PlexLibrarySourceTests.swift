@@ -391,6 +391,76 @@ final class PlexLibrarySourceTests: XCTestCase {
         XCTAssertEqual(roon, ["r3", "r4"], "alleen de tracks die Plex NIET heeft")
     }
 
+    // MARK: - Fase 4: direct afspelen
+
+    func testParsePartKeysReadsTheNestedKeyPerRatingKey() {
+        let keys = PlexClient.parsePartKeys([
+            ["ratingKey": "174626",
+             "Media": [["Part": [["key": "/library/parts/166227/1786173460/file.flac"]]]]],
+            ["ratingKey": 112009,
+             "Media": [["Part": [["key": "/library/parts/98008/1735043714/file.flac"]]]]],
+            ["ratingKey": "999", "Media": [["Part": [[:] as [String: Any]]]]],   // geen key → weg
+            ["Media": [["Part": [["key": "/x"]]]]],                              // geen rk → weg
+        ])
+        XCTAssertEqual(keys, [
+            "174626": "/library/parts/166227/1786173460/file.flac",
+            "112009": "/library/parts/98008/1735043714/file.flac",
+        ])
+    }
+
+    /// De part-key moet zijn extensie houden: AVURLAsset leest het mediatype van
+    /// het pad en snuffelt niet aan de inhoud — een kale id faalt met -12847.
+    func testStreamURLKeepsThePathExtensionAndCarriesTheToken() throws {
+        let client = PlexClient(baseURL: URL(string: "http://127.0.0.1:32400")!, token: "tok")
+        let url = try XCTUnwrap(client.streamURL(partKey: "/library/parts/1/2/file.flac"))
+        XCTAssertEqual(url.pathExtension, "flac")
+        XCTAssertTrue(url.query?.contains("X-Plex-Token=tok") ?? false)
+    }
+
+    /// Een Qobuz-item is niet te pinnen, een gewoon bibliotheeknummer wel — en dat
+    /// is nu een expliciet veld in plaats van afgeleid uit `streamURLOverride`.
+    func testPinnabilityIsStatedNotInferredFromTheOverride() {
+        let plexish = LocalPlaybackController.Track(
+            id: "k", title: "T", artist: "A", album: "Al", imageKey: nil, durationSec: nil,
+            streamURLOverride: URL(string: "http://plex/part.flac"))
+        XCTAssertTrue(plexish.isPinnable, "een Plex-rij heeft een override én een bestand")
+
+        let qobuz = LocalPlaybackController.Track(
+            id: "k2", title: "T", artist: "A", album: "Al", imageKey: nil, durationSec: nil,
+            streamURLOverride: URL(string: "https://cdn.qobuz/signed"), isPinnable: false)
+        XCTAssertFalse(qobuz.isPinnable)
+    }
+
+    /// Bewijst dat een Plex-part echt audio levert, met range-support (dus seeken).
+    func testLiveStreamURLReturnsSeekableAudio() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["ROONSAGE_PLEX_LIVE"] == "1",
+                          "opt-in: zet ROONSAGE_PLEX_LIVE=1")
+        let token = try XCTUnwrap(PlexClient.localToken())
+        let client = PlexClient(baseURL: URL(string: "http://127.0.0.1:32400")!, token: token)
+
+        let found = try await client.musicSection()
+        let section = try XCTUnwrap(found)
+        var first: PlexClient.Track?
+        try await client.allTracks(inSection: section.key, pageSize: 20) { page in
+            if first == nil { first = page.first }
+        }
+        let seed = try XCTUnwrap(first)
+
+        let parts = try await client.partKeys(ratingKeys: [seed.ratingKey])
+        let partKey = try XCTUnwrap(parts[seed.ratingKey], "elke track hoort een part te hebben")
+        let url = try XCTUnwrap(client.streamURL(partKey: partKey))
+
+        var req = URLRequest(url: url)
+        req.setValue("bytes=0-65535", forHTTPHeaderField: "Range")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let http = try XCTUnwrap(resp as? HTTPURLResponse)
+        XCTAssertEqual(http.statusCode, 206, "206 = range-support, dus seeken werkt")
+        XCTAssertFalse(data.isEmpty)
+        let type = http.value(forHTTPHeaderField: "Content-Type") ?? ""
+        XCTAssertTrue(type.hasPrefix("audio/"), "verwacht audio/*, kreeg \(type)")
+        print("[plex live] part \(partKey) → HTTP \(http.statusCode) \(type), \(data.count) bytes")
+    }
+
     // MARK: - Sonic Analysis (/nearest)
 
     func testParseNearestReadsHitsAndToleratesAMissingDistance() throws {

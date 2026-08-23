@@ -253,6 +253,41 @@ public struct PlexClient: Sendable {
         path.precomposedStringWithCanonicalMapping
     }
 
+    // MARK: - Direct play
+
+    /// Part keys for several tracks in ONE request.
+    ///
+    /// Plex accepts comma-separated rating keys on `/library/metadata`, so a
+    /// queue of eighteen tracks costs one round-trip instead of eighteen
+    /// (verified against the live server, 2026-08-23).
+    ///
+    /// The returned key already ends in the container extension
+    /// (`/library/parts/166227/1786173460/file.flac`), which matters:
+    /// `AVURLAsset` reads the media type off the path extension and does not
+    /// sniff content, so a bare id would fail the whole asset with -12847.
+    public func partKeys(ratingKeys: [String]) async throws -> [String: String] {
+        let ids = ratingKeys.filter { !$0.isEmpty }
+        guard !ids.isEmpty else { return [:] }
+        let json = try await getJSON(path: "/library/metadata/\(ids.joined(separator: ","))", query: [])
+        guard let container = json["MediaContainer"] as? [String: Any] else {
+            throw PlexError.malformedResponse("/library/metadata: no MediaContainer")
+        }
+        return Self.parsePartKeys((container["Metadata"] as? [[String: Any]]) ?? [])
+    }
+
+    /// Split out so the wire shape is testable without a server.
+    static func parsePartKeys(_ items: [[String: Any]]) -> [String: String] {
+        var out: [String: String] = [:]
+        for d in items {
+            guard let rk = stringValue(d["ratingKey"]),
+                  let media = d["Media"] as? [[String: Any]],
+                  let parts = media.first?["Part"] as? [[String: Any]],
+                  let key = parts.first?["key"] as? String, !key.isEmpty else { continue }
+            out[rk] = key
+        }
+        return out
+    }
+
     // MARK: - Sonic Analysis (Plex Pass)
 
     /// One sonically-near item as Plex reports it.

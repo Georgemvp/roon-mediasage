@@ -35,13 +35,25 @@ public final class LocalPlaybackController {
         /// drive the loudness-normalization gain; nil when not measured.
         public let lufs: Double?
         public let albumLufs: Double?
+        /// Is there a real file in the library behind this item, so it can be
+        /// pinned for offline?
+        ///
+        /// This used to be inferred from `streamURLOverride == nil`, which was
+        /// only ever a proxy: an override meant Qobuz, and a Qobuz item plays
+        /// from a signed CDN URL that expires, so pinning it yields a file that
+        /// stops working. Since fase 4 a Plex row ALSO carries an override while
+        /// being an ordinary file on disk, and that proxy would have quietly made
+        /// the whole library un-pinnable. So the fact is now stated, not inferred.
+        public let isPinnable: Bool
+
         public init(id: String, title: String, artist: String, album: String,
                     imageKey: String?, durationSec: Double?, streamURLOverride: URL? = nil,
-                    lufs: Double? = nil, albumLufs: Double? = nil) {
+                    lufs: Double? = nil, albumLufs: Double? = nil, isPinnable: Bool = true) {
             self.id = id; self.title = title; self.artist = artist
             self.album = album; self.imageKey = imageKey; self.durationSec = durationSec
             self.streamURLOverride = streamURLOverride
             self.lufs = lufs; self.albumLufs = albumLufs
+            self.isPinnable = isPinnable
         }
     }
 
@@ -672,8 +684,6 @@ public final class LocalPlaybackController {
 
     #if canImport(AVFoundation)
     private func makeItem(for track: Track) -> AVPlayerItem? {
-        // Qobuz (or any direct CDN URL): play it straight, no /audio server.
-        if let override = track.streamURLOverride { return AVPlayerItem(url: override) }
         // Onderweg: ask the server for AAC instead of the original (policy-gated).
         let transcode = LocalTranscode.queryItems()
         let variant = LocalAudioCache.variant(for: transcode)
@@ -692,6 +702,16 @@ public final class LocalPlaybackController {
         if let local = LocalAudioCache.localFile(forKey: track.id, variant: variant) {
             return AVPlayerItem(url: local)
         }
+        // A direct URL (Qobuz CDN, or a Plex part since fase 4): play it straight,
+        // no /audio server.
+        //
+        // Deliberately AFTER the on-disk check, not before. It used to short-
+        // circuit at the top of this method, which was harmless while Qobuz was
+        // the only override — a Qobuz item is never downloaded
+        // (`RoonClient+Downloads` requires `streamURLOverride == nil`). A Plex row
+        // CAN be pinned, and jumping straight to the URL would have streamed a
+        // track the user had deliberately taken offline.
+        if let override = track.streamURLOverride { return AVPlayerItem(url: override) }
         var comps = URLComponents(string: "\(streamBase)/audio")
         // AVPlayer can't attach a custom auth header without private API, so the
         // token rides in the query (the /audio endpoint accepts both).

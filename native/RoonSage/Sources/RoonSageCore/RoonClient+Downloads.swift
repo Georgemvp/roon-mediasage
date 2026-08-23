@@ -97,10 +97,10 @@ extension RoonClient {
         let variant = LocalAudioCache.variant(for: LocalTranscode.queryItems())
         let manager = OfflineDownloadManager.shared
         let pending = request.items.filter { item in
-            // A Qobuz item plays from a signed CDN URL that expires; pinning it
-            // would produce a file that stops working. Only on-disk library
-            // audio is pinnable.
-            item.streamURLOverride == nil
+            // Only on-disk library audio is pinnable — see `Track.isPinnable`.
+            // Not `streamURLOverride == nil`: since fase 4 a Plex row carries an
+            // override too, and that test would have excluded the entire library.
+            item.isPinnable
                 && LocalAudioCache.downloadedFile(forKey: item.id, variant: variant) == nil
                 && manager.status(forKey: item.id) == nil
         }

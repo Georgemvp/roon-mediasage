@@ -660,6 +660,11 @@ public struct SettingsView: View {
                     explanation: "Gebruikt Plex' eigen sonische analyse. Zonder koppeling valt hij terug op de eigen motor.",
                     isOn: Binding(get: { client.plexSonicEnabled },
                                   set: { client.plexSonicEnabled = $0 }))
+                SettingToggle(
+                    "Rechtstreeks afspelen vanaf Plex",
+                    explanation: "Streamt van Plex in plaats van via de analyzer. Werkt ook buitenshuis, zonder ZeroTier.",
+                    isOn: Binding(get: { client.plexDirectPlayEnabled },
+                                  set: { client.plexDirectPlayEnabled = $0 }))
             }.scoped(.device, in: scope)
 
             Group {

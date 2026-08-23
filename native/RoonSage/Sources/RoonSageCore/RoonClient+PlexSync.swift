@@ -203,6 +203,52 @@ extension RoonClient {
             .prefix(limit).map(\.track))
     }
 
+    // MARK: - Fase 4: direct afspelen vanaf Plex
+
+    /// Stream audio straight from Plex instead of through the analyser's `/audio`.
+    ///
+    /// Default off. Needs a Plex sign-in on this device (`PlexAuth`) — without one
+    /// `availableToken()` is nil on a client and every track falls back to the
+    /// analyser, which is the behaviour we have today.
+    public var plexDirectPlayEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "plex_direct_play_enabled") }
+        set { UserDefaults.standard.set(newValue, forKey: "plex_direct_play_enabled") }
+    }
+
+    /// Direct-play URLs for the Plex rows among `records`, keyed by content key.
+    ///
+    /// Empty when direct play is off, no Plex token is available, or none of the
+    /// records is a Plex row — the caller then queues them the old way. One
+    /// batched request for the whole queue; a failure yields an empty map rather
+    /// than a half-filled one, so a queue never silently splits across two
+    /// transports mid-album.
+    func plexStreamURLs(for records: [TrackRecord]) async -> [String: URL] {
+        guard plexDirectPlayEnabled,
+              let token = PlexClient.availableToken(),
+              let base = URL(string: plexBaseURL.trimmingCharacters(in: .whitespaces))
+        else { return [:] }
+
+        // content key → rating key, for the Plex rows only.
+        var ratingKeyByContentKey: [String: String] = [:]
+        for rec in records where rec.id.hasPrefix(DatabaseManager.plexKeyPrefix) {
+            let rk = String(rec.id.dropFirst(DatabaseManager.plexKeyPrefix.count))
+            guard !rk.isEmpty else { continue }
+            ratingKeyByContentKey[LocalPlayability.matchKey(for: rec)] = rk
+        }
+        guard !ratingKeyByContentKey.isEmpty else { return [:] }
+
+        let client = PlexClient(baseURL: base, token: token)
+        guard let parts = try? await client.partKeys(
+            ratingKeys: Array(Set(ratingKeyByContentKey.values))) else { return [:] }
+
+        var out: [String: URL] = [:]
+        for (contentKey, rk) in ratingKeyByContentKey {
+            guard let partKey = parts[rk], let url = client.streamURL(partKey: partKey) else { continue }
+            out[contentKey] = url
+        }
+        return out
+    }
+
     /// Map the wire type to the database row type. Separate so the parsing
     /// (PlexClient) and the storage shape (DatabaseManager) stay independent.
     ///
