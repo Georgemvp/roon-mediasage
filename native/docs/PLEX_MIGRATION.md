@@ -76,6 +76,23 @@ Plex dekt de bestanden; Roon levert nog wat er geen bestand voor is
 (~13.175 Qobuz-only tracks).
 
 ### Fase 4 — audio van Plex in plaats van :5766
+
+> **Blokkade, gevonden 2026-08-23 bij het uitwerken.** Fase 4 is niet "de
+> stream-URL omzetten". De client heeft dan een **eigen Plex-token** nodig, en
+> dat is er niet: `PlexClient.localToken()` leest het admin-token uit
+> `Preferences.xml`, wat alleen op de servermachine bestaat. Dat token naar een
+> iPhone sturen zou het admin-token over het netwerk zetten — dezelfde klasse
+> lek als SEC-M2, maar erger, want het geeft toegang tot de héle Plex-server.
+>
+> **Fase 4 begint dus met een Plex-inlog** (plex.tv PIN/OAuth-flow → eigen
+> client-token → Keychain). Pas daarna is de stream-URL een kleine wijziging: de
+> haak bestaat al (`LocalPlayback.Track.streamURLOverride`, nu gebruikt voor
+> Qobuz-CDN-URL's) en `PlexClient.streamURL(partKey:)` staat er.
+>
+> Eén detail voor later: de part-key (`Media[0].Part[0].key`) wordt bij de sync
+> niet opgeslagen. Ophalen via `/library/metadata/<ratingKey>` op afspeelmoment
+> kost één klein verzoek — goedkoper dan er een kolom voor te migreren.
+
 `AudioStreaming` (101) + `AudioTranscoder` (315) + `LocalTranscode` (129) +
 `LocalAudioCache` (364) + `RoonClient+Downloads` (202) +
 `DatabaseManager+Offline` (130) vervangen door Plex' stream-/transcode-/sync-API.
