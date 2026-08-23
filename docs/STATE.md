@@ -10,17 +10,21 @@ Van monoliet naar een snelle, stabiele Plexamp/Symfonium-achtige client. Maatsta
 iOS: snel en zonder bugs. Snoeien is het middel, niet het doel.
 
 ## Now
-Snoeiprogramma loopt. Vier batches af en lokaal gecommit, **nog niet gepusht/getagd**:
-`e464bdd` CLAP uit de clients (iOS-bundel 793 MB -> 96 MB) · `3c9e3cb` STATE.md 1656 -> 70
-regels · `7ad4a0b` Plex als bibliotheekbron (exacte join op bestandspad) · `57a66b1`
-RadioEngine.Context. 1088 tests, 4 skipped, 0 failures; release-build groen; lint 474 =
-baseline.
+Migratie naar het Plex-scenario, plan in `native/docs/PLEX_MIGRATION.md`. Fase 1 is AF:
+de Plex-import draait, geverifieerd op een KOPIE van de echte library.db —
+65.719/65.719 tracks, 58.827 Roon-rijen verdrongen, 16,4 s. **Staat default uit**
+(`plex_sync_enabled`), want de eerste run op de echte database herschrijft het gros van
+de catalogus. 1094 tests, 5 skipped, 0 failures.
+
+**Volgende concrete stap:** `plex_sync_enabled` aanzetten op de mini en één run op de
+échte database doen.
 
 ## Next
 1. ~~CLAP-modellen uit de clients~~ AF · 2. ~~STATE opschonen~~ AF
-3. ~~PlexLibrarySource prototype~~ AF (`7ad4a0b`) — maar **niets roept ingestPlexTracks aan**.
-   Volgende stap: een PlexSyncService in de analyzer die periodiek importeert, plus een
-   artwork-resolver voor `image_key = "plex::<thumb>"`.
+3. ~~PlexLibrarySource + PlexSyncService~~ AF (`7ad4a0b`, `eda751a`). Artwork lost op via
+   de bestaande /artwork-route; geen aparte resolver nodig.
+3b. Fase 2 van PLEX_MIGRATION: `/nearest` van Plex gebruiken voor vergelijkbaar/radio,
+   met SonicSelection.dropNearDuplicates erachter en RadioEngine als terugval.
 4. ~~RadioEngine-signatuur~~ AF (`57a66b1`). De audit-aanname "10 motoren samenvoegen" was
    fout — zie de commit; er valt hier niets meer samen te voegen.
 5. `RoonClient` opbreken: 13.041 regels / 547 functies / 115 properties -> < 2.000.
@@ -47,7 +51,7 @@ baseline.
 - CLAPEngine mag NOOIT een dependency van RoonSageCore/RoonSageUI worden: dat blaast elke client weer op met ~746 MB
 
 ## Decisions
-- **Open, ligt bij Casper (uitgebreid 2026-08-23):** Plex als catalogus + streaming/transcode/remote-laag, met de analyzer teruggebracht tot alléén analyse. Zie de audit; Plex dekt ~2.800 regels eigen code die we onderhouden, maar heeft geen CLAP/BPM/Camelot. Raakt de constraint "de analyzer is de primaire bron".
+- **BESLIST 2026-08-23 (user: "Ja"):** Alchemy, Song Paths en Sonic DNA blijven → CLAPEngine blijft, de analyzer krimpt tot batchjob i.p.v. server, en vergelijkbaar/radio delegeert naar Plex. Plan: `native/docs/PLEX_MIGRATION.md`. Getoetst: Plex' `/nearest` geeft HTTP 200 vanuit een gewone client (99,94% van de tracks geanalyseerd), maar levert géén BPM/toonsoort/loudness en géén ruwe vectoren.
 - Sonic-fit CLAP zit achter `SonicFitScoring`; alleen `ClapSonicFit` in de analyzer-app registreert. Client = provider nil = pre-sonische ordening (2026-08-23).
 
 ## Facts
