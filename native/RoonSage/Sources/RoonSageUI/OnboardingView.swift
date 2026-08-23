@@ -30,6 +30,16 @@ struct OnboardingView: View {
 
     private let steps = OnboardingStep.all
 
+    private var backButton: some View {
+        Button {
+            withAnimation(Motion.standard) { step -= 1 }
+        } label: {
+            Label(LS("onboarding.back"), systemImage: "chevron.left").frame(minWidth: 120)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Skip — for users who already know RoonSage and just want to connect.
@@ -70,17 +80,20 @@ struct OnboardingView: View {
             .padding(.bottom, Spacing.lg)
             .accessibilityHidden(true)
 
-            // Navigation
-            HStack(spacing: Spacing.md) {
-                if step > 0 {
-                    Button {
-                        withAnimation(Motion.standard) { step -= 1 }
-                    } label: {
-                        Label(LS("onboarding.back"), systemImage: "chevron.left").frame(minWidth: 120)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                }
+            // Navigation.
+            //
+            // The last step stacks vertically: three buttons of minWidth 160-200
+            // in one HStack ran off BOTH edges of an iPhone (measured on the
+            // simulator — "Back" was cut on the left, "Koppel met Plex" on the
+            // right). Only the last step has three, so only it needs the change.
+            let lastStep = step == steps.count - 1
+            let layout = lastStep
+                ? AnyLayout(VStackLayout(spacing: Spacing.sm))
+                : AnyLayout(HStackLayout(spacing: Spacing.md))
+            layout {
+                // Op de laatste stap staat "Terug" ONDERAAN: gestapeld boven de
+                // hoofdactie leest een terug-knop als de primaire keuze.
+                if step > 0 && !lastStep { backButton }
 
                 if step < steps.count - 1 {
                     Button {
@@ -100,7 +113,7 @@ struct OnboardingView: View {
                             Text(plexCode)
                                 .font(.system(.largeTitle, design: .monospaced).weight(.bold))
                                 .tracking(6)
-                            Text("Ga naar plex.tv/link en voer deze code in.")
+                            Text(LS("onboarding.plexEnterCode"))
                                 .font(.callout).foregroundStyle(.secondary)
                             ProgressView()
                         } else {
@@ -116,15 +129,16 @@ struct OnboardingView: View {
                                         if token != nil {
                                             // Flipt plexStandalone → WelcomeGate laat door.
                                             client.refreshPlexLinkState()
+                                            client.completeOnboarding()
                                         } else {
-                                            plexError = "Code verlopen — probeer opnieuw."
+                                            plexError = LS("onboarding.plexCodeExpired")
                                         }
                                     } catch {
-                                        plexError = "Koppelen mislukt: \(error.localizedDescription)"
+                                        plexError = String(format: LS("onboarding.plexLinkFailed"), error.localizedDescription)
                                     }
                                 }
                             } label: {
-                                Label("Koppel met Plex", systemImage: "link").frame(minWidth: 200)
+                                Label(LS("onboarding.plexLink"), systemImage: "link").frame(minWidth: 200)
                             }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.large)
@@ -137,7 +151,7 @@ struct OnboardingView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.large)
 
-                            Text("Plex is genoeg om te luisteren. De RoonSage-server voegt DJ-sets, Song Paths en Roon-zones toe.")
+                            Text(LS("onboarding.plexVsServer"))
                                 .font(.caption).foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
@@ -145,6 +159,7 @@ struct OnboardingView: View {
                             Text(plexError).font(.caption).foregroundStyle(.secondary)
                         }
                     }
+                    if step > 0 { backButton }
                 }
             }
             .padding(.horizontal, Spacing.xl)
@@ -238,12 +253,17 @@ struct OnboardingView: View {
         }
     }
 
-    // Step 4 — how to connect
+    // Step 4 — how to connect.
+    //
+    // These three rows showed their RAW KEYS on screen ("onboarding.connectStep1")
+    // — the keys were never in either .strings file. The localisation gate did not
+    // catch it because it scans `LS()` calls, and these were `LocalizedStringKey`
+    // literals handed to a subview. Now they are `LS()` like everything else.
     private var connectBody: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            OnboardingStepRow(number: 1, text: "onboarding.connectStep1")
-            OnboardingStepRow(number: 2, text: "onboarding.connectStep2")
-            OnboardingStepRow(number: 3, text: "onboarding.connectStep3")
+            OnboardingStepRow(number: 1, text: LS("onboarding.connectStep1"))
+            OnboardingStepRow(number: 2, text: LS("onboarding.connectStep2"))
+            OnboardingStepRow(number: 3, text: LS("onboarding.connectStep3"))
         }
         .padding(Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -303,7 +323,7 @@ private struct OnboardingBullet: View {
 
 private struct OnboardingStepRow: View {
     let number: Int
-    let text: LocalizedStringKey
+    let text: String
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.md) {
@@ -313,7 +333,7 @@ private struct OnboardingStepRow: View {
                 .frame(width: 26, height: 26)
                 .background(Color.roonGold.opacity(0.15), in: Circle())
                 .accessibilityHidden(true)
-            LT(text)
+            Text(text)
                 .font(.callout)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

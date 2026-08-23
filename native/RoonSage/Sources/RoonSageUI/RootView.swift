@@ -28,7 +28,10 @@ public struct ContentView: View {
             // parking it on the connect screen would hide a working app behind a
             // server it does not need (user, 2026-08-23: "de analyzer is dus
             // optioneel"). Analyser-only features ask to connect where they live.
-            if client.connectionState.isConnected || client.hasLiveSession
+            if !client.plexOnboardingDone {
+                // Altijd eerst, ook als Bonjour de server al gevonden heeft.
+                WelcomeGate()
+            } else if client.connectionState.isConnected || client.hasLiveSession
                 || client.offlineMode || client.plexStandalone {
                 // The banner is a layout SIBLING, not a top safe-area inset.
                 //
@@ -54,6 +57,7 @@ public struct ContentView: View {
         .animation(Motion.standard, value: client.connectionState.isConnected)
         .animation(Motion.standard, value: client.hasLiveSession)
         .animation(Motion.standard, value: client.offlineMode)
+        .animation(Motion.standard, value: client.plexOnboardingDone)
         .animation(Motion.standard, value: client.zonesAreStale)
         .overlay(alignment: .bottom) { ActionErrorToast() }
         // Summoned by AnalyzerRequiredNotice: on a standalone Plex device the
@@ -89,12 +93,17 @@ struct WelcomeGate: View {
     @State private var showConnect = false
 
     var body: some View {
-        if client.savedHost != nil || showConnect {
+        if showConnect || (client.plexOnboardingDone && client.savedHost != nil) {
             ConnectView()
                 .transition(.opacity)
         } else {
-            OnboardingView { withAnimation(Motion.standard) { showConnect = true } }
-                .transition(.opacity)
+            OnboardingView {
+                // "Ik gebruik een RoonSage-server": de keuze is gemaakt, dus het
+                // welkom is klaar — daarna is dit scherm het connect-scherm.
+                client.completeOnboarding()
+                withAnimation(Motion.standard) { showConnect = true }
+            }
+            .transition(.opacity)
         }
     }
 }

@@ -653,8 +653,8 @@
 "onboarding.serverFootnote"       = "Zonder die server werkt de app niet — daar staan je bibliotheek en je analyses.";
 "onboarding.serverIntro"          = "RoonSage heeft een server nodig: de analyzer-app op je Mac mini.";
 "onboarding.skip"                 = "Overslaan";
-"onboarding.stepConnectSubtitle"  = "Verbind met je Roon Core";
-"onboarding.stepConnectTitle"     = "Aan de slag";
+"onboarding.stepConnectSubtitle" = "Koppel met Plex — dat is genoeg om te beginnen";
+"onboarding.stepConnectTitle" = "Aan de slag";
 "onboarding.stepFeaturesSubtitle" = "Curatie, ontdekking en DJ-tools";
 "onboarding.stepFeaturesTitle"    = "Wat je kunt doen";
 "onboarding.stepIntroSubtitle"    = "Je AI-muziekcurator voor Roon";
@@ -1326,3 +1326,11 @@
 "smart.saved" = "“%@” bewaard.";
 "core.recap.week" = "Terugblik — week %d";
 "core.recap.month" = "Terugblik — %@";
+"onboarding.connectStep1" = "Koppel met Plex: je bibliotheek, hoezen en afspelen werken meteen.";
+"onboarding.connectStep2" = "Wil je meer? Verbind daarnaast met een RoonSage-server.";
+"onboarding.connectStep3" = "Die voegt DJ-sets, Song Paths, ontdekken en Roon-zones toe.";
+"onboarding.plexLink" = "Koppel met Plex";
+"onboarding.plexEnterCode" = "Ga naar plex.tv/link en voer deze code in.";
+"onboarding.plexVsServer" = "Met Plex kun je meteen luisteren. De RoonSage-server voegt DJ-sets, Song Paths en Roon-zones toe.";
+"onboarding.plexCodeExpired" = "Code verlopen — probeer opnieuw.";
+"onboarding.plexLinkFailed" = "Koppelen mislukt: %@";

@@ -153,7 +153,11 @@ public struct ZoneHintBanner: View {
     public init() {}
 
     public var body: some View {
-        if client.selectedZone == nil, !client.zones.isEmpty {
+        // `hasActiveOutput`, niet `selectedZone`: kies je "Dit apparaat", dan is
+        // selectedZone per definitie nil en stond deze waarschuwing er dus óók —
+        // gemeten op de simulator, mét muziek uit dit apparaat en de balk die
+        // "This device" zei. Twee berichten over één feit, waarvan één onwaar.
+        if !client.hasActiveOutput, !client.zones.isEmpty {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(Color.accentColor)

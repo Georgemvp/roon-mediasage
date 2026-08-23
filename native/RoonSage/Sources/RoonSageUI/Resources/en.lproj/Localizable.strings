@@ -653,8 +653,8 @@
 "onboarding.serverFootnote"       = "Without that server the app will not work — your library and analyses live there.";
 "onboarding.serverIntro"          = "RoonSage needs a server: the analyzer app on your Mac mini.";
 "onboarding.skip"                 = "Skip";
-"onboarding.stepConnectSubtitle"  = "Connect to your Roon Core";
-"onboarding.stepConnectTitle"     = "Getting started";
+"onboarding.stepConnectSubtitle" = "Link with Plex — that is enough to begin";
+"onboarding.stepConnectTitle" = "Getting started";
 "onboarding.stepFeaturesSubtitle" = "Curation, discovery and DJ tools";
 "onboarding.stepFeaturesTitle"    = "What you can do";
 "onboarding.stepIntroSubtitle"    = "Your AI music curator for Roon";
@@ -1326,3 +1326,11 @@
 "smart.saved" = "“%@” saved.";
 "core.recap.week" = "Recap — week %d";
 "core.recap.month" = "Recap — %@";
+"onboarding.connectStep1" = "Link with Plex: your library, artwork and playback work right away.";
+"onboarding.connectStep2" = "Want more? Also connect to a RoonSage server.";
+"onboarding.connectStep3" = "That adds DJ sets, Song Paths, discovery and Roon zones.";
+"onboarding.plexLink" = "Link with Plex";
+"onboarding.plexEnterCode" = "Go to plex.tv/link and enter this code.";
+"onboarding.plexVsServer" = "Plex is enough to start listening. The RoonSage server adds DJ sets, Song Paths and Roon zones.";
+"onboarding.plexCodeExpired" = "Code expired — try again.";
+"onboarding.plexLinkFailed" = "Linking failed: %@";

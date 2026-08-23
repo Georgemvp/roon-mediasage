@@ -196,6 +196,25 @@ public final class RoonClient {
 
     /// Ask for the connect screen. Called by `AnalyzerRequiredNotice`.
     public func requestServerConnection() { showServerConnectSheet = true }
+
+    /// Has the user been through the first-run welcome once?
+    ///
+    /// **This, not `savedHost == nil`, gates the welcome.** Bonjour discovery
+    /// finds the mini and connects on its own within a second of a cold start, so
+    /// a gate that asked "is a server configured?" was always answered before the
+    /// user saw anything — measured on a wiped simulator install, which went
+    /// straight into an empty library and never mentioned Plex. The requirement is
+    /// the opposite (user, 2026-08-23): *"de eerste keer opstarten moet de app
+    /// eerst vragen om op plex in te loggen."* A flag the user clears only by
+    /// making a choice is the only thing discovery cannot answer for them.
+    public internal(set) var plexOnboardingDone: Bool =
+        UserDefaults.standard.bool(forKey: "plex_onboarding_done")
+
+    /// The user made a choice (linked Plex, or picked "I use a server").
+    public func completeOnboarding() {
+        UserDefaults.standard.set(true, forKey: "plex_onboarding_done")
+        plexOnboardingDone = true
+    }
     /// Resolved server base URL (e.g. http://10.94.184.22:5767) in server mode.
     var remoteBaseURL: String?
     var remotePollTask: Task<Void, Never>?

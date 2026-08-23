@@ -195,12 +195,16 @@ extension RoonClient {
         let modeGate = await djModeGate(djMode, seedIds: seedIds, lib: lib, db: db)
         let gate = Self.composeGates(baseGate, modeGate)
         let related = await relatedSeedArtists(radioID: key, artist: radio.artist)
+        // Plex-snelpad: als zijn eigen analyse de buren levert, slaat de builder de
+        // kNN over de vectoren over. Leeg = alles blijft zoals het was.
+        let plexPool = await plexStationPool(seedIds: seedIds, library: lib, limit: Self.radioPoolSize)
         let pool = await Task.detached {
             Self.buildRadioCandidates(seedIds: seedIds, lib: lib, index: index,
                                       seed: "\(stamp)-\(key)-0", disliked: disliked,
                                       likedKeys: liked, knownArtists: known,
                                       adventurousness: adv, hardBan: hardBan, tasteVector: taste,
-                                      nnStats: stats, relatedArtists: related, gate: gate, arc: arc)
+                                      nnStats: stats, relatedArtists: related, gate: gate, arc: arc,
+                                      plexNeighbours: plexPool)
         }.value
         guard !pool.isEmpty else {
             reportError("Radio kon geen vergelijkbare tracks vinden — analyseer eerst meer muziek.")
@@ -401,6 +405,7 @@ extension RoonClient {
         // shouldn't reorder around a track that hasn't played yet.
         let continueFrom = preserveQueuedKeys ? nil : state.pool.last?.id
         let skipped = state.skippedKeys
+        let plexPool = await plexStationPool(seedIds: seedIds, library: lib, limit: Self.radioPoolSize)
         let pool = await Task.detached {
             Self.buildRadioCandidates(seedIds: seedIds, lib: lib, index: index,
                                       seed: "\(stamp)-\(key)-\(nextGen)", disliked: disliked,
@@ -408,7 +413,8 @@ extension RoonClient {
                                       likedKeys: liked, knownArtists: known,
                                       adventurousness: adv, hardBan: hardBan, tasteVector: taste,
                                       nnStats: stats, relatedArtists: related, gate: gate,
-                                      continueFromId: continueFrom, arc: arc)
+                                      continueFromId: continueFrom, arc: arc,
+                                      plexNeighbours: plexPool)
         }.value
         state.pool = pool
         state.cursor = 0
@@ -476,7 +482,8 @@ extension RoonClient {
         relatedArtists: [String: Double] = [:],
         gate: (@Sendable (DatabaseManager.SonicTrack) -> Bool)? = nil,
         continueFromId: String? = nil,
-        arc: RadioSequencer.Arc = .smooth
+        arc: RadioSequencer.Arc = .smooth,
+        plexNeighbours: [DatabaseManager.SonicTrack] = []
     ) -> [TrackRecord] {
         let seedSet = Set(seedIds)
         // Don't seed the station on a disliked track.
@@ -489,7 +496,13 @@ extension RoonClient {
         // fallback (and what the unit tests exercise via index: nil).
         let useEmb = index != nil && own.contains { index!.embedding(forId: $0.id) != nil }
         let neighbours: [DatabaseManager.SonicTrack]
-        if useEmb, let index {
+        if !plexNeighbours.isEmpty {
+            // Plex' eigen sonische analyse heeft de buren al bepaald — geen kNN
+            // over 66k vectoren nodig. Feedback-weging blijft: een dislike hoort
+            // ook hier zeldzamer te klinken.
+            neighbours = applyFeedbackWeighting(
+                plexNeighbours, disliked: disliked, salt: seed, matchKey: { $0.matchKey })
+        } else if useEmb, let index {
             // sequence:false here — we flow-order the FULL combined pool below,
             // opening on the continuation anchor (seamless top-up) when given.
             let opts = RadioEngine.Options(

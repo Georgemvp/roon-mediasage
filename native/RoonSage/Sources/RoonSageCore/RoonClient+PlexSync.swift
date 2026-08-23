@@ -290,6 +290,66 @@ extension RoonClient {
         return out
     }
 
+    /// Neighbour pool for a station, straight from Plex's Sonic Analysis.
+    ///
+    /// This is the speed path (user, 2026-08-23: *"Er moet gebruikt worden van
+    /// plex eigen analyse functie, zodat dit allemaal sneller gaat qua mixes,
+    /// radio's en slimme queues"*). The local route ranks 66k CLAP vectors; Plex
+    /// answers the same question with one HTTP call per seed, because it did the
+    /// analysis server-side and keeps its own index.
+    ///
+    /// Empty means "Plex had nothing usable" — the caller then runs the local
+    /// engine exactly as before. Never a partial answer dressed up as a full one.
+    func plexStationPool(seedIds: [String],
+                         library: [DatabaseManager.SonicTrack],
+                         limit: Int) async -> [DatabaseManager.SonicTrack] {
+        guard plexSonicEnabled,
+              let token = PlexClient.availableToken(),
+              let base = URL(string: plexBaseURL.trimmingCharacters(in: .whitespaces))
+        else { return [] }
+
+        // Only the Plex-sourced seeds can be asked about. Cap the fan-out: a
+        // station seeded on 60 of an artist's tracks does not need 60 round-trips
+        // to know what that artist sounds like.
+        let ratingKeys = seedIds
+            .filter { $0.hasPrefix(DatabaseManager.plexKeyPrefix) }
+            .prefix(Self.plexStationSeedCap)
+            .map { String($0.dropFirst(DatabaseManager.plexKeyPrefix.count)) }
+        guard !ratingKeys.isEmpty else { return [] }
+
+        let client = PlexClient(baseURL: base, token: token)
+        var byID = [String: DatabaseManager.SonicTrack](minimumCapacity: library.count)
+        for t in library { byID[t.id] = t }
+        let seedSet = Set(seedIds)
+
+        // Best score wins when several seeds return the same track — that is what
+        // makes this a POOL and not a concatenation of k-NN lists.
+        var best: [String: (track: DatabaseManager.SonicTrack, score: Float)] = [:]
+        for rk in ratingKeys {
+            guard let hits = try? await client.nearest(ratingKey: rk, limit: limit) else { continue }
+            for h in hits {
+                let id = DatabaseManager.plexTrackID(ratingKey: h.ratingKey)
+                guard !seedSet.contains(id), let track = byID[id] else { continue }
+                let score = Float(max(0, 1 - h.distance))
+                if let existing = best[id], existing.score >= score { continue }
+                best[id] = (track, score)
+            }
+        }
+        guard !best.isEmpty else { return [] }
+
+        // Plex does no duplicate hygiene at all; without this a station happily
+        // plays the same recording from three different albums.
+        let ordered = best.values.sorted { $0.score > $1.score }
+            .map { VectorIndex.Hit(track: $0.track, score: $0.score) }
+        var seen = Set<String>()
+        return Array(ordered.filter { seen.insert(SonicSelection.titleKey($0.track)).inserted }
+            .prefix(limit).map(\.track))
+    }
+
+    /// How many seed tracks a station asks Plex about. Beyond a handful the extra
+    /// round-trips buy nothing: the neighbourhoods overlap heavily.
+    static let plexStationSeedCap = 6
+
     /// Map the wire type to the database row type. Separate so the parsing
     /// (PlexClient) and the storage shape (DatabaseManager) stay independent.
     ///
