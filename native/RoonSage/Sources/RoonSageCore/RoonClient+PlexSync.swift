@@ -50,6 +50,20 @@ extension RoonClient {
         return server.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    /// Plex levert de bibliotheek op dit toestel.
+    ///
+    /// **Zodra je gekoppeld bent — óók als er een RoonSage-server is.** Een
+    /// eerdere versie hing dit aan `plexStandalone` ("geen server ingesteld"),
+    /// en dat maakte er óf-óf van: op een telefoon die ooit met de mini verbonden
+    /// was, deed geen enkel Plex-pad iets. Dat is niet de bedoeling (user,
+    /// 2026-08-23: *"het wordt plex standalone player … De server is optioneel"*).
+    ///
+    /// De juiste verhouding: Plex is de catalogus, de server is een uitbreiding
+    /// die curatie, DJ en Roon-zones toevoegt. Twee bronnen tegelijk zou weer
+    /// duplicaten geven, dus zodra dit waar is slaat de client de `/library`-import
+    /// van de share-server over.
+    public var plexIsLibrarySource: Bool { plexLinked }
+
     /// Re-read the Keychain into the observable `plexLinked`, and start or stop
     /// the import to match. Call after every sign-in and sign-out.
     public func refreshPlexLinkState() {
@@ -60,7 +74,7 @@ extension RoonClient {
             // loopback, which on a phone means the phone — a linked device would
             // otherwise sync 0 tracks and say nothing about why.
             await self?.resolvePlexServer()
-            guard let self, self.plexStandalone else { return }
+            guard let self, self.plexIsLibrarySource else { return }
             self.startPlexSync()
             // Don't make a fresh sign-in wait out the 120 s start-up delay before
             // the library appears — that delay exists to let the server's Roon
@@ -99,7 +113,7 @@ extension RoonClient {
     public func startPlexSync() {
         // Ook op een standalone client: dáár IS Plex de bibliotheek, en zonder
         // deze taak blijft hij na het inloggen leeg.
-        guard controlMode == .direct || plexStandalone else { return }
+        guard controlMode == .direct || plexIsLibrarySource else { return }
         Task {
             await TaskScheduler.shared.register(
                 name: Self.plexSyncTaskName,
@@ -167,7 +181,7 @@ extension RoonClient {
         // Een standalone client heeft die niet — daar is Plex de enige bron, dus
         // daar hoort de import gewoon te lopen zonder dat je eerst een vinkje moet
         // vinden. Anders is "log in en het werkt" niet waar.
-        guard plexSyncEnabled || plexStandalone else { return .disabled }
+        guard plexSyncEnabled || plexIsLibrarySource else { return .disabled }
         guard let db = database else { return .failed("geen database") }
         guard let token = PlexClient.availableToken() else { return .noToken }
         guard let base = URL(string: plexBaseURL.trimmingCharacters(in: .whitespaces)) else {

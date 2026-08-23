@@ -318,6 +318,13 @@ extension RoonClient {
     public func importLibrary(fromMac baseURL: String) async -> Int? {
         // A running sync writes the same tables the import replaces.
         guard let db = database, !isSyncing else { return nil }
+        // Plex owns the library on this device once it is linked. Importing the
+        // server's copy on top would put two writers on the same table — which is
+        // exactly how the 68.000 duplicate rows happened once already.
+        guard !plexIsLibrarySource else {
+            Log.info("Bibliotheek-import overgeslagen: Plex is hier de bron", category: .network)
+            return nil
+        }
         let trimmed = baseURL.trimmingCharacters(in: .whitespaces)
         guard let url = URL(string: "\(trimmed)/library") else { return nil }
         var req = URLRequest(url: url)
