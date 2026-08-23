@@ -55,7 +55,7 @@ final class RadioEngineTests: XCTestCase {
             let opts = RadioEngine.Options(adventurousness: 0.35, poolLimit: 3, sequence: false,
                                            scalarCoherence: scalar)
             return RadioEngine.rank(seeds: [seed], library: lib, index: index,
-                                    options: opts, salt: "").map { $0.track.id }
+                                    options: opts, context: .init(salt: "")).map { $0.track.id }
         }
         XCTAssertEqual(order(scalar: 0.12).first, "onTempo",
                        "matching tempo+key must win a cosine tie")
@@ -68,8 +68,10 @@ final class RadioEngineTests: XCTestCase {
     func testRankExcludesSeedsAndIsDeterministic() {
         let (seed, lib, index) = fixture()
         let opts = RadioEngine.Options(adventurousness: 0.35, poolLimit: 10, sequence: false)
-        let a = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts, salt: "day")
-        let b = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts, salt: "day")
+        let a = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts,
+                                 context: .init(salt: "day"))
+        let b = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts,
+                                 context: .init(salt: "day"))
         XCTAssertEqual(a.map { $0.track.id }, b.map { $0.track.id }, "deterministic per salt")
         XCTAssertFalse(a.contains { $0.track.id == "seed" }, "seed excluded from its own station")
         XCTAssertFalse(a.isEmpty)
@@ -83,7 +85,7 @@ final class RadioEngineTests: XCTestCase {
         func rankFar(adv: Double) -> Int {
             let opts = RadioEngine.Options(adventurousness: adv, poolLimit: 3, sequence: false)
             let r = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts,
-                                     knownArtists: known, salt: "")
+                                     context: .init(knownArtists: known, salt: ""))
             return r.firstIndex { $0.track.id == "far" } ?? .max
         }
         let familiar = rankFar(adv: 0)      // play-it-safe: far (new + distant) sinks
@@ -96,7 +98,7 @@ final class RadioEngineTests: XCTestCase {
         let (seed, lib, index) = fixture()
         let opts = RadioEngine.Options(adventurousness: 0.5, poolLimit: 10, hardBanDisliked: true, sequence: false)
         let r = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts,
-                                 disliked: ["far"], salt: "day")
+                                 context: .init(disliked: ["far"], salt: "day"))
         XCTAssertFalse(r.contains { $0.track.id == "far" }, "hard-banned track is gone entirely")
     }
 
@@ -105,7 +107,7 @@ final class RadioEngineTests: XCTestCase {
         let opts = RadioEngine.Options(adventurousness: 0.35, poolLimit: 10, sequence: false)
         // No track seeds: the request embedding alone carries the query (Generate).
         let r = RadioEngine.rank(seeds: [], library: lib, index: index, options: opts,
-                                 salt: "", queryAnchor: [1, 0, 0, 0])
+                                 context: .init(salt: "", queryAnchor: [1, 0, 0, 0]))
         XCTAssertEqual(r.first?.track.id, "seed", "cosine-nearest to the anchor leads")
         XCTAssertEqual(r.count, lib.count, "no seeds → nothing excluded")
     }
@@ -116,7 +118,7 @@ final class RadioEngineTests: XCTestCase {
         // Anchor on `far`'s vector: with the 50/50 query blend, far must outrank
         // mid even at a fully familiar dial (so distance-novelty can't be the cause).
         let r = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts,
-                                 salt: "", queryAnchor: [0.50, 0, 0.866, 0])
+                                 context: .init(salt: "", queryAnchor: [0.50, 0, 0.866, 0]))
         let farIdx = r.firstIndex { $0.track.id == "far" } ?? .max
         let midIdx = r.firstIndex { $0.track.id == "mid" } ?? .max
         XCTAssertLessThan(farIdx, midIdx, "request anchor pulls the query toward its own region")
@@ -138,7 +140,7 @@ final class RadioEngineTests: XCTestCase {
         let opts = RadioEngine.Options(adventurousness: 0, poolLimit: 10, sequence: false)
         func order(skip: Set<String>) -> [String] {
             RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts,
-                             skippedKeys: skip, salt: "").map { $0.track.id }
+                             context: .init(skippedKeys: skip, salt: "")).map { $0.track.id }
         }
         let awayFromPlus = order(skip: ["skipPlus"])
         XCTAssertLessThan(awayFromPlus.firstIndex(of: "minusY")!, awayFromPlus.firstIndex(of: "plusY")!,
@@ -158,7 +160,7 @@ final class RadioEngineTests: XCTestCase {
         let index = VectorIndex(tracks: lib)!
         let opts = RadioEngine.Options(adventurousness: 0.35, poolLimit: 2, sequence: false)
         let r = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts,
-                                 relatedArtists: ["fangraph": 1.0], salt: "")
+                                 context: .init(relatedArtists: ["fangraph": 1.0], salt: ""))
         XCTAssertEqual(r.first?.track.id, "a",
                        "the Deezer-related artist wins the equidistant tie: \(r.map { $0.track.id })")
     }
@@ -171,8 +173,9 @@ final class RadioEngineTests: XCTestCase {
         let lib = [seed, a, b]
         let index = VectorIndex(tracks: lib)!
         let opts = RadioEngine.Options(adventurousness: 0.35, poolLimit: 2, sequence: false)
-        let r = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts,
-                                 relatedArtists: ["toprelated": 1.0, "tailrelated": 0.4], salt: "")
+        var ctx = RadioEngine.Context()
+        ctx.relatedArtists = ["toprelated": 1.0, "tailrelated": 0.4]
+        let r = RadioEngine.rank(seeds: [seed], library: lib, index: index, options: opts, context: ctx)
         XCTAssertEqual(r.first?.track.id, "a",
                        "the higher-weighted fan-graph artist ranks first: \(r.map { $0.track.id })")
     }

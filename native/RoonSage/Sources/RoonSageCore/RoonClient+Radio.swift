@@ -498,8 +498,9 @@ extension RoonClient {
                 similarityFloor: nnStats.map { RadioEngine.Options.floor(stats: $0, adventurousness: adventurousness) })
             let ranked = RadioEngine.rank(
                 seeds: own, library: lib, index: index, options: opts,
-                disliked: disliked, skippedKeys: skippedKeys, likedKeys: likedKeys, knownArtists: knownArtists,
-                tasteVector: tasteVector, relatedArtists: relatedArtists, salt: seed)
+                context: .init(disliked: disliked, skippedKeys: skippedKeys, likedKeys: likedKeys,
+                               knownArtists: knownArtists, tasteVector: tasteVector,
+                               relatedArtists: relatedArtists, salt: seed))
             neighbours = applyFeedbackWeighting(
                 ranked.map(\.track), disliked: disliked, salt: seed, matchKey: { $0.matchKey })
         } else {

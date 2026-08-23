@@ -533,8 +533,8 @@ extension RoonClient {
                 hardBanDisliked: hardBan, sequence: false)
             let ranked = RadioEngine.rank(
                 seeds: own, library: lib, index: index, options: opts,
-                disliked: disliked, likedKeys: likedKeys, knownArtists: knownArtists,
-                tasteVector: tasteVector, relatedArtists: relatedArtists, salt: salt)
+                context: .init(disliked: disliked, likedKeys: likedKeys, knownArtists: knownArtists,
+                               tasteVector: tasteVector, relatedArtists: relatedArtists, salt: salt))
             neighbours = applyFeedbackWeighting(
                 ranked.map(\.track), disliked: disliked, salt: salt, matchKey: { $0.matchKey })
         } else {

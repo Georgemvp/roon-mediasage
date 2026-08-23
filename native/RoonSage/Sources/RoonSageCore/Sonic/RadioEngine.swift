@@ -109,23 +109,96 @@ public enum RadioEngine {
 
     /// Rank + diversify the library around `seeds`. `index` is required (the
     /// embedding path); callers fall back to `SonicEngine` when it's nil.
+    /// Everything the ranking knows about the listener and the request, other
+    /// than the seeds themselves.
+    ///
+    /// These used to be fifteen loose parameters on `rank`. That shape made the
+    /// engine expensive to extend: every new signal (skips, related artists, the
+    /// text anchor, seed weights…) meant a new parameter, and the six call sites
+    /// — Radio, ArtistRadio, Features ×2, Generate, DiscoverWeekly — all had to
+    /// be revisited even when they had nothing to pass. Defaulted fields on a
+    /// struct mean adding a signal now touches this type and the engine, and
+    /// nothing else.
+    ///
+    /// All fields default to "no opinion", so `Context()` ranks on the seeds alone.
+    public struct Context: Sendable {
+        /// Content keys the listener disliked. Soft-downweighted, or removed
+        /// entirely when `Options.hardBanDisliked`.
+        public var disliked: Set<String> = []
+        /// Content keys the listener skipped — a weaker negative than a dislike.
+        public var skippedKeys: Set<String> = []
+        /// Content keys the listener liked; pulls the query vector toward them.
+        public var likedKeys: Set<String> = []
+        /// Artists already in the library, for the familiarity/novelty balance.
+        public var knownArtists: Set<String> = []
+        /// Long-run personal taste vector, blended into the query.
+        public var tasteVector: [Float]?
+        /// Genres of the seeds, for the genre-coherence nudge.
+        public var seedGenres: Set<String> = []
+        /// Genres per track id, so candidates can be compared to `seedGenres`.
+        public var genresById: [String: Set<String>] = [:]
+        /// Per-seed weights (Sonic DNA passes play-recency). Must be the same
+        /// count as `seeds` or it is ignored.
+        public var seedWeights: [Double]?
+        /// Artist name → relatedness score, from the fan graph.
+        public var relatedArtists: [String: Double] = [:]
+        /// Stable tie-break salt, so a re-run of the same station reshuffles
+        /// deterministically instead of returning an identical list.
+        public var salt: String = ""
+        /// CLAP text embedding for a free-text request; joins the seeds as an
+        /// extra anchor, and carries the query alone when there are no seeds.
+        public var queryAnchor: [Float]?
+
+        /// Every field defaults, so a caller names only the signals it has — and
+        /// a field added here breaks no existing call site. That is the whole
+        /// point of the type; keep the defaults when extending it.
+        public init(disliked: Set<String> = [],
+                    skippedKeys: Set<String> = [],
+                    likedKeys: Set<String> = [],
+                    knownArtists: Set<String> = [],
+                    tasteVector: [Float]? = nil,
+                    seedGenres: Set<String> = [],
+                    genresById: [String: Set<String>] = [:],
+                    seedWeights: [Double]? = nil,
+                    relatedArtists: [String: Double] = [:],
+                    salt: String = "",
+                    queryAnchor: [Float]? = nil) {
+            self.disliked = disliked
+            self.skippedKeys = skippedKeys
+            self.likedKeys = likedKeys
+            self.knownArtists = knownArtists
+            self.tasteVector = tasteVector
+            self.seedGenres = seedGenres
+            self.genresById = genresById
+            self.seedWeights = seedWeights
+            self.relatedArtists = relatedArtists
+            self.salt = salt
+            self.queryAnchor = queryAnchor
+        }
+    }
+
     public static func rank(
         seeds: [DatabaseManager.SonicTrack],
         library: [DatabaseManager.SonicTrack],
         index: VectorIndex,
         options: Options,
-        disliked: Set<String> = [],
-        skippedKeys: Set<String> = [],
-        likedKeys: Set<String> = [],
-        knownArtists: Set<String> = [],
-        tasteVector: [Float]? = nil,
-        seedGenres: Set<String> = [],
-        genresById: [String: Set<String>] = [:],
-        seedWeights: [Double]? = nil,
-        relatedArtists: [String: Double] = [:],
-        salt: String = "",
-        queryAnchor: [Float]? = nil
+        context: Context = Context()
     ) -> [Result] {
+        // Destructured so the ranking body below is unchanged from the
+        // fifteen-parameter version — this refactor moves the call shape, not
+        // the behaviour.
+        let disliked = context.disliked
+        let skippedKeys = context.skippedKeys
+        let likedKeys = context.likedKeys
+        let knownArtists = context.knownArtists
+        let tasteVector = context.tasteVector
+        let seedGenres = context.seedGenres
+        let genresById = context.genresById
+        let seedWeights = context.seedWeights
+        let relatedArtists = context.relatedArtists
+        let salt = context.salt
+        let queryAnchor = context.queryAnchor
+
         // Anchors: the seed vectors that exist in the index. Cap for cost.
         // (Callers pass seeds heaviest-first, so the cap keeps what matters.)
         let seedIds = seeds.map(\.id)

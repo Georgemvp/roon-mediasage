@@ -134,8 +134,8 @@ public enum DiscoverWeekly {
             hardBanDisliked: false, sequence: false)
         let ranked = RadioEngine.rank(
             seeds: seeds, library: library, index: index, options: opts,
-            disliked: disliked, likedKeys: likedKeys, knownArtists: knownArtists,
-            tasteVector: tasteVector, salt: salt)
+            context: .init(disliked: disliked, likedKeys: likedKeys, knownArtists: knownArtists,
+                           tasteVector: tasteVector, salt: salt))
 
         // Discovery exclusion: drop recently-played + disliked, dedupe by content key.
         // (RadioEngine already excludes the seeds themselves.)

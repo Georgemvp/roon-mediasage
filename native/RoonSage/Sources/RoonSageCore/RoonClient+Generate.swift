@@ -594,11 +594,11 @@ extension RoonClient {
                 let opts = RadioEngine.Options(
                     adventurousness: adv, poolLimit: 400, candidateK: indexTracks.count,
                     hardBanDisliked: false, sequence: false, similarityFloor: floor)
-                let ranked = RadioEngine.rank(seeds: seeds, library: indexTracks, index: subIndex,
-                                              options: opts, disliked: dislikedKeys, likedKeys: liked,
-                                              knownArtists: known, tasteVector: taste,
-                                              relatedArtists: relatedArtists,
-                                              salt: "", queryAnchor: queryVec)
+                let ranked = RadioEngine.rank(
+                    seeds: seeds, library: indexTracks, index: subIndex, options: opts,
+                    context: .init(disliked: dislikedKeys, likedKeys: liked, knownArtists: known,
+                                   tasteVector: taste, relatedArtists: relatedArtists,
+                                   queryAnchor: queryVec))
                 // QW2 — guarantee near-duplicate removal (same recording on album +
                 // compilation, different matchKeys) even on pools ≤ poolLimit, where
                 // RadioEngine's internal MMR — and thus its near-dup drop — is

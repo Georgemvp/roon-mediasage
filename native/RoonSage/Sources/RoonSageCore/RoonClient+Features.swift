@@ -668,8 +668,8 @@ extension RoonClient {
                 let opts = RadioEngine.Options(adventurousness: adv, poolLimit: limit + 6, sequence: true)
                 raw = RadioEngine.rank(
                     seeds: [seed], library: lib, index: index, options: opts,
-                    disliked: disliked, likedKeys: liked, knownArtists: known,
-                    salt: "similar\u{1f}\(seed.matchKey)")
+                    context: .init(disliked: disliked, likedKeys: liked, knownArtists: known,
+                                   salt: "similar\u{1f}\(seed.matchKey)"))
                     .map { SonicEngine.Scored(track: $0.track, similarity: min(1, max(0, $0.score)), reason: $0.reason) }
             } else if seedInLib {
                 raw = SonicEngine.similar(to: seed, in: lib, limit: limit + 1, index: index)
@@ -929,9 +929,9 @@ extension RoonClient {
                 let opts = RadioEngine.Options(adventurousness: adv, poolLimit: recommendCount * 3, sequence: false)
                 recRaw = RadioEngine.rank(
                     seeds: seedTracks, library: lib, index: index, options: opts,
-                    disliked: disliked, likedKeys: liked, knownArtists: known,
-                    tasteVector: taste, seedGenres: seedGenres, genresById: genres,
-                    seedWeights: seeds.map(\.weight), salt: "fingerprint")
+                    context: .init(disliked: disliked, likedKeys: liked, knownArtists: known,
+                                   tasteVector: taste, seedGenres: seedGenres, genresById: genres,
+                                   seedWeights: seeds.map(\.weight), salt: "fingerprint"))
                     // RadioEngine.score carries novelty/discovery bonuses (can exceed
                     // 1) — clamp to a 0…1 similarity for the UI's match %.
                     .map { SonicEngine.Scored(track: $0.track, similarity: min(1, max(0, $0.score)), reason: $0.reason) }
