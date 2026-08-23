@@ -1,48 +1,59 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
-Lees docs/STATE.md en pak de eerstvolgende open stap uit de genummerde lijst hieronder.
-Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build && swift test
-→ commit → (push+tag alleen als Casper daar in dat gesprek om vraagt) → STATE.md bijwerken.
-Houd dit bestand onder ~70 regels. Historie staat in docs/STATE-archief-2026-08-23.md.
+Lees docs/STATE.md, native/docs/AUDIT_PLEX_CLIENT_2026_08_23.md en
+native/docs/PLEX_MIGRATION.md. Doel: RoonSage wordt een Plex-standalone speler —
+Plex is de bibliotheek, de RoonSage-server is een optionele uitbreiding.
+
+Pak de eerstvolgende open stap uit ## Next. Werk incrementeel: bewerken →
+cd native/RoonSage && swift build -Xswiftc -strict-concurrency=complete &&
+swift test && swift build -c release --product RoonSage &&
+./native/scripts/check-localization.sh --strict → commit → push + tag
+(v / ios-v / analyzer-v) → STATE.md bijwerken.
+
+Die strict-concurrency-vlag is niet optioneel: zonder hem brak CI op v1.10.292
+terwijl het lokaal bouwde.
+
+Test met GUI-automatisering, niet alleen met unit-tests: `~/gui-wakker.sh status`,
+dan `~/bin/rs-sim setup` / `build` / `tap X Y` / `shot PAD`. Vrijwel elke echte bug
+van 2026-08-23 kwam uit kijken naar het scherm, niet uit de testsuite.
 ═══════════════════════════════════════════════════════════════════ -->
 
 ## Goal
-Van monoliet naar een snelle, stabiele Plexamp/Symfonium-achtige client. Maatstaf is
-iOS: snel en zonder bugs. Snoeien is het middel, niet het doel.
+Een snelle, stabiele Plexamp/Symfonium-achtige speler. Plex levert de bibliotheek,
+het streamen en de sonische analyse; de analyzer voegt BPM/Camelot/vectoren toe voor
+DJ, Song Paths, Alchemy en Sonic DNA. De server is optioneel, nooit vereist.
 
 ## Now
-**Plex-migratie: fases 1 t/m 3 LIVE op de mini, fase 4a gebouwd en getagd.**
-`analyzer-v1.1.215` draait, `plex_sync_enabled` staat aan, de echte import is gedraaid:
-tracks 89.752 → 96.644 (plex 65.719 / roon 30.925), onbereikbare analyses 19.537 → 8.959.
-Backup vóór de import: `library-pre-plex-20260823-161349.db`.
+Plex-migratie fases 1 t/m 4a zijn af en getagd t/m **v1.10.296 / ios-v1.7.262 /
+analyzer-v1.1.226**. De mini draait `analyzer-v1.1.223`.
 
-Sindsdien getagd t/m **v1.10.287 / ios-v1.7.253 / analyzer-v1.1.217**: Plex-inlog per
-apparaat (PIN-flow, Keychain) en rechtstreeks afspelen vanaf Plex. 1110 tests, 8 skipped,
-0 failures; release-build groen; lokalisatie 0 missend; lint 474 = baseline.
+**Wat werkt en geverifieerd is:** Plex-import (65.719/65.719), `/nearest` voor
+vergelijkbare nummers en radio's, Plex-inlog per apparaat (PIN → Keychain),
+serverontdekking via plex.tv (incl. het externe Remote-Access-adres), rechtstreeks
+afspelen (`HTTP 206 audio/flac`), formaatweergave, hoezen via Plex' photo-transcoder.
 
-Nog UIT (bewust, zet ze aan in Instellingen → Plex): `plex_sonic_enabled`,
-`plex_direct_play_enabled`. Beide hebben een Plex-koppeling op dat apparaat nodig.
+**Wat NIET geverifieerd is:** niemand heeft de Plex-koppeling op een toestel
+voltooid — dat vraagt een code intypen op plex.tv/link. Tot dat gebeurt is
+"Plex-only werkt" een redenering, geen meting.
 
-**Openstaande beslissing van Casper:** waar gaan `listening_history` (44.157 rijen),
-`track_feedback` en `playlists` heen als de analyzer optioneel wordt? Aanname nu:
-client houdt ze zelf, analyzer wordt sync-peer — Plex accepteert geen teruggedateerde
-historie-import, dus verhuizen zou die data vernietigen.
+**Openstaand op de mini:** de live database heeft nog 147.692 rijen voor 79.704
+unieke nummers (~68.000 duplicaten, local + plex naast elkaar). De fix zit in
+`analyzer-v1.1.221+`; de opschoning gebeurt bij de eerstvolgende Plex-sync. De
+cadans is gewist en de analyzer herstart, dus die zou moeten lopen — controleer met
+`sqlite3 "file:$HOME/Library/Application Support/RoonSage/library.db?mode=ro" "SELECT source, COUNT(*) FROM tracks GROUP BY source;"`
 
 ## Next
-1. ~~CLAP-modellen uit de clients~~ AF · 2. ~~STATE opschonen~~ AF
-3. ~~PlexLibrarySource + PlexSyncService~~ AF (`7ad4a0b`, `eda751a`). Artwork lost op via
-   de bestaande /artwork-route; geen aparte resolver nodig.
-3b. ~~Fase 2: `/nearest` voor vergelijkbaar~~ AF (`5edb9a2`). ~~Fase 3: Roon-walk
-   degradeert~~ AF (`bc4c514`). Fase 4 (audio/offline van Plex) en fase 5 (share-server
-   krimpen) staan nog open — zie PLEX_MIGRATION.
-4. ~~RadioEngine-signatuur~~ AF (`57a66b1`). De audit-aanname "10 motoren samenvoegen" was
-   fout — zie de commit; er valt hier niets meer samen te voegen.
-5. `RoonClient` opbreken: 13.041 regels / 547 functies / 115 properties -> < 2.000.
-6. UI snoeien: 31 navigatiebestemmingen -> ~10, gemeten op echt gebruik via `/play-stats`.
-7. Beslissen over Plex als volwaardige catalogus + streaming-/transcodelaag (§ Decisions).
-   Zou ~2.800 regels eigen code kunnen vervangen (LibraryShareServer, LocalAudioCache,
-   LocalTranscode, AudioTranscoder, Downloads, Offline, ArtworkProvider, LibrarySyncService).
-8. Opruimen: 8.038 analyzer-rijen wijzen naar bestanden die niet meer bestaan (steekproef
-   300/300 weg), waarvan 1.638 in `MuziekDown` — de SoulSync-verhuizing.
+1. **Plex koppelen op een echt toestel** en de standalone-modus end-to-end doorlopen.
+   Zonder die stap staat alles hierboven op aannames.
+2. Duplicaten op de mini bevestigen als opgeruimd (zie hierboven).
+3. Uit de audit, punt A: zichtbare Instellingen-knop, schermtitel niet afkappen,
+   "Mood"-chips tonen genres, palet-kopjes lokaliseren.
+4. Uit de audit, punt B: artiest- en album-radio via `/nearest` op de artiest/album-
+   ratingKey; wachtrij-top-up via `/nearest` op de laatst gespeelde track.
+5. Uit de audit, punt C: crossfade, equalizer, CarPlay.
+6. Uit de audit, punt D: historie/feedback/playlists lokaal op de client (nu leven
+   die alleen op de mini — zonder dat vergeet een standalone toestel alles).
+7. Fase 4b (artwork/offline/transcode volledig van Plex) en fase 5 (share-server van
+   vereiste naar uitbreiding).
 
 ## Constraints
 - "Geen Apple TV / tvOS (scope is strikt macOS 14+ en iOS 17+)" (user, 2026-08-23)
