@@ -490,6 +490,40 @@ final class PlexLibrarySourceTests: XCTestCase {
         print("[plex live] part \(partKey) → HTTP \(http.statusCode) \(type), \(data.count) bytes")
     }
 
+    // MARK: - Formaat tonen
+
+    func testPartInfoSummaryReadsLikePlexamp() {
+        func info(_ codec: String?, _ depth: Int?, _ rate: Int?, _ br: Int?, _ ch: Int?) -> String {
+            PlexClient.PartInfo(key: "/k", container: nil, codec: codec, bitDepth: depth,
+                                samplingRate: rate, bitrate: br, channels: ch).summary
+        }
+        XCTAssertEqual(info("flac", 16, 44100, 893, 2), "FLAC 16/44,1 · 893 kbps")
+        XCTAssertEqual(info("flac", 24, 96000, 2304, 2), "FLAC 24/96 · 2304 kbps",
+                       "hele samplerates zonder decimaal")
+        XCTAssertEqual(info("aac", nil, 44100, 256, 2), "AAC 44 kHz · 256 kbps")
+        XCTAssertEqual(info("flac", 24, 96000, nil, 6), "FLAC 24/96 · 6ch")
+        XCTAssertEqual(info(nil, nil, nil, nil, nil), "", "niets bekend = geen badge")
+    }
+
+    func testParsePartsReadsFormatFromMediaAndStream() {
+        let parts = PlexClient.parseParts([[
+            "ratingKey": "174626",
+            "Media": [[
+                "container": "flac", "audioCodec": "flac", "bitrate": 893, "audioChannels": 2,
+                "Part": [[
+                    "key": "/library/parts/166227/1786173460/file.flac",
+                    "Stream": [["codec": "flac", "bitDepth": 16, "samplingRate": 44100, "channels": 2]],
+                ]],
+            ]],
+        ]])
+        let info = parts["174626"]
+        XCTAssertEqual(info?.key, "/library/parts/166227/1786173460/file.flac")
+        XCTAssertEqual(info?.bitDepth, 16, "bitdiepte zit op de STREAM, niet op Media")
+        XCTAssertEqual(info?.samplingRate, 44100)
+        XCTAssertEqual(info?.bitrate, 893)
+        XCTAssertEqual(info?.summary, "FLAC 16/44,1 · 893 kbps")
+    }
+
     // MARK: - Sonic Analysis (/nearest)
 
     func testParseNearestReadsHitsAndToleratesAMissingDistance() throws {

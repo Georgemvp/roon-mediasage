@@ -275,17 +275,83 @@ public struct PlexClient: Sendable {
         return Self.parsePartKeys((container["Metadata"] as? [[String: Any]]) ?? [])
     }
 
+    /// What a track actually is, as Plex reports it.
+    ///
+    /// Comes free with the part-key lookup — same request, same payload — which is
+    /// why it lives here rather than in a schema column. Plexamp and Symfonium both
+    /// put this on screen; RoonSage showed nothing at all until now.
+    public struct PartInfo: Sendable, Equatable {
+        public let key: String
+        public let container: String?
+        public let codec: String?
+        public let bitDepth: Int?
+        public let samplingRate: Int?
+        /// kbps.
+        public let bitrate: Int?
+        public let channels: Int?
+
+        /// "FLAC 16/44,1 · 893 kbps" — the one-line badge.
+        ///
+        /// Sample rate in kHz with one decimal, because 44100 on a screen is noise
+        /// and 44,1 is the number people recognise. Whole rates lose the decimal
+        /// (96 kHz, not 96,0).
+        public var summary: String {
+            var parts: [String] = []
+            if let codec { parts.append(codec.uppercased()) }
+            if let bitDepth, let samplingRate {
+                let khz = Double(samplingRate) / 1000
+                let rate = khz == khz.rounded()
+                    ? String(Int(khz))
+                    : String(format: "%.1f", khz).replacingOccurrences(of: ".", with: ",")
+                parts.append("\(bitDepth)/\(rate)")
+            } else if let samplingRate {
+                parts.append("\(samplingRate / 1000) kHz")
+            }
+            var line = parts.joined(separator: " ")
+            if let bitrate, bitrate > 0 { line += (line.isEmpty ? "" : " · ") + "\(bitrate) kbps" }
+            if let channels, channels > 2 { line += " · \(channels)ch" }
+            return line
+        }
+    }
+
+    /// Part key + format for several tracks in ONE request.
+    public func parts(ratingKeys: [String]) async throws -> [String: PartInfo] {
+        let ids = ratingKeys.filter { !$0.isEmpty }
+        guard !ids.isEmpty else { return [:] }
+        let json = try await getJSON(path: "/library/metadata/\(ids.joined(separator: ","))", query: [])
+        guard let container = json["MediaContainer"] as? [String: Any] else {
+            throw PlexError.malformedResponse("/library/metadata: no MediaContainer")
+        }
+        return Self.parseParts((container["Metadata"] as? [[String: Any]]) ?? [])
+    }
+
     /// Split out so the wire shape is testable without a server.
-    static func parsePartKeys(_ items: [[String: Any]]) -> [String: String] {
-        var out: [String: String] = [:]
+    static func parseParts(_ items: [[String: Any]]) -> [String: PartInfo] {
+        var out: [String: PartInfo] = [:]
         for d in items {
             guard let rk = stringValue(d["ratingKey"]),
-                  let media = d["Media"] as? [[String: Any]],
-                  let parts = media.first?["Part"] as? [[String: Any]],
-                  let key = parts.first?["key"] as? String, !key.isEmpty else { continue }
-            out[rk] = key
+                  let media = (d["Media"] as? [[String: Any]])?.first,
+                  let part = (media["Part"] as? [[String: Any]])?.first,
+                  let key = part["key"] as? String, !key.isEmpty else { continue }
+            // Bit depth and sample rate live on the audio STREAM, one level deeper
+            // than the codec and bitrate — Plex splits them and only the stream
+            // knows 16/44.1.
+            let stream = (part["Stream"] as? [[String: Any]])?.first
+            out[rk] = PartInfo(
+                key: key,
+                container: media["container"] as? String,
+                codec: (stream?["codec"] as? String) ?? (media["audioCodec"] as? String),
+                bitDepth: intValue(stream?["bitDepth"]),
+                samplingRate: intValue(stream?["samplingRate"]),
+                bitrate: intValue(media["bitrate"]) ?? intValue(stream?["bitrate"]),
+                channels: intValue(media["audioChannels"]) ?? intValue(stream?["channels"]))
         }
         return out
+    }
+
+    /// Part keys only — kept because most callers want just the URL.
+    static func parsePartKeys(_ items: [[String: Any]]) -> [String: String] {
+        parseParts(items).mapValues(\.key)
     }
 
     // MARK: - Sonic Analysis (Plex Pass)

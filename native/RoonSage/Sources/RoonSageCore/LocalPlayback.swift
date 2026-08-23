@@ -45,15 +45,20 @@ public final class LocalPlaybackController {
         /// being an ordinary file on disk, and that proxy would have quietly made
         /// the whole library un-pinnable. So the fact is now stated, not inferred.
         public let isPinnable: Bool
+        /// "FLAC 16/44,1 · 893 kbps" when the source reported it. Plexamp and
+        /// Symfonium both show this; it arrives free with the part lookup.
+        public let format: String?
 
         public init(id: String, title: String, artist: String, album: String,
                     imageKey: String?, durationSec: Double?, streamURLOverride: URL? = nil,
-                    lufs: Double? = nil, albumLufs: Double? = nil, isPinnable: Bool = true) {
+                    lufs: Double? = nil, albumLufs: Double? = nil, isPinnable: Bool = true,
+                    format: String? = nil) {
             self.id = id; self.title = title; self.artist = artist
             self.album = album; self.imageKey = imageKey; self.durationSec = durationSec
             self.streamURLOverride = streamURLOverride
             self.lufs = lufs; self.albumLufs = albumLufs
             self.isPinnable = isPinnable
+            self.format = format
         }
     }
 

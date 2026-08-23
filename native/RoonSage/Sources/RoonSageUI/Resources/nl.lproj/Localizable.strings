@@ -1349,3 +1349,4 @@
 "library.emptyPlexTitle" = "Je bibliotheek is nog leeg";
 "library.emptyPlexBody" = "Koppel met Plex om je muziek te laden. Dat is genoeg om te beginnen — een RoonSage-server is optioneel.";
 "library.emptyPlexAction" = "Koppel met Plex";
+"a11y.playingFormat" = "Formaat: %@";

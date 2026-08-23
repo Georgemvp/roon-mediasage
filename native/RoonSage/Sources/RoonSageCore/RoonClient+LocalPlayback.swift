@@ -134,10 +134,12 @@ extension RoonClient {
         for rec in tracks {
             let key = LocalPlayability.matchKey(for: rec)
             let artist = rec.artist ?? "", album = rec.album ?? ""
-            if let url = plexURLs[key] {
+            if let plex = plexURLs[key] {
                 items.append(.init(id: key, title: rec.title, artist: artist, album: album,
-                                   imageKey: rec.imageKey, durationSec: nil, streamURLOverride: url,
-                                   lufs: lufsByKey[key], albumLufs: albumLufs[album]))
+                                   imageKey: rec.imageKey, durationSec: nil,
+                                   streamURLOverride: plex.url,
+                                   lufs: lufsByKey[key], albumLufs: albumLufs[album],
+                                   format: plex.format))
             } else if playableKeys.contains(key) {
                 items.append(.init(id: key, title: rec.title, artist: artist, album: album,
                                    imageKey: rec.imageKey, durationSec: nil,

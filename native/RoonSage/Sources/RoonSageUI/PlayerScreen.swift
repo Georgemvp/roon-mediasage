@@ -271,6 +271,21 @@ private struct PlayerHero: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
+                // Wat je nu eigenlijk hoort. Plexamp en Symfonium zetten dit
+                // prominent op het scherm; wij hadden de data (Plex levert codec,
+                // bitdiepte, samplerate en bitrate mee met de part-lookup) en
+                // toonden er niets van.
+                if let format = client.localPlayback.current?.format, !format.isEmpty {
+                    Text(format)
+                        .font(.caption.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                        .padding(.top, 2)
+                        .accessibilityLabel(String(format: LS("a11y.playingFormat"), format))
+                }
             } else {
                 LT("nowPlaying.nothingPlaying")
                     .font(.title3)

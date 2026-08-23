@@ -282,7 +282,7 @@ extension RoonClient {
     /// batched request for the whole queue; a failure yields an empty map rather
     /// than a half-filled one, so a queue never silently splits across two
     /// transports mid-album.
-    func plexStreamURLs(for records: [TrackRecord]) async -> [String: URL] {
+    func plexStreamURLs(for records: [TrackRecord]) async -> [String: (url: URL, format: String)] {
         guard plexDirectPlayEnabled,
               let token = PlexClient.availableToken(),
               let base = URL(string: plexBaseURL.trimmingCharacters(in: .whitespaces))
@@ -298,13 +298,13 @@ extension RoonClient {
         guard !ratingKeyByContentKey.isEmpty else { return [:] }
 
         let client = PlexClient(baseURL: base, token: token)
-        guard let parts = try? await client.partKeys(
+        guard let parts = try? await client.parts(
             ratingKeys: Array(Set(ratingKeyByContentKey.values))) else { return [:] }
 
-        var out: [String: URL] = [:]
+        var out: [String: (url: URL, format: String)] = [:]
         for (contentKey, rk) in ratingKeyByContentKey {
-            guard let partKey = parts[rk], let url = client.streamURL(partKey: partKey) else { continue }
-            out[contentKey] = url
+            guard let info = parts[rk], let url = client.streamURL(partKey: info.key) else { continue }
+            out[contentKey] = (url, info.summary)
         }
         return out
     }
