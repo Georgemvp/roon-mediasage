@@ -44,27 +44,37 @@ extension DatabaseManager {
     }
 
 
-    /// Match keys the analyser already owns. The Roon walk skips those records:
-    /// the analyser is the primary catalogue (user, 2026-08-23), so a Roon row
-    /// for a file we walked ourselves is a duplicate that would be displaced by
-    /// the very next feature sync anyway — churning ~51.000 rows every walk.
+    /// Content keys already owned by a source that has the actual file.
     ///
-    /// Empty on a machine whose analyser hasn't synced yet, and then the walk
-    /// behaves exactly as it always did.
-    static func analyzerOwnedKeys(_ db: Database) throws -> Set<String> {
+    /// The Roon walk skips those records: a file-backed source is the primary
+    /// catalogue (user, 2026-08-23), so a Roon row for a file we walked ourselves
+    /// is a duplicate that the very next import displaces anyway — churning
+    /// ~51.000 rows every walk. Empty on a machine that has neither source
+    /// synced, and then the walk behaves exactly as it always did.
+    ///
+    /// Fase 3 of PLEX_MIGRATION: Plex joined the analyser here. Without it the
+    /// walk re-created a Roon row for every recording Plex owns, and the next
+    /// Plex import displaced it again — two systems writing over each other on
+    /// every cycle. Filtering at WRITE time (not at browse time) fixes that at
+    /// track granularity, so an album Plex covers only partly still gets its
+    /// remaining tracks from Roon.
+    ///
+    /// What survives from Roon is exactly what has no file: the Qobuz/streaming
+    /// layer (~13.175 tracks, measured 2026-08-23).
+    static func fileBackedOwnedKeys(_ db: Database) throws -> Set<String> {
         Set(try String.fetchAll(db, sql: """
             SELECT match_key FROM tracks
-            WHERE source = 'local' AND match_key IS NOT NULL AND match_key != ''
+            WHERE source IN ('local', 'plex') AND match_key IS NOT NULL AND match_key != ''
         """))
     }
 
-    /// Records the walk should still write — everything the analyser doesn't own.
-    static func writableRoonRecords(_ records: [TrackRecord], ownedByAnalyzer: Set<String>)
+    /// Records the walk should still write — everything no file-backed source owns.
+    static func writableRoonRecords(_ records: [TrackRecord], ownedByFileSource: Set<String>)
     -> [TrackRecord] {
-        guard !ownedByAnalyzer.isEmpty else { return records }
+        guard !ownedByFileSource.isEmpty else { return records }
         return records.filter { r in
             guard let k = r.matchKey, !k.isEmpty else { return true }
-            return !ownedByAnalyzer.contains(k)
+            return !ownedByFileSource.contains(k)
         }
     }
 
@@ -127,7 +137,7 @@ extension DatabaseManager {
                     """,
                     arguments: [fingerprint, albumTitle])
             }
-            let records = Self.writableRoonRecords(records, ownedByAnalyzer: try Self.analyzerOwnedKeys(db))
+            let records = Self.writableRoonRecords(records, ownedByFileSource: try Self.fileBackedOwnedKeys(db))
             let chunk = Self.rowsPerChunk(columns: 10)
             var start = 0
             while start < records.count {
@@ -216,10 +226,10 @@ extension DatabaseManager {
     public func replaceAlbumBatch(_ items: [AlbumBatchItem]) async throws {
         guard !items.isEmpty else { return }
         try await pool.write { db in
-            let owned = try Self.analyzerOwnedKeys(db)
+            let owned = try Self.fileBackedOwnedKeys(db)
             let chunk = Self.rowsPerChunk(columns: 10)
             for item in items {
-                let records = Self.writableRoonRecords(item.records, ownedByAnalyzer: owned)
+                let records = Self.writableRoonRecords(item.records, ownedByFileSource: owned)
                 let preservedYears = item.append ? []
                     : try Self.analyzerYears(db, fingerprint: item.fingerprint, albumTitle: item.albumTitle)
                 if !item.append {

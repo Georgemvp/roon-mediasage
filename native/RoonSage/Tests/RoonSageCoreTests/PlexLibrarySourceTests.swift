@@ -351,6 +351,46 @@ final class PlexLibrarySourceTests: XCTestCase {
         XCTAssertGreaterThan(withPath, rows.count / 2, "de meeste rijen moeten een bestandspad hebben")
     }
 
+    // MARK: - Fase 3: de Roon-walk maakt geen dubbelen meer aan
+
+    /// Zonder dit maakte elke walk een Roon-rij aan voor een nummer dat Plex al
+    /// bezit, die de volgende import weer verdrong — twee systemen die elkaar
+    /// overschrijven.
+    func testRoonWalkSkipsRecordingsPlexAlreadyOwns() async throws {
+        try await db.ingestPlexTracks([plex("1", artist: "Solti", title: "Elektra", album: "Strauss")])
+
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks([
+            roonRecord("r1", artist: "Solti", title: "Elektra", album: "Strauss"),   // Plex bezit hem
+            roonRecord("r2", artist: "Solti", title: "Salome", album: "Strauss"),    // Plex niet
+        ], albumTitle: "Strauss", fingerprint: "fpA", generation: run.generation)
+
+        let rows = try await db.pool.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, source FROM tracks ORDER BY id")
+        }
+        XCTAssertEqual(rows.map { $0["id"] as String? }, ["plex::1", "r2"],
+                       "de Roon-rij voor het nummer dat Plex bezit hoort niet geschreven te worden")
+        XCTAssertEqual(rows.map { $0["source"] as String? }, ["plex", "roon"])
+    }
+
+    /// Het filter zit op TRACK-niveau, niet op album-niveau: een album dat Plex
+    /// maar half dekt, krijgt de rest gewoon van Roon.
+    func testPartiallyCoveredAlbumStillGetsItsRemainingTracksFromRoon() async throws {
+        try await db.ingestPlexTracks([
+            plex("1", artist: "A", title: "T1", album: "Al"),
+            plex("2", artist: "A", title: "T2", album: "Al"),
+        ])
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks((1...4).map {
+            roonRecord("r\($0)", artist: "A", title: "T\($0)", album: "Al")
+        }, albumTitle: "Al", fingerprint: "fpAl", generation: run.generation)
+
+        let roon = try await db.pool.read { db in
+            try String.fetchAll(db, sql: "SELECT id FROM tracks WHERE source='roon' ORDER BY id")
+        }
+        XCTAssertEqual(roon, ["r3", "r4"], "alleen de tracks die Plex NIET heeft")
+    }
+
     // MARK: - Sonic Analysis (/nearest)
 
     func testParseNearestReadsHitsAndToleratesAMissingDistance() throws {
