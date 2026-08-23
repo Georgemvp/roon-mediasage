@@ -659,6 +659,18 @@ extension RoonClient {
         if let inLib { seedOrNil = inLib } else { seedOrNil = await db.sonicSeed(matchKey: matchKey) }
         guard let seed = seedOrNil else { return [] }
         let seedInLib = inLib != nil
+
+        // Fase 2 (PLEX_MIGRATION): Plex Pass analysed 99,94% of this library and
+        // answers `/nearest` for any Plex row. When that path is on and produces
+        // something, it wins; nil means Plex had no answer and the local ranking
+        // below runs unchanged. Feedback weighting still applies either way.
+        if let plexHits = await plexSimilarTracks(seed: seed, library: lib, index: index, limit: limit),
+           !plexHits.isEmpty {
+            let scored = plexHits.map { SonicEngine.Scored(track: $0, similarity: 1) }
+            return Array(Self.applyFeedbackWeighting(
+                scored, disliked: disliked, salt: "similar\u{1f}\(seed.matchKey)",
+                matchKey: { $0.track.matchKey }).prefix(limit))
+        }
         return await Task.detached {
             let raw: [SonicEngine.Scored]
             if seedInLib, let index, index.embedding(forId: seed.id) != nil {

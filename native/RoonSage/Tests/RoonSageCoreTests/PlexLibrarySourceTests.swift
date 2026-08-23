@@ -351,6 +351,55 @@ final class PlexLibrarySourceTests: XCTestCase {
         XCTAssertGreaterThan(withPath, rows.count / 2, "de meeste rijen moeten een bestandspad hebben")
     }
 
+    // MARK: - Sonic Analysis (/nearest)
+
+    func testParseNearestReadsHitsAndToleratesAMissingDistance() throws {
+        let hits = try XCTUnwrap(PlexClient.parseNearest(["MediaContainer": ["Metadata": [
+            ["ratingKey": "174626", "distance": 0.0],
+            ["ratingKey": 90228, "distance": 0.167],      // getal i.p.v. string
+            ["ratingKey": "99999"],                       // geen distance
+            ["distance": 0.5],                            // geen ratingKey → weg
+        ]]]))
+        XCTAssertEqual(hits.map(\.ratingKey), ["174626", "90228", "99999"])
+        XCTAssertEqual(hits[1].distance, 0.167, accuracy: 0.0001)
+        XCTAssertEqual(hits[2].distance, 1, "zonder distance = maximaal ver, niet weggegooid")
+    }
+
+    func testParseNearestReturnsNilWhenTheEndpointChanged() {
+        XCTAssertNil(PlexClient.parseNearest(["something": "else"]),
+                     "nil betekent 'Plex antwoordde niet zoals verwacht' → caller valt terug")
+        XCTAssertEqual(PlexClient.parseNearest(["MediaContainer": [:] as [String: Any]])?.count, 0,
+                       "leeg is een echt antwoord, geen fout")
+    }
+
+    /// The endpoint is undocumented. This test is the canary: if a Plex update
+    /// changes it, this fails and fase 2 falls back to RadioEngine as designed.
+    func testLiveNearestEndpointStillAnswers() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["ROONSAGE_PLEX_LIVE"] == "1",
+                          "opt-in: zet ROONSAGE_PLEX_LIVE=1")
+        let token = try XCTUnwrap(PlexClient.localToken())
+        let client = PlexClient(baseURL: URL(string: "http://127.0.0.1:32400")!, token: token)
+
+        let found = try await client.musicSection()
+        let section = try XCTUnwrap(found)
+        var seed: PlexClient.Track?
+        try await client.allTracks(inSection: section.key, pageSize: 50) { page in
+            if seed == nil { seed = page.first }
+        }
+        let s = try XCTUnwrap(seed)
+
+        let hits = try await client.nearest(ratingKey: s.ratingKey, limit: 10)
+        XCTAssertFalse(hits.isEmpty, "/nearest moet hits geven op een geanalyseerde track")
+        // Gemeten 10/10 op de echte server: Plex laat de seed weg. Een distance
+        // van 0 is dús een ANDER, identiek klinkend exemplaar — niet de seed.
+        XCTAssertFalse(hits.contains { $0.ratingKey == s.ratingKey },
+                       "Plex hoort de seed zelf niet terug te geven")
+        let distances = hits.map(\.distance)
+        XCTAssertEqual(distances, distances.sorted(), "afstanden horen oplopend te zijn")
+        print("[plex live] /nearest op \(s.ratingKey): \(hits.count) hits, "
+              + "afstand \(distances.first ?? -1)…\(distances.last ?? -1)")
+    }
+
     func testTokenIsReadFromPreferencesXML() {
         let xml = #"<?xml version="1.0"?><Preferences MachineIdentifier="abc" PlexOnlineToken="s3cr3t-t0k3n" FriendlyName="mini" />"#
         XCTAssertEqual(PlexClient.attribute("PlexOnlineToken", in: xml), "s3cr3t-t0k3n")

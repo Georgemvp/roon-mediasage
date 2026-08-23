@@ -81,12 +81,29 @@ Plex dekt de bestanden; Roon levert nog wat er geen bestand voor is
 `DatabaseManager+Offline` (130) vervangen door Plex' stream-/transcode-/sync-API.
 **Vereist Plex Pass** — dat heeft de user.
 
-### Fase 5 — de analyzer stopt met server zijn
-`LibraryShareServer` (1.172) en de token-/apparaatgoedkeuringslaag vervallen als
-de clients hun bibliotheek en audio van Plex halen. De analyzer schrijft alleen
-nog een sidecar met BPM/toonsoort/loudness/embeddings, die de app leest.
-Dit is de laag die volgens de eigen memory de #1 oorzaak van
-"wil niet verbinden" is (verlopen client-token).
+### Fase 5 — de analyzer krimpt tot een kleine server
+
+> **Correctie (2026-08-23).** Een eerdere versie van dit plan zei "de analyzer
+> stopt met server zijn". Dat klopt niet: een iPhone kan de 66.239 embeddings
+> niet zinnig lokaal houden (~135 MB) en het CLAP-tekstmodel al helemaal niet,
+> dus er moet iets blijven serveren. Hij wordt geen batchjob — hij wordt een
+> **kleine** server.
+
+```
+nu:      :5767  44 endpoints  +  :5766  8 endpoints   = 52
+straks:  :5766  ~4 endpoints  (/features, /embeddings, /text-embed, /health)
+```
+
+Wat vervalt: de hele bibliotheek-mirror (`LibraryShareServer`, 1.172 regels), de
+playback-proxy, de offline-wachtrij, `/audio`, `/artwork`, en de
+apparaatgoedkeuring voor audio. Wat blijft is een klein ding dat vectoren en
+scalars uitdeelt.
+
+Het tokenprobleem verdwijnt daarmee niet volledig — de resterende endpoints
+hebben nog steeds auth — maar wel op de plek waar het pijn doet. Volgens de eigen
+memory is een verlopen client-token de #1 oorzaak van "wil niet verbinden"; na
+deze fase valt bij een auth-storing een aanbeveling weg in plaats van dat de
+muziek stopt, want het audio-pad ligt dan bij Plex.
 
 **Geschatte omvang die vervalt:** ~2.800 regels in fase 3–5, plus de ZeroTier-
 afhankelijkheid en de twee poorten. Wat blijft: `RoonProtocol`, `Theme`/

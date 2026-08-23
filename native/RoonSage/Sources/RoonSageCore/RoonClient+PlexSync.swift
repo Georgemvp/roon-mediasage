@@ -127,6 +127,79 @@ extension RoonClient {
         }
     }
 
+    // MARK: - Fase 2: sonic similarity from Plex
+
+    /// Use Plex Pass's Sonic Analysis for "vergelijkbare nummers" instead of the
+    /// local embedding k-NN.
+    ///
+    /// Default off. `/nearest` is undocumented and can break on a Plex update, so
+    /// this is opt-in and every call falls back to `RadioEngine` when Plex has no
+    /// answer — a wrong result is worse than a slower one.
+    public var plexSonicEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "plex_sonic_enabled") }
+        set { UserDefaults.standard.set(newValue, forKey: "plex_sonic_enabled") }
+    }
+
+    /// Sonically similar library tracks to `seed`, via Plex.
+    ///
+    /// nil (not empty) means "Plex could not answer" — the caller must then run
+    /// its own ranking. Empty means Plex answered and nothing survived, which is
+    /// a real answer.
+    ///
+    /// Three things happen to Plex's raw list, all of them necessary:
+    ///   1. the seed is filtered out defensively. Plex already excludes it
+    ///      (measured 10/10, 2026-08-23) — but a `distance` of 0 is NOT the seed,
+    ///      it is another identical copy, so the guard must key on the rating key
+    ///      and never on the distance;
+    ///   2. hits are resolved back to library rows by `plex::<ratingKey>` — a hit
+    ///      Plex knows but our library does not is skipped, not faked;
+    ///   3. `SonicSelection.dropNearDuplicates` runs over the result. Plex does
+    ///      no duplicate hygiene at all: measured 2026-08-23, a seed returned
+    ///      five further copies of that same recording plus three of one other.
+    func plexSimilarTracks(seed: DatabaseManager.SonicTrack,
+                           library: [DatabaseManager.SonicTrack],
+                           index: VectorIndex?,
+                           limit: Int) async -> [DatabaseManager.SonicTrack]? {
+        guard plexSonicEnabled,
+              seed.id.hasPrefix(DatabaseManager.plexKeyPrefix),
+              let token = PlexClient.localToken(),
+              let base = URL(string: plexBaseURL.trimmingCharacters(in: .whitespaces))
+        else { return nil }
+
+        let ratingKey = String(seed.id.dropFirst(DatabaseManager.plexKeyPrefix.count))
+        guard !ratingKey.isEmpty else { return nil }
+
+        let client = PlexClient(baseURL: base, token: token)
+        // Oversample: the seed, the unknown-to-us hits and the near-duplicate
+        // collapse all eat into the list before `limit` is reached.
+        guard let hits = try? await client.nearest(ratingKey: ratingKey, limit: limit * 4) else {
+            return nil                                   // Plex unreachable / endpoint changed
+        }
+        guard !hits.isEmpty else { return nil }
+
+        var byID = [String: DatabaseManager.SonicTrack](minimumCapacity: library.count)
+        for t in library { byID[t.id] = t }
+
+        var ordered: [VectorIndex.Hit] = []
+        ordered.reserveCapacity(hits.count)
+        for h in hits where h.ratingKey != ratingKey {
+            guard let track = byID[DatabaseManager.plexTrackID(ratingKey: h.ratingKey)] else { continue }
+            guard track.matchKey != seed.matchKey else { continue }
+            // Plex reports distance; the hygiene layer speaks similarity.
+            ordered.append(VectorIndex.Hit(track: track, score: Float(max(0, 1 - h.distance))))
+        }
+        guard !ordered.isEmpty else { return nil }
+
+        // dropNearDuplicates needs an index for its embedding check; without one
+        // it still collapses on title/artist, which is the important half here.
+        if let index {
+            return SonicSelection.dropNearDuplicates(ordered, index: index, limit: limit).map(\.track)
+        }
+        var seen = Set<String>()
+        return Array(ordered.filter { seen.insert(SonicSelection.titleKey($0.track)).inserted }
+            .prefix(limit).map(\.track))
+    }
+
     /// Map the wire type to the database row type. Separate so the parsing
     /// (PlexClient) and the storage shape (DatabaseManager) stay independent.
     ///

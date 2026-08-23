@@ -242,6 +242,56 @@ public struct PlexClient: Sendable {
         path.precomposedStringWithCanonicalMapping
     }
 
+    // MARK: - Sonic Analysis (Plex Pass)
+
+    /// One sonically-near item as Plex reports it.
+    public struct NearestHit: Sendable, Equatable {
+        public let ratingKey: String
+        /// 0 = the seed itself; larger = further away in Plex's "musical universe".
+        public let distance: Double
+    }
+
+    /// Sonically nearest items to `ratingKey`, from Plex Pass's Sonic Analysis.
+    ///
+    /// **Undocumented endpoint.** Plex publishes Sonic Analysis as a Plexamp
+    /// feature and does not document `/nearest` as a public API — but it answers
+    /// an ordinary token-authenticated request (verified 2026-08-23 against the
+    /// live server: HTTP 200, a real distance gradient, and it works on track,
+    /// album and artist rating keys). It can break on a Plex update, which is
+    /// exactly why every caller goes through this one method and why the caller
+    /// keeps a local fallback.
+    ///
+    /// **Excludes the seed itself** — measured 10/10 on the live server
+    /// (2026-08-23). Do not read a `distance` of 0 as "this is the seed": it is a
+    /// *different* row that is sonically identical, i.e. another copy of the same
+    /// recording. Plex does no duplicate hygiene at all — one seed returned five
+    /// further copies of its own recording plus three of another — so run the
+    /// hits through `SonicSelection` before showing them.
+    ///
+    /// Hits come back in ascending distance order.
+    public func nearest(ratingKey: String, limit: Int = 30) async throws -> [NearestHit] {
+        let json = try await getJSON(path: "/library/metadata/\(ratingKey)/nearest",
+                                     query: [URLQueryItem(name: "limit", value: String(limit))])
+        guard let hits = Self.parseNearest(json) else {
+            throw PlexError.malformedResponse("/nearest: no MediaContainer")
+        }
+        return hits
+    }
+
+    /// Split out from `nearest` so the wire shape is testable without a server.
+    /// nil = the response was not a MediaContainer at all (endpoint changed);
+    /// an empty array = it answered with no hits.
+    static func parseNearest(_ json: [String: Any]) -> [NearestHit]? {
+        guard let container = json["MediaContainer"] as? [String: Any] else { return nil }
+        let items = (container["Metadata"] as? [[String: Any]]) ?? []
+        return items.compactMap { d in
+            guard let rk = stringValue(d["ratingKey"]) else { return nil }
+            // `distance` is absent on some builds; treat that as "no opinion"
+            // (maximally far) rather than dropping an otherwise usable hit.
+            return NearestHit(ratingKey: rk, distance: doubleValue(d["distance"]) ?? 1)
+        }
+    }
+
     // MARK: - URLs the caller builds
 
     /// Direct-stream URL for a track part. Plex serves the original file here;
@@ -307,6 +357,13 @@ public struct PlexClient: Sendable {
         if let i = any as? Int { return i }
         if let s = any as? String { return Int(s) }
         if let d = any as? Double { return Int(d) }
+        return nil
+    }
+
+    static func doubleValue(_ any: Any?) -> Double? {
+        if let d = any as? Double { return d }
+        if let i = any as? Int { return Double(i) }
+        if let s = any as? String { return Double(s) }
         return nil
     }
 }
