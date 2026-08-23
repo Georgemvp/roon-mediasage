@@ -35,13 +35,31 @@ public struct TrackFeatureRow: Sendable {
     public var embeddingModel: String?
     public var moods: String?        // JSON: {"happy":0.4,…}
     public var attributes: String?   // JSON: {"valence":0.6,"danceability":0.4,…}
+    // Hard identity straight out of the file's tags. Exact where artist|title is
+    // a guess: two files with the same ISRC are the same recording however they
+    // are spelled. All optional — a file may carry none of them.
+    public var isrc: String?
+    public var recordingMBID: String?
+    public var releaseTrackMBID: String?
+    public var albumMBID: String?
+    public var artistMBID: String?
+
+    /// True when the file's tags yielded at least one hard identifier. Drives
+    /// `identity_source`: a row that yielded nothing must not claim 'tag', or a
+    /// later dataset value would look like it had been overruled by a tag.
+    public var hasHardIdentity: Bool {
+        isrc != nil || recordingMBID != nil || releaseTrackMBID != nil
+            || albumMBID != nil || artistMBID != nil
+    }
 
     public init(matchKey: String, artist: String?, title: String?, album: String?, year: Int?,
                 filePath: String, fileMtime: Double, bpm: Double, bpmConfidence: Double,
                 keyRoot: String, keyMode: String, camelot: String, energy: Double, duration: Double,
                 tags: String?, analyzedAt: String, loudness: Double? = nil,
                 embedding: [Float]? = nil, embeddingModel: String? = nil, moods: String? = nil,
-                attributes: String? = nil) {
+                attributes: String? = nil,
+                isrc: String? = nil, recordingMBID: String? = nil, releaseTrackMBID: String? = nil,
+                albumMBID: String? = nil, artistMBID: String? = nil) {
         self.matchKey = matchKey; self.artist = artist; self.title = title; self.album = album
         self.year = year; self.filePath = filePath; self.fileMtime = fileMtime; self.bpm = bpm
         self.bpmConfidence = bpmConfidence; self.keyRoot = keyRoot; self.keyMode = keyMode
@@ -49,6 +67,8 @@ public struct TrackFeatureRow: Sendable {
         self.analyzedAt = analyzedAt; self.loudness = loudness
         self.embedding = embedding; self.embeddingModel = embeddingModel; self.moods = moods
         self.attributes = attributes
+        self.isrc = isrc; self.recordingMBID = recordingMBID; self.releaseTrackMBID = releaseTrackMBID
+        self.albumMBID = albumMBID; self.artistMBID = artistMBID
     }
 }
 
@@ -180,6 +200,20 @@ public final class FeatureStore {
             // "no match") so the worker is resumable.
             try addColumn("deezer_genres", "TEXT")
             try addColumn("deezer_genre_checked_at", "TEXT")
+            // Hard identity read from the file's OWN tags (MetadataReader), as
+            // opposed to `isrc`/`recording_mbid` which until now could only be
+            // filled by the offline dataset sidecar — a fuzzy metadata match.
+            // Measured on a 385-file sample of the real library (2026-08-23):
+            // 80% of files carry an ISRC in their tags while only 52% of rows had
+            // one stored, so 41% of the library's hard identity was being read
+            // past. `identity_source` records which of the two wrote the value
+            // ('tag' beats 'dataset': the tag is IN the file). `identity_checked_at`
+            // makes the backfill resumable and stops it re-reading a finished row.
+            try addColumn("release_track_mbid", "TEXT")
+            try addColumn("album_mbid", "TEXT")
+            try addColumn("artist_mbid", "TEXT")
+            try addColumn("identity_source", "TEXT")
+            try addColumn("identity_checked_at", "TEXT")
             // Zero-shot CLAP tagging (ClapTagger): which vocabulary version wrote
             // this row's `tags`. NULL = legacy Ollama tags (or untagged); the
             // tagger re-stamps every row whose version lags, so bumping
@@ -449,8 +483,10 @@ public final class FeatureStore {
                     INSERT INTO track_features
                       (match_key, artist, title, album, year, file_path, file_mtime,
                        bpm, bpm_confidence, key_root, key_mode, camelot, energy, duration, tags, analyzed_at,
-                       embedding, embedding_model, moods, attributes, loudness)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                       embedding, embedding_model, moods, attributes, loudness,
+                       isrc, recording_mbid, release_track_mbid, album_mbid, artist_mbid,
+                       identity_source, identity_checked_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(match_key) DO UPDATE SET
                       artist=excluded.artist, title=excluded.title, album=excluded.album, year=excluded.year,
                       file_path=excluded.file_path, file_mtime=excluded.file_mtime,
@@ -458,11 +494,23 @@ public final class FeatureStore {
                       key_root=excluded.key_root, key_mode=excluded.key_mode, camelot=excluded.camelot,
                       energy=excluded.energy, duration=excluded.duration, analyzed_at=excluded.analyzed_at,
                       embedding=excluded.embedding, embedding_model=excluded.embedding_model, moods=excluded.moods,
-                      attributes=excluded.attributes, loudness=excluded.loudness
+                      attributes=excluded.attributes, loudness=excluded.loudness,
+                      -- COALESCE, not overwrite: a file without an ISRC tag must not
+                      -- wipe the one the dataset sidecar supplied. A tag that IS
+                      -- present wins, because it is in the file itself.
+                      isrc=COALESCE(excluded.isrc, isrc),
+                      recording_mbid=COALESCE(excluded.recording_mbid, recording_mbid),
+                      release_track_mbid=COALESCE(excluded.release_track_mbid, release_track_mbid),
+                      album_mbid=COALESCE(excluded.album_mbid, album_mbid),
+                      artist_mbid=COALESCE(excluded.artist_mbid, artist_mbid),
+                      identity_source=COALESCE(excluded.identity_source, identity_source),
+                      identity_checked_at=excluded.identity_checked_at
                 """, arguments: [
                     r.matchKey, r.artist, r.title, r.album, r.year, r.filePath, r.fileMtime,
                     r.bpm, r.bpmConfidence, r.keyRoot, r.keyMode, r.camelot, r.energy, r.duration, r.tags, r.analyzedAt,
                     r.embedding.map(Self.blob), r.embeddingModel, r.moods, r.attributes, r.loudness,
+                    r.isrc, r.recordingMBID, r.releaseTrackMBID, r.albumMBID, r.artistMBID,
+                    r.hasHardIdentity ? Self.identitySourceTag : nil, r.analyzedAt,
                 ])
             }
         }
@@ -496,7 +544,8 @@ public final class FeatureStore {
                 SELECT COUNT(*) AS c, COUNT(embedding) AS e, COUNT(tags) AS t, COUNT(attributes) AS a,
                        COUNT(mb_genres) AS g, COUNT(popularity) AS p,
                        SUM(CASE WHEN attributes LIKE '%"arousal"%' THEN 1 ELSE 0 END) AS ar,
-                       SUM(CASE WHEN tags_model = ? THEN 1 ELSE 0 END) AS tm
+                       SUM(CASE WHEN tags_model = ? THEN 1 ELSE 0 END) AS tm,
+                       COUNT(identity_checked_at) AS id
                 FROM track_features
             """, arguments: [ClapTagVocabulary.version])
             // `g`/`p` fold in MB + popularity progress. `ar` (arousal coverage)
@@ -506,8 +555,12 @@ public final class FeatureStore {
             // `tm` is the same trap for the CLAP retag: it REPLACES tags in place,
             // so COUNT(tags) never moves — without this term retagged rows would
             // never reach clients.
-            return "\(r?["c"] as Int? ?? 0)/\(r?["e"] as Int? ?? 0)/\(r?["t"] as Int? ?? 0)/\(r?["a"] as Int? ?? 0)/\(r?["g"] as Int? ?? 0)/\(r?["p"] as Int? ?? 0)/\(r?["ar"] as Int? ?? 0)/\(r?["tm"] as Int? ?? 0)"
-        }) ?? "0/0/0/0/0/0/0/0"
+            // `id` is the same trap once more: the identity backfill REWRITES isrc
+            // in place on rows that already had a dataset value, so COUNT(isrc)
+            // can stay flat while the corpus genuinely changed. Without this term
+            // clients would never re-pull the corrected identity.
+            return "\(r?["c"] as Int? ?? 0)/\(r?["e"] as Int? ?? 0)/\(r?["t"] as Int? ?? 0)/\(r?["a"] as Int? ?? 0)/\(r?["g"] as Int? ?? 0)/\(r?["p"] as Int? ?? 0)/\(r?["ar"] as Int? ?? 0)/\(r?["tm"] as Int? ?? 0)/\(r?["id"] as Int? ?? 0)"
+        }) ?? "0/0/0/0/0/0/0/0/0"
     }
 
     /// Resolve a streamable on-disk file for a track's match key — backs the
@@ -1000,6 +1053,117 @@ public final class FeatureStore {
             try db.execute(sql: "UPDATE track_features SET loudness = ?, loudness_checked_at = ? WHERE match_key = ?",
                            arguments: [loudness, checkedAt, matchKey])
         }
+    }
+
+    // MARK: - Hard identity (ISRC / MusicBrainz ids, read from the file's tags)
+
+    /// `identity_source` value meaning "read from the file's own tags". The other
+    /// writer of `isrc`/`recording_mbid` is the offline dataset sidecar, whose
+    /// match is fuzzy metadata — where both have an opinion, the tag wins.
+    public static let identitySourceTag = "tag"
+
+    public struct IdentityCandidate: Sendable {
+        public let matchKey: String
+        public let filePath: String
+        public let artist: String?
+        public let album: String?
+    }
+
+    /// Rows whose tags have never been read for identity. Resumable: a row is
+    /// stamped `identity_checked_at` even when the file carries nothing, so it is
+    /// never re-read.
+    public func tracksNeedingIdentity(limit: Int) -> [IdentityCandidate] {
+        (try? dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT match_key, file_path, artist, album FROM track_features
+                WHERE identity_checked_at IS NULL
+                  AND file_path IS NOT NULL AND file_path != ''
+                LIMIT ?
+            """, arguments: [limit])
+        })?.compactMap { r in
+            guard let mk = r["match_key"] as String?, let p = r["file_path"] as String? else { return nil }
+            return IdentityCandidate(matchKey: mk, filePath: p,
+                                     artist: r["artist"] as String?, album: r["album"] as String?)
+        } ?? []
+    }
+
+    /// Store what the tags said and mark the row read. Each id is COALESCEd so a
+    /// file without the tag keeps whatever the dataset sidecar supplied; a tag
+    /// that IS present overwrites it. `identity_source` only claims 'tag' when
+    /// the file actually yielded something.
+    public func setIdentity(matchKey: String, isrc: String?, recordingMBID: String?,
+                            releaseTrackMBID: String?, albumMBID: String?, artistMBID: String?,
+                            checkedAt: String) throws {
+        let found = isrc != nil || recordingMBID != nil || releaseTrackMBID != nil
+            || albumMBID != nil || artistMBID != nil
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                UPDATE track_features SET
+                  isrc = COALESCE(?, isrc),
+                  recording_mbid = COALESCE(?, recording_mbid),
+                  release_track_mbid = COALESCE(?, release_track_mbid),
+                  album_mbid = COALESCE(?, album_mbid),
+                  artist_mbid = COALESCE(?, artist_mbid),
+                  identity_source = CASE WHEN ? THEN ? ELSE identity_source END,
+                  identity_checked_at = ?
+                WHERE match_key = ?
+            """, arguments: [isrc, recordingMBID, releaseTrackMBID, albumMBID, artistMBID,
+                             found, Self.identitySourceTag, checkedAt, matchKey])
+        }
+    }
+
+    /// Outcome of repairing a row whose artist/album held a MusicBrainz id
+    /// instead of a name (the MetadataReader bug — 412 rows in the real library).
+    public enum IdentityRepair: String, Sendable { case renamed, rekeyed, droppedDuplicate }
+
+    /// Put the real names back, and move the row to the key those names produce.
+    ///
+    /// The stored key was built from a UUID, so the correct key is a different
+    /// string — and `match_key` is the primary key. Three outcomes: the key is
+    /// unchanged (just rename), the correct key is free (rename + rekey), or a
+    /// correct row already exists (this one is a duplicate of it — drop it, or
+    /// the library shows the track twice).
+    @discardableResult
+    public func repairIdentityNames(matchKey: String, artist: String?, album: String?,
+                                    newMatchKey: String) throws -> IdentityRepair {
+        try dbQueue.write { db in
+            guard newMatchKey != matchKey,
+                  !newMatchKey.replacingOccurrences(of: "\u{1f}", with: "").isEmpty else {
+                try db.execute(sql: "UPDATE track_features SET artist = ?, album = ? WHERE match_key = ?",
+                               arguments: [artist, album, matchKey])
+                return .renamed
+            }
+            let taken = try Bool.fetchOne(
+                db, sql: "SELECT EXISTS(SELECT 1 FROM track_features WHERE match_key = ?)",
+                arguments: [newMatchKey]) ?? false
+            if taken {
+                try db.execute(sql: "DELETE FROM track_features WHERE match_key = ?", arguments: [matchKey])
+                return .droppedDuplicate
+            }
+            try db.execute(sql: """
+                UPDATE track_features SET match_key = ?, artist = ?, album = ? WHERE match_key = ?
+            """, arguments: [newMatchKey, artist, album, matchKey])
+            return .rekeyed
+        }
+    }
+
+    /// Rows whose tags have been read — drives the backfill progress UI.
+    public func identityCheckedCount() -> Int {
+        (try? dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(identity_checked_at) FROM track_features") ?? 0
+        }) ?? 0
+    }
+
+    /// Rows carrying at least one hard identifier — the number that matters.
+    public func hardIdentityCount() -> Int {
+        (try? dbQueue.read { db in
+            try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM track_features
+                WHERE (isrc IS NOT NULL AND isrc != '')
+                   OR (recording_mbid IS NOT NULL AND recording_mbid != '')
+                   OR (release_track_mbid IS NOT NULL AND release_track_mbid != '')
+            """) ?? 0
+        }) ?? 0
     }
 
     /// Tracks that have a non-NULL loudness value — drives the backfill progress UI.

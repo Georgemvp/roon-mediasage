@@ -219,7 +219,13 @@ public final class LibraryWalker {
                 // CLAP is disabled so enabling it later triggers an embed pass.
                 embeddingModel: clap.map { $0.modelVersion },
                 moods: f.moods.isEmpty ? nil : encodeFloatMap(f.moods),
-                attributes: f.attributes.isEmpty ? nil : encodeFloatMap(f.attributes)
+                attributes: f.attributes.isEmpty ? nil : encodeFloatMap(f.attributes),
+                // Hard identity from the same tag read that produced the names
+                // above — free here, and it means a freshly analysed row never
+                // needs the identity backfill.
+                isrc: meta.isrc, recordingMBID: meta.recordingMBID,
+                releaseTrackMBID: meta.releaseTrackMBID,
+                albumMBID: meta.albumMBID, artistMBID: meta.artistMBID
             ))
         }
         }

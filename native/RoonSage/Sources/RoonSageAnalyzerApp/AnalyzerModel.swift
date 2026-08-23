@@ -20,6 +20,9 @@ final class AnalyzerModel {
     /// Trickle the F3 loudness backfill in the background (decodes pre-F3 tracks,
     /// disk-gentle, resumable).
     var autoLoudness: Bool { didSet { UserDefaults.standard.set(autoLoudness, forKey: "auto_loudness") } }
+    /// Trickle the hard-identity backfill (ISRC + MusicBrainz ids straight out of
+    /// the file's tags). Tag-only, so it is cheap next to every other backfill.
+    var autoIdentity: Bool { didSet { UserDefaults.standard.set(autoIdentity, forKey: "auto_identity") } }
     /// Trickle preview-embeddings for file-less (Qobuz-only) library tracks via
     /// Deezer 30s previews (network-gentle, resumable) — makes them radio
     /// candidates like any analyzed track.
@@ -84,6 +87,9 @@ final class AnalyzerModel {
     private(set) var popularityCount = 0
     private(set) var loudness: LoudnessProgress?
     private(set) var isLoudnessBackfilling = false
+    private(set) var identity: IdentityProgress?
+    private(set) var isIdentityBackfilling = false
+    private(set) var hardIdentityCount = 0
     private(set) var loudnessCount = 0
     private(set) var preview: PreviewProgress?
     private(set) var isPreviewBackfilling = false
@@ -100,6 +106,7 @@ final class AnalyzerModel {
     private var enricher: GenreEnricher?
     private var popularityEnricher: PopularityEnricher?
     private var loudnessBackfill: LoudnessBackfill?
+    private var identityBackfill: IdentityBackfill?
     private var previewBackfill: PreviewEmbeddingBackfill?
     private var deezerGenreEnricher: DeezerGenreEnricher?
     private var server: HTTPServer?
@@ -119,6 +126,7 @@ final class AnalyzerModel {
         autoEnrich = UserDefaults.standard.object(forKey: "auto_enrich") as? Bool ?? true
         autoPopularity = UserDefaults.standard.object(forKey: "auto_popularity") as? Bool ?? true
         autoLoudness = UserDefaults.standard.object(forKey: "auto_loudness") as? Bool ?? true
+        autoIdentity = UserDefaults.standard.object(forKey: "auto_identity") as? Bool ?? true
         autoPreview = UserDefaults.standard.object(forKey: "auto_preview") as? Bool ?? true
         autoDeezerGenre = UserDefaults.standard.object(forKey: "auto_deezer_genre") as? Bool ?? true
         walkerConcurrency = UserDefaults.standard.object(forKey: "walker_concurrency") as? Int ?? 3
@@ -154,6 +162,7 @@ final class AnalyzerModel {
         mbEnrichedCount = store?.mbEnrichedCount() ?? 0
         popularityCount = store?.popularityCount() ?? 0
         loudnessCount = store?.loudnessCount() ?? 0
+        hardIdentityCount = store?.hardIdentityCount() ?? 0
         previewCount = store?.previewRowCount() ?? 0
         isrcCount = store?.isrcCount() ?? 0
         deezerGenreCount = store?.deezerGenreEnrichedCount() ?? 0
@@ -204,6 +213,8 @@ final class AnalyzerModel {
             autoDeezerGenreIfEnabled()
             // Zero-shot CLAP tags for new/legacy rows (local, no network).
             autoTagIfNeeded()
+            // Hard identity off the tags — tag-only, so it costs almost nothing.
+            autoIdentityIfEnabled()
         }
     }
 
@@ -352,6 +363,40 @@ final class AnalyzerModel {
         if trackCount == 0 { refresh() }
         guard trackCount > 0 else { return }
         startLoudness()
+    }
+
+    // MARK: - Hard identity (ISRC / MusicBrainz ids from the tags)
+
+    /// Read hard identity off the tags of rows analysed before MetadataReader
+    /// looked for it, and repair rows whose artist/album held a MusicBrainz id
+    /// instead of a name. Tag-only — no audio is decoded — so it is by far the
+    /// cheapest backfill here and converges in one pass.
+    func startIdentity() {
+        guard let store, !isIdentityBackfilling, trackCount > 0 else { return }
+        isIdentityBackfilling = true
+        identity = nil
+        status = "Identiteit uit de tags lezen (ISRC + MusicBrainz)…"
+        let b = IdentityBackfill(store: store)
+        identityBackfill = b
+        Task {
+            let repaired = await b.run { p in Task { @MainActor in self.identity = p } }
+            isIdentityBackfilling = false
+            refresh()
+            status = repaired > 0
+                ? "Identiteit: \(hardIdentityCount)/\(trackCount) tracks, \(repaired) namen hersteld."
+                : "Identiteit: \(hardIdentityCount)/\(trackCount) tracks."
+        }
+    }
+
+    func cancelIdentity() { identityBackfill?.cancel() }
+
+    /// Trickle the identity backfill in the background when enabled. Exits fast
+    /// when every row has been read, so it is cheap to call on every launch.
+    func autoIdentityIfEnabled() {
+        guard autoIdentity, !isIdentityBackfilling, store != nil else { return }
+        if trackCount == 0 { refresh() }
+        guard trackCount > 0 else { return }
+        startIdentity()
     }
 
     // MARK: - Preview embeddings (Qobuz-only tracks)

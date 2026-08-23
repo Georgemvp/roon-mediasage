@@ -7,6 +7,22 @@ public struct TrackMetadata: Sendable {
     public var album: String?
     public var year: Int?
     public var genre: String?
+
+    // Hard identity, straight out of the file's tags. Unlike artist/title these
+    // are exact: two files with the same ISRC are the same recording, whatever
+    // their spelling. Measured on a 385-file sample of the real library
+    // (2026-08-23): ISRC in 80% of files, a MusicBrainz recording/release-track
+    // id in 24%. 41% of files carried an ISRC that nothing was reading.
+    public var isrc: String?
+    public var recordingMBID: String?
+    public var releaseTrackMBID: String?
+    public var albumMBID: String?
+    public var artistMBID: String?
+
+    /// Empty metadata — what an unreadable or missing file yields. Public so the
+    /// identity backfill can stamp such a row as "read, nothing there" instead of
+    /// retrying it on every launch.
+    public init() {}
 }
 
 /// Reads embedded tags (Vorbis comments / ID3 / iTunes) via AVFoundation.
@@ -18,6 +34,82 @@ public struct MetadataReader {
     static func saneYear(_ v: String?) -> Int? {
         guard let v, let y = Int(v.prefix(4)), (1900...2035).contains(y) else { return nil }
         return y
+    }
+
+    /// ISRC is exactly 12 alphanumerics (CC-XXX-YY-NNNNN); taggers write it with
+    /// and without the dashes. Normalise to the bare form so two spellings of the
+    /// same code compare equal, and reject anything that isn't one — a malformed
+    /// identifier is worse than none, because it joins rows that aren't the same
+    /// recording.
+    public static func normalisedISRC(_ v: String?) -> String? {
+        guard let v else { return nil }
+        let bare = v.uppercased().filter { $0.isLetter || $0.isNumber }
+        guard bare.count == 12 else { return nil }
+        // Country code is alphabetic, the rest alphanumeric.
+        guard bare.prefix(2).allSatisfy({ $0.isLetter }) else { return nil }
+        return bare
+    }
+
+    /// A MusicBrainz id is a canonical 8-4-4-4-12 UUID. Lowercased so the same id
+    /// from two taggers is one string; anything else is rejected rather than
+    /// stored as a half-identity.
+    public static func normalisedMBID(_ v: String?) -> String? {
+        guard let v else { return nil }
+        let trimmed = v.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return looksLikeMBID(trimmed) ? trimmed : nil
+    }
+
+    /// Shape test only — used both to accept an id and to refuse to store one as
+    /// a human-readable name.
+    public static func looksLikeMBID(_ v: String) -> Bool {
+        let parts = v.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().split(separator: "-",
+                                                                                         omittingEmptySubsequences: false)
+        guard parts.count == 5, parts.map(\.count) == [8, 4, 4, 4, 12] else { return false }
+        return parts.allSatisfy { $0.allSatisfy { c in c.isHexDigit } }
+    }
+
+    /// Route one raw Vorbis/ID3 tag into the metadata. Split out of `read` so the
+    /// routing is testable without a tagged audio file on disk — this is exactly
+    /// where the MBID-as-artist bug lived, and a bug you can't write a test
+    /// against comes back.
+    ///
+    /// `raw` is the uppercased tag name as AVFoundation hands it over.
+    static func applyRawTag(_ raw: String, _ value: String, into m: inout TrackMetadata) {
+        // Squash punctuation so a Vorbis comment (MUSICBRAINZ_RELEASETRACKID) and
+        // an ID3 TXXX description ("MusicBrainz Release Track Id") are one key.
+        let squashed = raw.filter { $0.isLetter || $0.isNumber }
+
+        // Identity FIRST, and it never falls through to the name matching below.
+        // That fall-through was a real bug: MUSICBRAINZ_ARTISTID contains
+        // "ARTIST" and MUSICBRAINZ_ALBUMID contains "ALBUM", so in a file whose
+        // MB tag was enumerated before its plain tag the UUID was stored as the
+        // artist and album NAME. 412 tracks in the real library were keyed on a
+        // UUID that way (measured 2026-08-23) — invisible to every join, and
+        // shown to the user as an artist called "300c4c73-33ac-…".
+        if squashed == "ISRC" {
+            if m.isrc == nil { m.isrc = normalisedISRC(value) }
+            return
+        }
+        if squashed.hasPrefix("MUSICBRAINZ") {
+            let id = normalisedMBID(value)
+            switch squashed {
+            case "MUSICBRAINZRELEASETRACKID": m.releaseTrackMBID = m.releaseTrackMBID ?? id
+            case "MUSICBRAINZTRACKID", "MUSICBRAINZRECORDINGID": m.recordingMBID = m.recordingMBID ?? id
+            case "MUSICBRAINZALBUMID", "MUSICBRAINZRELEASEID": m.albumMBID = m.albumMBID ?? id
+            case "MUSICBRAINZARTISTID", "MUSICBRAINZALBUMARTISTID": m.artistMBID = m.artistMBID ?? id
+            default: break   // release-group, work, disc-id … not used
+            }
+            return
+        }
+
+        // Belt and braces for tag schemes we haven't seen: a bare UUID is an
+        // identifier, never a name a human typed.
+        if raw.contains("ARTIST"), m.artist == nil, !looksLikeMBID(value) { m.artist = value }
+        else if raw.contains("ALBUM"), m.album == nil, !looksLikeMBID(value) { m.album = value }
+        else if raw.contains("TITLE"), m.title == nil, !looksLikeMBID(value) { m.title = value }
+        else if raw.contains("GENRE"), m.genre == nil { m.genre = value }
+        else if raw.contains("DATE") || raw.contains("YEAR"), m.year == nil,
+                let y = saneYear(value) { m.year = y }
     }
 
     public static func read(url: URL) -> TrackMetadata {
@@ -40,13 +132,9 @@ public struct MetadataReader {
                     }
                 }
                 // Vorbis/ID3 raw keys (FLAC etc. surface here, not commonMetadata).
-                if let raw = (item.key as? String)?.uppercased() ?? item.identifier?.rawValue.uppercased() {
-                    if raw.contains("ARTIST"), m.artist == nil { m.artist = value }
-                    else if raw.contains("ALBUM"), m.album == nil { m.album = value }
-                    else if raw.contains("TITLE"), m.title == nil { m.title = value }
-                    else if raw.contains("GENRE"), m.genre == nil { m.genre = value }
-                    else if (raw.contains("DATE") || raw.contains("YEAR")), m.year == nil,
-                            let y = saneYear(value) { m.year = y }
+                if let raw = (item.key as? String)?.uppercased() ?? item.identifier?.rawValue.uppercased(),
+                   let value {
+                    applyRawTag(raw, value, into: &m)
                 }
             }
         }

@@ -1,8 +1,9 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met `native/docs/STANDALONE_LIBRARY_PLAN.md`:
-fase 1 (tweede bibliotheekbron) én fase 2 (lokale albumhoezen) zijn AF, gemeten
-en lokaal gecommit — **nog niet gepusht en niet getagd**. De volgende stap is
-fase 3 (stabiele track-identiteit) of eerst uitrollen; zie ## Next.
+fase 1 (tweede bibliotheekbron), fase 2 (lokale albumhoezen) én de harde
+identiteit uit de tags zijn AF, gemeten en lokaal gecommit — **nog niet gepusht
+en niet getagd**. Fase 3 is herzien op wat DroppedNeedle en SoulSync bleken te
+doen; zie §5d van het plan en ## Next.
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
@@ -22,7 +23,7 @@ Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performan
 
 ## Now
 NU (2026-08-23, ochtend): **DE BIBLIOTHEEK LOS VAN ROON — PLAN GESCHREVEN, FASE 1
-EN FASE 2 AF EN GEMETEN.** (user: "Ga daar in werken en begin maak een duidelijk plan en
+EN 2 AF, PLUS DE HARDE IDENTITEIT UIT DE TAGS.** (user: "Ga daar in werken en begin maak een duidelijk plan en
 voer die uit.") Plan: `native/docs/STANDALONE_LIBRARY_PLAN.md`, vier fasen.
 **Lokaal gecommit, NIET gepusht, NIET getagd** — een tag stuurt de analyzer via
 de CI-DMG naar de mini en daar is deze sessie niet om gevraagd.
@@ -90,11 +91,56 @@ ingebed, 16 als `cover.jpg` ernaast, 2 nergens = **99% dekking**. En `/artwork`
 end-to-end over HTTP: 200 OK, `image/jpeg`, 199×200 px, **14.143 bytes** — die
 hoes zit als ~1 MB in het bestand, en de uplink hier is 39 Mbps.
 
-**Verified: `swift build` exit 0 · `swift test` 1003 tests, 0 fouten, 1
-overgeslagen (baseline 984) · `swift build -c release` groen voor RoonSage én
-RoonSageAnalyzerApp · swiftlint 466 violations / 2 serious — exact gelijk aan de
-baseline · check-localization `--strict` exit 0, 1134 sleutels, 0 missend,
-0 geïnterpoleerd, 0 wees.**
+**Harde identiteit uit de tags** (user: *"kijk ook naar dropped needle en
+soulsync hoe zij bibliotheek inscannen etc. Volgens mij gaat dat met metabrainz
+en accousticID"*). Klopt voor DN, half voor SoulSync — en de meting bracht iets
+anders naar boven.
+
+- **DroppedNeedle** identificeert in drie lagen: `automatic` (MB-matcher, 12.270),
+  `embedded` (MB-tags al in het bestand, 9.296), `manual` (7.148). **AcoustID is
+  de kléinste laag** — 4.239 pogingen, 2.655 `matched` — een laatste redmiddel,
+  geen eerste stap. Dekking 28.714/67.110 (43%).
+- **SoulSync** heeft geen bibliotheekscanner; AcoustID zit er als *verificatie ná
+  een download* (`library_reorganize.py`). Wat wél telt: SoulSync schrijft
+  identiteit terug in de tags.
+- **Wat er dus echt op schijf ligt** (steekproef 385, mutagen): **ISRC 80%**,
+  MB recording/release-track-id 24%, `deezer_track_id` 27%, AcoustID 0%. RoonSage
+  las géén van beide: de 36.962 ISRC's in `analyzer.db` kwamen uit de
+  dataset-sidecar (fuzzy metadata-match). **41% van de bestanden droeg een ISRC
+  die nergens werd opgepikt**; waar beide bronnen iets hadden waren ze het 89%
+  eens, en het verschil zijn sidecar-missers.
+
+**Daar zat een echte bug.** `MetadataReader` matchte rauwe tagnamen met
+`contains("ARTIST")` — en `MUSICBRAINZ_ARTISTID` bevat "ARTIST",
+`MUSICBRAINZ_ALBUMID` bevat "ALBUM". In bestanden waar de MB-tag eerst werd
+opgesomd belandde de **UUID als artiest- én albumnaam**: 412 rijen, gesleuteld op
+een UUID, onvindbaar voor elke join en in de app zichtbaar als een artiest die
+`300c4c73-33ac-…` heet. De routering zit nu in een pure `applyRawTag`, precies
+zodat er een test tegenaan kan — die werd **bewezen rood** op de oude routering
+(4 failures) en groen op de nieuwe.
+
+**Gebouwd:** `TrackMetadata` draagt `isrc`/`recordingMBID`/`releaseTrackMBID`/
+`albumMBID`/`artistMBID` (genormaliseerd en gevalideerd — een malformed
+identifier is erger dan geen, want die joint rijen die niet hetzelfde zijn);
+vijf kolommen in `track_features` plus `identity_source`/`identity_checked_at`;
+de walker schrijft het mee uit dezelfde tag-lezing; `IdentityBackfill` haalt de
+achterstand op zónder audio te decoderen en repareert onderweg de UUID-namen.
+De tag wint van de sidecar, maar een ontbrekende tag wist de sidecar niet
+(COALESCE). `contentSignature()` kreeg een identiteitsterm — zonder die term
+pullen clients een in-place herschreven ISRC nooit op; dezelfde val als moods,
+arousal en de CLAP-retag.
+
+**Gemeten op een kopie van de echte `analyzer.db`** (1.931 rijen in scope: alle
+412 UUID-rijen + 1.500 willekeurige): ISRC 841 → **1.410** · 361 MB-ids gevonden ·
+artiest = UUID **412 → 0** · 412 rijen hersteld, **waarvan 352 duplicaten van een
+correcte rij** (66.378 → 66.026). Kosten ~48 ms per bestand, dus de volle
+backfill is ~1 uur, eenmalig en hervatbaar.
+
+**Verified: `swift build` exit 0 · `swift test` 1022 tests, 0 fouten, 2
+overgeslagen (baseline 984) · `swift build -c release` groen voor RoonSage,
+RoonSageAnalyzerApp én roonsage-analyzer · swiftlint 465 violations / 2 serious —
+één minder dan de baseline, dus geen nieuwe · check-localization `--strict`
+exit 0, 1134 sleutels, 0 missend, 0 geïnterpoleerd, 0 wees.**
 
 ---
 _Hieronder de `## Now` van de vorige sessie (de 360°-audit). Bewaard, niet
@@ -1181,7 +1227,9 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **Fase 1+2 pushen + taggen** (`v1.10.275` / `ios-v1.7.241` / `analyzer-v1.1.205`) en de analyzer via de CI-DMG uitrollen. Allebei de fasen zitten ín de analyzer (de ingest draait alleen in `.direct`-modus, `/artwork` is een analyzer-endpoint), dus op de mini gebeurt er niets tot die uitrol. Bewust niet gedaan zonder opdracht.
+- **Fase 3, herzien** (`native/docs/STANDALONE_LIBRARY_PLAN.md` §5d): sleutel op de identiteit die er nu ís — `release_track_mbid` → `recording_mbid`/`isrc` → een deterministische terugval, met het schema in de sleutel (`isrc::`, `mb::`, `k::`) zoals `local::` en `import::` dat al doen. Twee dingen niet vergeten: Roon's Browse-API geeft géén identifiers, dus dit repareert alleen de bestandskant; en de dekking wordt ~80% ISRC / ~24% MB-id, dus de terugval blijft nodig.
+- **De identiteits-backfill één keer laten lopen op de mini** — ~48 ms per bestand, dus ~1 uur voor 66.378 rijen. Hervatbaar, geen audio-decode. Hij start vanzelf bij de volgende analyzer-launch (`autoIdentityIfEnabled`), dus dit gebeurt bij de uitrol.
+- **Fase 1+2+identiteit pushen + taggen** (`v1.10.275` / `ios-v1.7.241` / `analyzer-v1.1.205`) en de analyzer via de CI-DMG uitrollen. Allebei de fasen zitten ín de analyzer (de ingest draait alleen in `.direct`-modus, `/artwork` is een analyzer-endpoint), dus op de mini gebeurt er niets tot die uitrol. Bewust niet gedaan zonder opdracht.
 - **Op het toestel beoordelen.** Twee dingen wil je zíen: of de 15.053 nieuwe albums er in de bibliotheek uitzien zoals de Roon-albums (hoes, groepering, jaartal), en of een lokale rij op een Roon-zone speelt — dat gaat via een verse Roon-zoekopdracht, en of Roon die klassieke boxsets op artiest+titel terugvindt is niet headless te toetsen.
 - **Fase 3 (stabiele track-identiteit)** uit `native/docs/STANDALONE_LIBRARY_PLAN.md`: `tracks.id` los van Roon's `item_key`. Let op de meting die er al staat — `match_key` alléén kan niet, hij is niet uniek in `tracks` (67.262 unieke sleutels op 89.752 rijen).
 - **4.484 verweesde rijen in `track_audio_features`** — sleutels die de huidige `/features`-export niet meer produceert (oude normaliser, of `bpm IS NULL`). Geen analyse meer achter; kandidaat voor een onderhoudsronde.
