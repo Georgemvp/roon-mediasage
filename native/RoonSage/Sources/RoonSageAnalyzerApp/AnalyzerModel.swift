@@ -1,5 +1,6 @@
 import AnalyzerCore
 import AudioAnalysis
+import CLAPEngine
 import Foundation
 import Observation
 import RoonSageCore
@@ -685,6 +686,13 @@ final class AnalyzerModel {
             }
             self.clap = loaded
             self.server?.attachCLAP(loaded)
+            // Hand the discovery run its CLAP capabilities. RoonSageCore declares
+            // only the protocol (so client apps don't link the 746 MB model), so
+            // without this registration the server build would silently lose the
+            // sonic-fit re-rank.
+            if let loaded {
+                Task { await SonicFit.shared.register(ClapSonicFit(clap: loaded)) }
+            }
             self.clapLoadState = loaded != nil ? .ready : .failed
             if self.isServing, let p = UInt16(self.port) {
                 self.status = "Serving on \(p)" + (loaded?.canEmbedText == true ? " — text search ready." : " (text model unavailable).")

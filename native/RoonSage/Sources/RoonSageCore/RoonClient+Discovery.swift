@@ -370,8 +370,8 @@ extension RoonClient {
         // text tokenizer, no index, or an empty match falls back to the normal seed.
         var sonicTarget = tasteVector
         if let textQuery, !textQuery.isEmpty, let index,
-           let clap = await SonicFitClap.shared.model(), clap.canEmbedText,
-           let textVec = try? clap.textEmbedding(textQuery) {
+           let fit = await SonicFit.shared.provider,
+           let textVec = await fit.textEmbedding(textQuery) {
             let hits = index.nearest(to: textVec, k: 400).map { (artist: $0.track.artist, score: $0.score) }
             let vibeArtists = DiscoveryTextSeeding.topArtists(hits, limit: 25)
             if !vibeArtists.isEmpty { topArtists = vibeArtists }
@@ -532,7 +532,7 @@ extension RoonClient {
                                      weight: Double = DiscoverySonicFit.sonicFitWeight)
         async -> [DatabaseManager.StoredRecommendation] {
         guard discoverySonicFit, let centroid, !centroid.isEmpty,
-              let clap = await SonicFitClap.shared.model() else { return stored }
+              let fit = await SonicFit.shared.provider else { return stored }
         let k = min(topK, stored.count)
         guard k > 0 else { return stored }
 
@@ -547,7 +547,7 @@ extension RoonClient {
             if let cached = memo[key] {
                 cosine = cached
             } else if let url = await RelatedArtistsClient.shared.topTrackPreview(forArtist: head[i].artist),
-                      let c = await DiscoverySonicFit.cosineToTaste(previewURL: url, centroid: centroid, clap: clap) {
+                      let c = await fit.cosineToTaste(previewURL: url, centroid: centroid) {
                 memo[key] = c
                 cosine = c
             } else {

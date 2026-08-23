@@ -1,4 +1,5 @@
 import AudioAnalysis
+import CLAPEngine
 import CoreGraphics
 import Foundation
 import ImageIO

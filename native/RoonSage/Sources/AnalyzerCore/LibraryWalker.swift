@@ -1,4 +1,5 @@
 import AudioAnalysis
+import CLAPEngine
 import Darwin   // malloc_zone_pressure_relief
 import Foundation
 

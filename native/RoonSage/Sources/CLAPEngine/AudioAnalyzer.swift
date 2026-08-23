@@ -1,4 +1,5 @@
 import Accelerate
+import AudioAnalysis
 import Foundation
 
 public struct AudioFeatures: Sendable, Codable {

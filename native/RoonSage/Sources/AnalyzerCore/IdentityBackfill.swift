@@ -1,4 +1,5 @@
 import AudioAnalysis
+import CLAPEngine
 import Foundation
 
 public struct IdentityProgress: Sendable {

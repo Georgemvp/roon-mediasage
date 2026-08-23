@@ -1,5 +1,6 @@
 import Accelerate
 import AudioAnalysis
+import CLAPEngine
 import Foundation
 
 public struct ClapTagProgress: Sendable {

@@ -1,4 +1,5 @@
 import Accelerate
+import AudioAnalysis
 import Foundation
 
 /// Reproduces CLAP's `ClapFeatureExtractor` log-mel front-end in Swift so the

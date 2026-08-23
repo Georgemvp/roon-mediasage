@@ -1,3 +1,4 @@
+import AudioAnalysis
 import Foundation
 
 /// Musical key via chromagram + Krumhansl-Schmuckler key profiles.

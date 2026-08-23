@@ -1,5 +1,6 @@
 import AVFoundation
 @testable import AudioAnalysis
+@testable import CLAPEngine
 import XCTest
 
 /// Proves `AudioDecoder.decodeWindows` (the bounded-memory streaming path that

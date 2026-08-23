@@ -33,7 +33,7 @@ env/
 # for the build-time conversion + the open question on how to ship the model)
 *.mlpackage/
 hf_cache/
-native/RoonSage/Sources/AudioAnalysis/Resources/CLAP/
+native/RoonSage/Sources/CLAPEngine/Resources/CLAP/
 
 # Testing
 .pytest_cache/

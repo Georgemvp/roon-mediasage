@@ -1,4 +1,5 @@
 @testable import AudioAnalysis
+@testable import CLAPEngine
 import XCTest
 
 /// Year sanity: broken file tags (4018, 0, garbage) must yield NO year rather

@@ -1,5 +1,6 @@
 import AnalyzerCore
 import AudioAnalysis
+import CLAPEngine
 import Foundation
 
 setvbuf(stdout, nil, _IOLBF, 0)

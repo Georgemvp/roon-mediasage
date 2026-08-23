@@ -1,4 +1,5 @@
 @testable import AudioAnalysis
+@testable import CLAPEngine
 import CoreML
 import Foundation
 import XCTest

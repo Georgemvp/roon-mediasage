@@ -1,4 +1,5 @@
 @testable import AudioAnalysis
+@testable import CLAPEngine
 import XCTest
 
 /// Hard identity out of the file's own tags (AudioAnalysis/MetadataReader).

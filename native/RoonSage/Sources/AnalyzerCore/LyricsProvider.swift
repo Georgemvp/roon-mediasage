@@ -1,4 +1,5 @@
 import AudioAnalysis
+import CLAPEngine
 import Foundation
 
 /// Lyrics that live on the music volume — the offline half of the lyrics story.

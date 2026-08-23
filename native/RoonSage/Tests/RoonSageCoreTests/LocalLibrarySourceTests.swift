@@ -1,5 +1,6 @@
 @testable import AnalyzerCore
 import AudioAnalysis
+import CLAPEngine
 import GRDB
 import XCTest
 @testable import RoonSageCore

@@ -1,3 +1,4 @@
+import CLAPEngine
 import Foundation
 import XCTest
 @testable import RoonSageCore

@@ -1,4 +1,5 @@
 import AVFoundation
+import AudioAnalysis
 import Foundation
 
 public struct TrackMetadata: Sendable {

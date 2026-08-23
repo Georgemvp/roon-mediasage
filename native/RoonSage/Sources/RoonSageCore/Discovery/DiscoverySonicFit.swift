@@ -34,39 +34,44 @@ public enum DiscoverySonicFit {
         return weight * t
     }
 
-    /// Download `previewURL` to a temp `.mp3`, CLAP-embed it, and cosine against
-    /// the taste centroid. nil on any download/decode/embed failure (caller then
-    /// leaves the score untouched). Mirrors AnalyzerCore's PreviewEmbeddingBackfill:
-    /// AVFoundation sniffs by extension, so the temp file MUST end in `.mp3`
-    /// (Deezer previews are MP3). The temp file is always cleaned up.
-    public static func cosineToTaste(previewURL: URL, centroid: [Float], clap: CLAPModel) async -> Double? {
-        guard let (tmp, _) = try? await URLSession.shared.download(from: previewURL) else { return nil }
-        let mp3 = tmp.deletingPathExtension().appendingPathExtension("mp3")
-        try? FileManager.default.moveItem(at: tmp, to: mp3)
-        defer { try? FileManager.default.removeItem(at: mp3) }
-        guard let embedding = try? clap.embed(url: mp3),
-              embedding.count == centroid.count, !centroid.isEmpty else { return nil }
-        // Both vectors are L2-normalized (CLAP embeddings and the taste centroid),
-        // so their dot product IS the cosine similarity.
-        var acc: Float = 0
-        for i in 0..<embedding.count { acc += embedding[i] * centroid[i] }
-        return Double(acc)
-    }
 }
 
-/// One-time, best-effort CLAP handle for the discovery pipeline's sonic-fit
-/// re-rank. RoonSageCore has no loaded model of its own (the analyzer app loads
-/// its own separately for analysis); this loads one lazily, once per process.
-/// nil when the CLAP models aren't present — which disables sonic fit silently.
-public actor SonicFitClap {
-    public static let shared = SonicFitClap()
-    private var attempted = false
-    private var cached: CLAPModel?
+/// The CLAP side of sonic fit, behind a protocol so RoonSageCore never links the
+/// model.
+///
+/// RoonSageCore is what every client app (macOS, iOS) depends on. Referring to
+/// `CLAPModel` here used to drag the 746 MB CLAPEngine resource bundle into
+/// RoonSage.app on both platforms — for a bounded ±0.12 re-rank that only ever
+/// runs on the server build. So the two CLAP capabilities the discovery run
+/// needs are declared here and implemented by whoever actually owns a model
+/// (`ClapSonicFit`, in the analyser app). No registrant → both call sites see
+/// nil and the batch keeps its pre-sonic ranking, which is the same degradation
+/// path a missing model already took.
+public protocol SonicFitScoring: Sendable {
 
-    public func model() async -> CLAPModel? {
-        if attempted { return cached }
-        attempted = true
-        cached = CLAPModel.load()   // heavy but one-time; nil if models absent
-        return cached
-    }
+    /// CLAP text embedding for a free-text vibe, or nil when this provider has no
+    /// text tokenizer (the old `canEmbedText` guard, folded into the return).
+    func textEmbedding(_ text: String) async -> [Float]?
+
+    /// Download `previewURL`, CLAP-embed it, and cosine against the taste
+    /// centroid. nil on any download/decode/embed failure — the caller then
+    /// leaves the score untouched.
+    func cosineToTaste(previewURL: URL, centroid: [Float]) async -> Double?
+}
+
+/// Process-wide registry for the sonic-fit provider.
+///
+/// Replaces the old `SonicFitClap` lazy model handle: the laziness now lives in
+/// the registrant (which owns the expensive `CLAPModel.load()`), and this only
+/// answers "is there one?". Unregistered on every client build by design.
+public actor SonicFit {
+    public static let shared = SonicFit()
+
+    private var registered: SonicFitScoring?
+
+    /// Provider, or nil when nothing registered one (every client build).
+    public var provider: SonicFitScoring? { registered }
+
+    /// Called once by the server build during start-up.
+    public func register(_ provider: SonicFitScoring) { registered = provider }
 }

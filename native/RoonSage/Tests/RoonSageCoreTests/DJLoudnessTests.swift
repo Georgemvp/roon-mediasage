@@ -1,5 +1,6 @@
 import AudioAnalysis
 @testable import RoonSageCore
+import CLAPEngine
 import XCTest
 
 /// Feature 3 — loudness-aware DJ sequencing. Loudness is an EXTRA factor next to
