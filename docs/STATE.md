@@ -8,7 +8,7 @@ Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst getagd: v1.10.280 / ios-v1.7.246 / analyzer-v1.1.210. De mini draait
+Laatst getagd: v1.10.281 / ios-v1.7.247 / analyzer-v1.1.211. De mini draait
 analyzer-v1.1.202: een tag levert een DMG, geen uitrol — installeren is de
 handmatige bootout → installeren → bootstrap. **Fase 1 zit in de analyzer, dus
 hij werkt pas op de mini ná zo'n uitrol.**
@@ -22,9 +22,10 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
-NU (2026-08-23, namiddag): **NAVIDROME + SHELV — VIJF FASES ERIN, ALLES GROEN,
-NOG NIET GECOMMIT/GEPUSHT/GETAGD.** (user: "Opdracht: RoonSage Verrijken met
-Best-Practices uit Navidrome & Shelv", vijf fases.)
+NU (2026-08-23, namiddag): **NAVIDROME + SHELV — VIJF FASES ERIN EN GESHIPT.**
+(user: "Opdracht: RoonSage Verrijken met Best-Practices uit Navidrome & Shelv",
+vijf fases; daarna "commit puh en tag".) **GESHIPT: commit `6e252b1`, gepusht naar
+`main`, getagd `v1.10.281` / `ios-v1.7.247` / `analyzer-v1.1.211`.**
 
 **Wat er al bleek te staan** — fase 1 t/m 4 waren grotendeels af: `Shelves.swift`
 + de overzicht-feed, de LRC-parser + karaoke-`LyricsView`, een downloadwachtrij en
@@ -1439,8 +1440,9 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **Committen + pushen + taggen** (v / ios-v / analyzer-v) — nog niet gedaan, de
-  user heeft er in deze sessie niet om gevraagd.
+- **CI in de gaten houden** — vier workflows draaien op `6e252b1` + de drie tags
+  (Native Tests, Release macOS DMG, Release iOS TestFlight, Release Analyzer App).
+  Bij groen is er niets te doen; bij rood is de tag al de release.
 - Fase 2 werkt pas op de mini ná een analyzer-uitrol (bootout → installeren →
   bootstrap): `/lyrics` op 5766 en de `LyricsBackfill` zitten in de analyzer.
 - Fase 4: Opus is alleen op macOS 26.5 gemeten. Vóór je het op de iPhone aanzet:
@@ -1513,6 +1515,7 @@ ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AU
 - Kern-audit files: QobuzClient.swift, LibraryShareServer.swift (:91 enforceToken), RoonClient+DiscoverWeekly.swift (:355 searchQobuz-gate), AnalyzerCore/HTTPServer.swift (5766)
 
 ## Done
+- **NAVIDROME + SHELV, VIJF FASES (2026-08-23) — RESULTAAT: `6e252b1` · `v1.10.281` / `ios-v1.7.247` / `analyzer-v1.1.211` · 1074 tests, 3 skipped, 0 failures (baseline 1032).** Fase 1 t/m 4 bleken grotendeels al te bestaan, dus dit was gaten vullen: drie ontbrekende bibliotheekplanken (`randomAlbums`, `sonicallyRecommendedAlbums`, `dormantAlbums(days: 180)`) · songteksten aan de analyzer-kant (`LRCParser`/`SYLTParser` in AudioAnalysis, `MetadataReader.lyrics()`, `LyricsProvider`, hervatbare `LyricsBackfill`, **`GET /lyrics?matchKey=` op 5766**) · `OfflineDownloadManager` op een achtergrond-`URLSession` + `AppDelegate` + schema v50 `offline_tracks.local_path` + "Houd favorieten offline" + rijstatus · Opus naast AAC via ffmpeg met runtime-probe op de client · en helemaal nieuw `SmartPlaylistEngine` + `RecapService` + de "Regels"-tab in `CreateHubView`. **Verified: `swift build` exit 0 · `swift test` "Executed 1074 tests, with 3 tests skipped and 0 failures (0 unexpected)" · `swift build -c release --product RoonSage` exit 0 · `xcodegen generate` exit 0 · RoonProtocol `swift test` exit 0 · swiftlint 474 violations / 2 serious, beide pre-existing (baseline 469).** `Package.swift` bewust buiten de commit gehouden. **NIET geverifieerd tegen een draaiende server:** `/lyrics` en `/audio?format=opus` zijn alleen door unit-tests gedekt — dat vergt de analyzer-uitrol.
 - **BIBLIOTHEEKOVERZICHT ALS FEED (2026-08-23) — RESULTAAT: één sectiegrammatica (kleinkapitaal + haarlijn + chevron) over Bibliotheek én Ontdek, afwisselend plank/lijst, en drie secties erbij uit bestaande data.** Gewijzigd: `Shelves.swift` (`sectionHeader` zonder icoon, `sectionChevron`, `compactRows`, zachtere speelbadge), `LibraryView.swift` (feed-volgorde, `todaySection`, `labelSection`, `trackRows`, `seeAllButton`, `topOfMonthRows`, `loadLabelSpotlight`), `DiscoveryView.swift` (sweep: 6 aanroepen), beide `Localizable.strings` (5 sleutels). **Verified: `swift build` exit 0 · `swift test` "Executed 1032 tests, with 3 tests skipped and 0 failures (0 unexpected)" · `swift build -c release --product RoonSage` exit 0 · swiftlint 466 violations / 2 serious (= baseline) · `native/scripts/check-localization.sh --strict` exit 0, 1140 sleutels, 0 missend / 0 wees · visueel op iPhone 17-simulator tegen de live analyzer (`/tmp/rs_ui/51.png`, `56.png`, `58.png`).** **GESHIPT: commit `a08970a`, getagd `v1.10.280` / `ios-v1.7.246` / `analyzer-v1.1.210`, alle vier de workflows groen (Native Tests, Release macOS DMG, Release iOS TestFlight, Release Analyzer App).**
 - **BIBLIOTHEEK + ARTIESTPAGINA HERZIEN (2026-08-23) — RESULTAAT: drie hoezen per iPhone-rij i.p.v. twee, en de Queen-pagina eindigt na ~4 schermen i.p.v. ~30.** Gewijzigd: `Shelves.swift` (`coverGridColumns(compact:)`), `AlbumArtView.swift` (vierkante `fillingWidth`-variant), `LibraryView.swift` (raster + `LibraryTrackRow(showsArtist:)` + `AlbumGridCell(showsArtist:)` + twee niet-bestaande SF Symbols), `LibraryDetailViews.swift` (artiestkop, begrensde discografie + `ArtistAlbumsGridView`, albumkop), beide `Localizable.strings` (`libraryDetail.showAllReleases`). **Verified: `swift build` exit 0 · `swift test` "Executed 1032 tests, with 3 tests skipped and 0 failures (0 unexpected)" (gelijk aan baseline) · `swift build -c release --product RoonSage` exit 0 · swiftlint 466 violations / 2 serious (gelijk aan baseline) · visueel op iPhone 17-simulator (iOS 26.5) tegen de live analyzer op 192.168.178.59:5767, schermafdrukken in `/tmp/rs_ui/`.** **GESHIPT 2026-08-23 12:43: commit `005db57`, gepusht naar `main`, getagd `v1.10.279` / `ios-v1.7.245` / `analyzer-v1.1.209`, alle vier de workflows groen (Native Tests 3m52s, Release macOS DMG 3m56s, Release iOS TestFlight 3m53s, Release Analyzer App 3m07s)** (user: "Commit push en tag"). `native/RoonSage/Package.swift` bewust buiten de commit gehouden.
 - **AUDIT VOLLEDIG UITGEVOERD: BATCH A + B + C (2026-08-23) — RESULTAAT: 973 → 984 tests 0 fouten, 61 → 0 geïnterpoleerde sleutels, 5 → 2 serious lint, release + iOS-typecheck groen.** 21 bevindingen (5 🔴 / 8 🟠 / 4 🟡 / 4 🟢) uit `docs/NATIVE_APP_AUDIT.md`, alle uitgevoerd behalve drie expliciet gemotiveerde uitzonderingen (zie het statusblok in dat rapport). Twee dingen bleken groter dan de audit inschatte: het macOS-app-target had **nul** `LS()`-aanroepen, en `check-localization.sh` keek daar nooit — beide opgelost, en de gate is nu strenger in plaats van zwakker. Niet gecommit.
