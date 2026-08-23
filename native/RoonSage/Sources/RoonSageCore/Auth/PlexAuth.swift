@@ -128,6 +128,114 @@ public enum PlexAuth {
         return nil
     }
 
+    // MARK: - Server discovery
+    //
+    // Without this a signed-in phone syncs nothing, and the failure is silent:
+    // `plexBaseURL` defaults to `http://127.0.0.1:32400`, which is right on the
+    // machine running Plex and is the PHONE ITSELF everywhere else. Measured
+    // 2026-08-23 — a device that had linked correctly still showed 0 tracks.
+    //
+    // plex.tv knows where the server actually is. For this account it returns
+    // three routes: two local (`10-94-184-22…` over ZeroTier, `192-168-178-59…`
+    // over the LAN) and one external on a different port — that last one is Plex
+    // Remote Access, which is exactly what makes the app work away from home
+    // without ZeroTier.
+
+    public struct Connection: Sendable, Equatable {
+        public let uri: String
+        public let local: Bool
+        public let relay: Bool
+    }
+
+    public struct Server: Sendable, Equatable {
+        public let name: String
+        /// Token scoped to THIS server. Not always the account token, so prefer it.
+        public let accessToken: String?
+        public let connections: [Connection]
+    }
+
+    /// Servers this account can reach.
+    public static func servers(session: URLSession = .shared) async throws -> [Server] {
+        guard let token = storedToken() else { throw AuthError.malformedResponse("not signed in") }
+        var comps = URLComponents(string: "https://plex.tv/api/v2/resources")!
+        comps.queryItems = [
+            URLQueryItem(name: "includeHttps", value: "1"),
+            URLQueryItem(name: "includeRelay", value: "1"),
+        ]
+        var req = URLRequest(url: comps.url!)
+        req.timeoutInterval = 20
+        applyHeaders(&req)
+        req.setValue(token, forHTTPHeaderField: "X-Plex-Token")
+
+        let data: Data
+        let response: URLResponse
+        do { (data, response) = try await session.data(for: req) } catch {
+            throw AuthError.transport(error.localizedDescription)
+        }
+        guard let code = (response as? HTTPURLResponse)?.statusCode else {
+            throw AuthError.malformedResponse("no HTTP response")
+        }
+        guard (200..<300).contains(code) else { throw AuthError.http(code) }
+        guard let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw AuthError.malformedResponse("resources: not a JSON array")
+        }
+        return parseServers(raw)
+    }
+
+    /// Split out so the wire shape is testable without plex.tv.
+    static func parseServers(_ raw: [[String: Any]]) -> [Server] {
+        raw.compactMap { r in
+            // `provides` is a comma list; a Plex account also returns players and
+            // controllers, which have no library to talk to.
+            guard (r["provides"] as? String)?.contains("server") == true else { return nil }
+            let conns = (r["connections"] as? [[String: Any]] ?? []).compactMap { c -> Connection? in
+                guard let uri = c["uri"] as? String, !uri.isEmpty else { return nil }
+                return Connection(uri: uri,
+                                  local: (c["local"] as? Bool) ?? false,
+                                  relay: (c["relay"] as? Bool) ?? false)
+            }
+            guard !conns.isEmpty else { return nil }
+            return Server(name: (r["name"] as? String) ?? "Plex",
+                          accessToken: r["accessToken"] as? String,
+                          connections: conns)
+        }
+    }
+
+    /// Order to try connections in: local first (fast, no relay hop), then a
+    /// direct external address, and only then a relayed one — a relay works
+    /// everywhere but goes through Plex's infrastructure and is the slowest.
+    static func ranked(_ connections: [Connection]) -> [Connection] {
+        connections.sorted { a, b in
+            func rank(_ c: Connection) -> Int { c.relay ? 2 : (c.local ? 0 : 1) }
+            return rank(a) < rank(b)
+        }
+    }
+
+    /// First connection that actually answers, with the token to use for it.
+    ///
+    /// Probes `/identity`, which needs no auth and is the cheapest thing a Plex
+    /// server serves. A short timeout per candidate: an unreachable LAN address
+    /// from a phone on mobile data should cost a second, not thirty.
+    public static func reachableServer(session: URLSession = .shared,
+                                       timeout: TimeInterval = 3) async
+    -> (baseURL: String, token: String)? {
+        guard let account = storedToken(), let list = try? await servers(session: session) else { return nil }
+        for server in list {
+            let token = server.accessToken ?? account
+            for conn in ranked(server.connections) {
+                guard let url = URL(string: conn.uri + "/identity") else { continue }
+                var req = URLRequest(url: url)
+                req.timeoutInterval = timeout
+                req.setValue(token, forHTTPHeaderField: "X-Plex-Token")
+                guard let (_, resp) = try? await session.data(for: req),
+                      let code = (resp as? HTTPURLResponse)?.statusCode,
+                      (200..<300).contains(code) else { continue }
+                return (conn.uri, token)
+            }
+        }
+        return nil
+    }
+
     // MARK: - Parsing (split out so the wire shape is testable without plex.tv)
 
     static func parsePin(_ json: [String: Any]) -> Pin? {

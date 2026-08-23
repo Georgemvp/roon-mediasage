@@ -197,6 +197,15 @@ public final class RoonClient {
     /// Ask for the connect screen. Called by `AnalyzerRequiredNotice`.
     public func requestServerConnection() { showServerConnectSheet = true }
 
+    /// A screen asked for the Plex sign-in.
+    ///
+    /// Same shape as `showServerConnectSheet`: linking Plex is now the answer to
+    /// "my library is empty", so any screen that hits that state has to be able
+    /// to offer it without knowing where Settings lives.
+    public var showPlexLinkSheet = false
+
+    public func requestPlexLink() { showPlexLinkSheet = true }
+
     /// Has the user been through the first-run welcome once?
     ///
     /// **This, not `savedHost == nil`, gates the welcome.** Bonjour discovery

@@ -1628,13 +1628,30 @@ public struct LibraryView: View {
         .accessibilityLabel("\(title), \(subtitle)")
     }
 
+    @ViewBuilder
     private var overviewEmpty: some View {
-        ContentUnavailableView(
-            client.connectionState.isConnected ? LS("library.noLibraryYet") : LS("library.notConnected"),
-            systemImage: client.connectionState.isConnected ? "music.note.house" : "wifi.slash",
-            description: client.connectionState.isConnected
-                ? LT("library.syncToFillOverview")
-                : LT("library.connectFirst"))
+        // An empty library with no server used to say "not connected — connect
+        // first", which on a Plex-first device is both wrong and a dead end: the
+        // thing to do is link Plex, not hunt for a server that is optional. This
+        // was the actual first-run experience on a real phone (user, 2026-08-23:
+        // "hij haalt geen bibliotheek op … helemaal geen nummers").
+        if !client.plexLinked && !client.connectionState.isConnected {
+            ContentUnavailableView {
+                Label(LS("library.emptyPlexTitle"), systemImage: "link")
+            } description: {
+                Text(LS("library.emptyPlexBody"))
+            } actions: {
+                Button(LS("library.emptyPlexAction")) { client.requestPlexLink() }
+                    .buttonStyle(.borderedProminent)
+            }
+        } else {
+            ContentUnavailableView(
+                client.connectionState.isConnected ? LS("library.noLibraryYet") : LS("library.notConnected"),
+                systemImage: client.connectionState.isConnected ? "music.note.house" : "wifi.slash",
+                description: client.connectionState.isConnected
+                    ? LT("library.syncToFillOverview")
+                    : LT("library.connectFirst"))
+        }
     }
 
     // MARK: Overview — data loading

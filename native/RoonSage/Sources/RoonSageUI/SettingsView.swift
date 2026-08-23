@@ -136,6 +136,72 @@ public struct SettingsView: View {
 
     public var body: some View {
         Form {
+            // Plex. Sign-in is per DEVICE (not synced): the token PlexAuth mints
+            // is scoped to this install, which is the whole reason it exists —
+            // the alternative is shipping the server's admin token to clients.
+            Section(LS("settings.plex")) {
+                if plexSignedIn {
+                    LabeledContent(LS("settings.plexStatus"), value: LS("settings.plexLinked"))
+                    Button(LS("settings.plexUnlink"), role: .destructive) {
+                        PlexAuth.signOut()
+                        plexSignedIn = false
+                        plexPinCode = nil
+                        plexStatus = nil
+                        client.refreshPlexLinkState()
+                    }
+                } else if let code = plexPinCode {
+                    LabeledContent(LS("settings.plexCode"), value: code)
+                    Text(LS("settings.plexCodeHelp"))
+                        .font(.caption).foregroundStyle(.secondary)
+                    ProgressView()
+                } else {
+                    Button {
+                        plexSigningIn = true
+                        plexStatus = nil
+                        Task {
+                            defer { plexSigningIn = false; plexPinCode = nil }
+                            do {
+                                let token = try await PlexAuth.signIn { pin in
+                                    Task { @MainActor in plexPinCode = pin.code }
+                                }
+                                plexSignedIn = token != nil
+                                plexStatus = token != nil ? nil : LS("onboarding.plexCodeExpired")
+                                client.refreshPlexLinkState()
+                            } catch {
+                                plexStatus = String(format: LS("onboarding.plexLinkFailed"), error.localizedDescription)
+                            }
+                        }
+                    } label: {
+                        Label(LS("onboarding.plexLink"), systemImage: "link")
+                    }
+                    .disabled(plexSigningIn)
+                }
+                if let plexStatus {
+                    Text(plexStatus).font(.caption).foregroundStyle(.secondary)
+                }
+
+                // Bindings, geen computed property: een computed var op het
+                // @Observable model laat SwiftUI niet hertekenen (zie de
+                // Last.fm-schakelaars hierboven, en de memory hierover).
+                if role == .server {
+                    SettingToggle(
+                        LS("settings.plexImport"),
+                        explanation: LS("settings.plexImportHelp"),
+                        isOn: Binding(get: { client.plexSyncEnabled },
+                                      set: { client.plexSyncEnabled = $0 }))
+                }
+                SettingToggle(
+                    LS("settings.plexSonic"),
+                    explanation: LS("settings.plexSonicHelp"),
+                    isOn: Binding(get: { client.plexSonicEnabled },
+                                  set: { client.plexSonicEnabled = $0 }))
+                SettingToggle(
+                    LS("settings.plexDirect"),
+                    explanation: LS("settings.plexDirectHelp"),
+                    isOn: Binding(get: { client.plexDirectPlayEnabled },
+                                  set: { client.plexDirectPlayEnabled = $0 }))
+            }.scoped(.device, in: scope)
+
             // Appearance
             Section(LS("settings.appearance")) {
                 Picker(LS("settings.theme"), selection: $themePreset) {
@@ -601,72 +667,6 @@ public struct SettingsView: View {
                 LT("settings.qobuzLocalHelp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }.scoped(.device, in: scope)
-
-            // Plex. Sign-in is per DEVICE (not synced): the token PlexAuth mints
-            // is scoped to this install, which is the whole reason it exists —
-            // the alternative is shipping the server's admin token to clients.
-            Section("Plex") {
-                if plexSignedIn {
-                    LabeledContent("Status", value: "Gekoppeld")
-                    Button("Ontkoppelen", role: .destructive) {
-                        PlexAuth.signOut()
-                        plexSignedIn = false
-                        plexPinCode = nil
-                        plexStatus = nil
-                        client.refreshPlexLinkState()
-                    }
-                } else if let code = plexPinCode {
-                    LabeledContent("Koppelcode", value: code)
-                    Text("Ga naar plex.tv/link en voer deze code in. Hij verloopt na 15 minuten.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    ProgressView()
-                } else {
-                    Button {
-                        plexSigningIn = true
-                        plexStatus = nil
-                        Task {
-                            defer { plexSigningIn = false; plexPinCode = nil }
-                            do {
-                                let token = try await PlexAuth.signIn { pin in
-                                    Task { @MainActor in plexPinCode = pin.code }
-                                }
-                                plexSignedIn = token != nil
-                                plexStatus = token != nil ? nil : "Code verlopen — probeer opnieuw."
-                                client.refreshPlexLinkState()
-                            } catch {
-                                plexStatus = "Koppelen mislukt: \(error.localizedDescription)"
-                            }
-                        }
-                    } label: {
-                        Label("Koppel met Plex", systemImage: "link")
-                    }
-                    .disabled(plexSigningIn)
-                }
-                if let plexStatus {
-                    Text(plexStatus).font(.caption).foregroundStyle(.secondary)
-                }
-
-                // Bindings, geen computed property: een computed var op het
-                // @Observable model laat SwiftUI niet hertekenen (zie de
-                // Last.fm-schakelaars hierboven, en de memory hierover).
-                if role == .server {
-                    SettingToggle(
-                        "Plex-bibliotheek importeren",
-                        explanation: "Plex wordt de catalogus. Verdringt Roon-rijen voor nummers waarvan Plex het bestand heeft.",
-                        isOn: Binding(get: { client.plexSyncEnabled },
-                                      set: { client.plexSyncEnabled = $0 }))
-                }
-                SettingToggle(
-                    "Vergelijkbare nummers via Plex",
-                    explanation: "Gebruikt Plex' eigen sonische analyse. Zonder koppeling valt hij terug op de eigen motor.",
-                    isOn: Binding(get: { client.plexSonicEnabled },
-                                  set: { client.plexSonicEnabled = $0 }))
-                SettingToggle(
-                    "Rechtstreeks afspelen vanaf Plex",
-                    explanation: "Streamt van Plex in plaats van via de analyzer. Werkt ook buitenshuis, zonder ZeroTier.",
-                    isOn: Binding(get: { client.plexDirectPlayEnabled },
-                                  set: { client.plexDirectPlayEnabled = $0 }))
             }.scoped(.device, in: scope)
 
             Group {

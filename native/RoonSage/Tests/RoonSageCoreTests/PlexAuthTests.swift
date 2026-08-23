@@ -68,6 +68,53 @@ final class PlexAuthTests: XCTestCase {
         XCTAssertNil(PlexAuth.storedToken())
     }
 
+    // MARK: - Serverontdekking
+
+    /// De bug die dit vond: `plexBaseURL` staat standaard op 127.0.0.1, wat op een
+    /// telefoon de telefoon zélf is. Een correct gekoppeld toestel synchroniseerde
+    /// daardoor 0 tracks, zonder één foutmelding.
+    func testParseServersKeepsOnlyServersWithConnections() {
+        let servers = PlexAuth.parseServers([
+            ["name": "Mac mini", "provides": "server", "accessToken": "srv-tok",
+             "connections": [
+                ["uri": "https://10-0-0-1.plex.direct:32400", "local": true, "relay": false],
+                ["uri": "https://82-217-191-164.plex.direct:14084", "local": false, "relay": false],
+             ]],
+            ["name": "Een speler", "provides": "player", "connections": [["uri": "x"]]],
+            ["name": "Server zonder route", "provides": "server", "connections": []],
+        ])
+        XCTAssertEqual(servers.count, 1)
+        XCTAssertEqual(servers[0].name, "Mac mini")
+        XCTAssertEqual(servers[0].accessToken, "srv-tok")
+        XCTAssertEqual(servers[0].connections.count, 2)
+    }
+
+    /// Lokaal eerst (snel), dan direct extern, dan pas relay (traagst).
+    func testConnectionsAreRankedLocalThenDirectThenRelay() {
+        let ranked = PlexAuth.ranked([
+            .init(uri: "relay", local: false, relay: true),
+            .init(uri: "extern", local: false, relay: false),
+            .init(uri: "lokaal", local: true, relay: false),
+        ])
+        XCTAssertEqual(ranked.map(\.uri), ["lokaal", "extern", "relay"])
+    }
+
+    /// Echt tegen plex.tv: geeft die dit account een server met een bruikbaar adres?
+    func testLiveResourcesReturnsAReachableServer() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["ROONSAGE_PLEX_LIVE"] == "1",
+                          "opt-in: zet ROONSAGE_PLEX_LIVE=1")
+        // De live-test gebruikt het admin-token als sta-in voor een apparaat-token.
+        let admin = try XCTUnwrap(PlexClient.localToken(), "geen lokale Plex-installatie")
+        XCTAssertTrue(PlexAuth.store(token: admin))
+
+        let servers = try await PlexAuth.servers()
+        XCTAssertFalse(servers.isEmpty, "plex.tv hoort minstens één server te kennen")
+        let found = await PlexAuth.reachableServer()
+        let route = try XCTUnwrap(found, "geen enkele route antwoordde op /identity")
+        XCTAssertTrue(route.baseURL.hasPrefix("http"))
+        print("[plex live] servers=\(servers.map(\.name)) → bereikbaar via \(route.baseURL)")
+    }
+
     // MARK: - Standalone-modus
 
     /// De poort waar de hele Plex-first opstart op hangt: gekoppeld aan Plex én

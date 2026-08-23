@@ -54,15 +54,34 @@ extension RoonClient {
     /// the import to match. Call after every sign-in and sign-out.
     public func refreshPlexLinkState() {
         plexLinked = PlexAuth.storedToken() != nil
-        if plexStandalone {
-            startPlexSync()
+        guard plexLinked else { stopPlexSync(); return }
+        Task { [weak self] in
+            // Find out where Plex actually IS before syncing. The default is
+            // loopback, which on a phone means the phone — a linked device would
+            // otherwise sync 0 tracks and say nothing about why.
+            await self?.resolvePlexServer()
+            guard let self, self.plexStandalone else { return }
+            self.startPlexSync()
             // Don't make a fresh sign-in wait out the 120 s start-up delay before
             // the library appears — that delay exists to let the server's Roon
             // connect settle, which a standalone client does not have.
-            Task { await runPlexSync() }
-        } else if !plexLinked {
-            stopPlexSync()
+            await self.runPlexSync()
         }
+    }
+
+    /// Point `plexBaseURL` at a route that answers, via plex.tv.
+    ///
+    /// Skipped when Plex runs on this machine (the server build reads the admin
+    /// token locally and loopback is genuinely correct there). Leaves the current
+    /// value alone when nothing answers, so a working manual address is never
+    /// replaced by a failed probe.
+    @discardableResult
+    public func resolvePlexServer() async -> Bool {
+        guard PlexClient.localToken() == nil else { return false }
+        guard let found = await PlexAuth.reachableServer() else { return false }
+        plexBaseURL = found.baseURL
+        Log.info("Plex-server gevonden op \(found.baseURL)", category: .network)
+        return true
     }
 
     public static let plexSyncTaskName = "plex-library-sync"

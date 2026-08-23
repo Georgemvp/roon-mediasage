@@ -183,7 +183,13 @@ extension RoonClient {
             }
         }
         guard let live = remoteBaseURL else {
-            connectionState = .failed("Geen RoonSage-server gevonden op het netwerk.")
+            // In de standalone Plex-modus is er GEEN server, en dat is geen fout.
+            // Deze melding stond bij een Plex-only toestel permanent boven de
+            // bibliotheek — de app zeurde om iets wat expliciet optioneel is
+            // (user, 2026-08-23: "hij blijft zeuren om RoonSage server").
+            connectionState = plexStandalone
+                ? .disconnected
+                : .failed("Geen RoonSage-server gevonden op het netwerk.")
             return
         }
         // Remember the live address so the connect screen and next launch

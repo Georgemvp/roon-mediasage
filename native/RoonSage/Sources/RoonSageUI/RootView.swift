@@ -66,6 +66,9 @@ public struct ContentView: View {
         .sheet(isPresented: Bindable(client).showServerConnectSheet) {
             ConnectView()
         }
+        .sheet(isPresented: Bindable(client).showPlexLinkSheet) {
+            PlexLinkSheet()
+        }
         .roonSageAppearance()
         .appLanguage()
         // Share the now-playing album-art tint with every tab, refreshed whenever
@@ -130,7 +133,8 @@ struct ReconnectingBanner: View {
         // one of them alarming and covering a control. Found on the first
         // screenshot the UI harness ever took — six batches of building never
         // surfaced it, because you have to *look*.
-        if !client.connectionState.isConnected && !client.hasLiveSession && !client.offlineMode {
+        if !client.connectionState.isConnected && !client.hasLiveSession
+            && !client.offlineMode && !client.plexStandalone {
             pill(client.connectionState.label, icon: "arrow.clockwise")
         } else if client.zonesAreStale {
             // The other half of the zone-grace window, which had no voice at all.
