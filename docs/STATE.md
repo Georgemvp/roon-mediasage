@@ -154,14 +154,27 @@ bereikbaar 49.166 → **60.621**. De standalone bibliotheek is dus op twee punte
 béter dan de Roon-bibliotheek. Wat er nog aan Roon vastzit is de identiteit van de
 Roon-rijen zelf en de Qobuz-laag (fase 4).
 
-**Verified: `swift build` exit 0 · `swift test` 1026 tests, 0 fouten, 3
+**De jaartallen werden bij elke Roon-sync gewist.** De standalone-meting liet
+zien dat de app 1.071 jaartallen had terwijl de bestandstags er 59.136 leveren —
+en `applyTrackYears` vult die al in. Oorzaak: de walk **vervangt** een album (hij
+DELETE't de rijen en INSERT ze vers), dus de `ON CONFLICT`-tak draait nooit en
+alles wat alleen de analyzer weet sneuvelt op de delete. Mijn eerste fix
+(COALESCE op die tak) deed dan ook niets — zie ## Failed attempts. Nu wordt het
+door de analyzer ingevulde jaar bínnen dezelfde transactie bewaard en na de
+insert teruggezet, alleen waar de verse rij zelf geen jaar heeft (een jaar dat
+Roon wél levert houdt voorrang). Regressietest op beide paden — de losse
+`replaceAlbumTracks` én `replaceAlbumBatch`, dat laatste is wat de echte sync
+gebruikt — en bewezen rood vóór de fix.
+
+**Verified: `swift build` exit 0 · `swift test` 1029 tests, 0 fouten, 3
 overgeslagen (baseline 984) · `swift build -c release` groen voor RoonSage én
-RoonSageAnalyzerApp · swiftlint 465 violations / 2 serious — één minder dan de
+RoonSageAnalyzerApp · swiftlint 466 violations / 2 serious — één minder dan de
 baseline, dus geen nieuwe · check-localization `--strict` exit 0, 1134 sleutels,
 0 missend, 0 geïnterpoleerd, 0 wees.**
 
-**GESHIPT + GROEN (2026-08-23 08:31): `v1.10.275` / `ios-v1.7.241` /
-`analyzer-v1.1.205`**, alle vier de workflows success (Native Tests, Analyzer DMG,
+**GESHIPT + GROEN (2026-08-23): `v1.10.275` / `ios-v1.7.241` /
+`analyzer-v1.1.205` én `v1.10.276` / `ios-v1.7.242` / `analyzer-v1.1.206`**, alle
+workflows success (Native Tests, Analyzer DMG,
 macOS DMG, iOS TestFlight). De mini draait nog analyzer-v1.1.202 — een tag levert
 een DMG, geen uitrol.
 
@@ -1443,3 +1456,4 @@ ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AU
 
 ## Failed attempts
 - CLAPEmbeddingTests (testEmbeddingMatchesGolden) crasht met SIGABRT / MPSGraph-assertie `shape.count=0 != strides.count=2` — ALLEEN wanneer de zware dataset-destillatie (7zz 121GB + DuckDB) gelijktijdig draait. Slaagde deze sessie 2× (531/534) vóór de destillatie startte; diff raakt CLAP niet; 535/535 groen met CLAP-GPU-tests overgeslagen. CONCLUSIE: omgevings-flake door GPU/CPU-contentie, geen regressie. Her-toetsen op een stille machine.
+- ATTEMPT 1 [L1] (2026-08-23, jaartallen): COALESCE(excluded.year, year) op de ON CONFLICT-tak van replaceAlbumTracks/replaceAlbumBatch -> jaar bleef nil. Oorzaak: die tak draait niet, want de walk DELETE't de albumrijen eerst en INSERT ze daarna vers. Het jaar sneuvelt op de delete. Opgelost door de door de analyzer ingevulde jaren binnen dezelfde transactie te bewaren en na de insert terug te zetten (preserveAnalyzerYears).

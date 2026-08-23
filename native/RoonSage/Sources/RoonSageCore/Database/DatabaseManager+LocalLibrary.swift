@@ -245,7 +245,8 @@ extension DatabaseManager {
                     VALUES \(placeholders)
                     ON CONFLICT(id) DO UPDATE SET
                       title=excluded.title, artist=excluded.artist, album=excluded.album,
-                      album_key=excluded.album_key, year=excluded.year, is_live=excluded.is_live,
+                      album_key=excluded.album_key, year=COALESCE(excluded.year, year),
+                      is_live=excluded.is_live,
                       match_key=excluded.match_key, image_key=excluded.image_key,
                       album_fp=excluded.album_fp, source=excluded.source
                 """, arguments: StatementArguments(args))

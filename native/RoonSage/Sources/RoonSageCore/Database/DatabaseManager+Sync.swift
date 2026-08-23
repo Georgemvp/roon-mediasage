@@ -43,6 +43,39 @@ extension DatabaseManager {
         }
     }
 
+
+    /// Years the analyser filled in on an album's rows, keyed by content.
+    ///
+    /// The walk REPLACES an album: it deletes the album's rows and inserts them
+    /// fresh, so the `ON CONFLICT` branch never runs and anything only the
+    /// analyser knows is wiped. The year is exactly that — Roon parses it out of
+    /// a subtitle string and almost never succeeds (1.071 of 89.752 rows carried
+    /// one, measured 2026-08-23), while the file tags supply 59.136 via
+    /// `applyTrackYears`. Without this snapshot every walk undid that.
+    static func analyzerYears(_ db: Database, fingerprint: String, albumTitle: String) throws
+    -> [(matchKey: String, year: Int)] {
+        try Row.fetchAll(db, sql: """
+            SELECT match_key, year FROM tracks
+            WHERE source = 'roon' AND year IS NOT NULL AND year > 0
+              AND match_key IS NOT NULL AND match_key != ''
+              AND (album_fp = ? OR (album_fp IS NULL AND album = ?))
+        """, arguments: [fingerprint, albumTitle]).compactMap { r in
+            guard let mk = r["match_key"] as String?, let y = r["year"] as Int? else { return nil }
+            return (mk, y)
+        }
+    }
+
+    /// Put the snapshot back, only where the fresh row has no year of its own —
+    /// a year Roon DID supply is a real value and keeps priority.
+    static func restoreAnalyzerYears(_ db: Database, _ years: [(matchKey: String, year: Int)]) throws {
+        for y in years {
+            try db.execute(sql: """
+                UPDATE tracks SET year = ?
+                WHERE match_key = ? AND source = 'roon' AND (year IS NULL OR year = 0)
+            """, arguments: [y.year, y.matchKey])
+        }
+    }
+
     /// Atomically replace one album's rows and checkpoint it. `append: true`
     /// skips the delete — used when the same fingerprint occurs twice in the
     /// album list (two editions with identical title/artist/year) so the
@@ -55,6 +88,8 @@ extension DatabaseManager {
         append: Bool = false
     ) async throws {
         try await pool.write { db in
+            // Snapshot before the delete — see `analyzerYears`.
+            let preservedYears = append ? [] : try Self.analyzerYears(db, fingerprint: fingerprint, albumTitle: albumTitle)
             if !append {
                 // Old-session rows of this album (item_keys differ, so the id
                 // upsert can't dedupe them) + pre-v10 legacy rows by title.
@@ -79,7 +114,13 @@ extension DatabaseManager {
                     VALUES \(placeholders)
                     ON CONFLICT(id) DO UPDATE SET
                       title=excluded.title, artist=excluded.artist, album=excluded.album,
-                      album_key=excluded.album_key, year=excluded.year, is_live=excluded.is_live,
+                      album_key=excluded.album_key, is_live=excluded.is_live,
+                      -- COALESCE, geen overschrijving: Roon's jaar komt uit een
+                      -- subtitle-string die zelden te parsen valt — 1.071 van de
+                      -- 89.752 rijen droegen er een (gemeten 2026-08-23), terwijl
+                      -- de bestandstags er 59.136 leveren. Zonder dit wiste élke
+                      -- Roon-walk de jaartallen die applyTrackYears net invulde.
+                      year=COALESCE(excluded.year, year),
                       match_key=excluded.match_key, image_key=excluded.image_key,
                       album_fp=excluded.album_fp
                 """
@@ -93,6 +134,7 @@ extension DatabaseManager {
                 try db.execute(sql: sql, arguments: StatementArguments(args))
                 start += chunk
             }
+            try Self.restoreAnalyzerYears(db, preservedYears)
             try db.execute(
                 sql: """
                     INSERT INTO sync_album_checkpoints (fingerprint, generation) VALUES (?,?)
@@ -151,6 +193,8 @@ extension DatabaseManager {
         try await pool.write { db in
             let chunk = Self.rowsPerChunk(columns: 10)
             for item in items {
+                let preservedYears = item.append ? []
+                    : try Self.analyzerYears(db, fingerprint: item.fingerprint, albumTitle: item.albumTitle)
                 if !item.append {
                     // Same source='roon' scope as replaceAlbumTracks above.
                     try db.execute(
@@ -170,7 +214,13 @@ extension DatabaseManager {
                         VALUES \(placeholders)
                         ON CONFLICT(id) DO UPDATE SET
                           title=excluded.title, artist=excluded.artist, album=excluded.album,
-                          album_key=excluded.album_key, year=excluded.year, is_live=excluded.is_live,
+                          album_key=excluded.album_key, is_live=excluded.is_live,
+                          -- COALESCE, geen overschrijving: Roon's jaar komt uit een
+                          -- subtitle-string die zelden te parsen valt — 1.071 van de
+                          -- 89.752 rijen droegen er een (gemeten 2026-08-23), terwijl
+                          -- de bestandstags er 59.136 leveren. Zonder dit wiste élke
+                          -- Roon-walk de jaartallen die applyTrackYears net invulde.
+                          year=COALESCE(excluded.year, year),
                           match_key=excluded.match_key, image_key=excluded.image_key,
                           album_fp=excluded.album_fp
                     """
@@ -184,6 +234,7 @@ extension DatabaseManager {
                     try db.execute(sql: sql, arguments: StatementArguments(args))
                     start += chunk
                 }
+                try Self.restoreAnalyzerYears(db, preservedYears)
                 try db.execute(
                     sql: """
                         INSERT INTO sync_album_checkpoints (fingerprint, generation) VALUES (?,?)

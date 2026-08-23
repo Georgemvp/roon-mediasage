@@ -481,4 +481,72 @@ final class LocalLibrarySourceTests: XCTestCase {
             """)
         XCTAssertGreaterThan(standalone.tracks, 0)
     }
+
+    // MARK: - Jaartallen
+
+    func testARoonResyncDoesNotWipeTheYearsTheAnalyserFilledIn() async throws {
+        // Roon's jaar komt uit een subtitle-string die zelden te parsen is: op de
+        // echte bibliotheek droegen 1.071 van de 89.752 rijen er een, terwijl de
+        // bestandstags er 59.136 leveren. `applyTrackYears` vult die in — en elke
+        // volgende walk schreef er een NULL overheen.
+        let run1 = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("r1", artist: "Bowie", title: "Heroes", album: "Heroes")],
+            albumTitle: "Heroes", fingerprint: "fpH", generation: run1.generation)
+
+        let key = TrackIdentity.matchKey(artist: "Bowie", album: "Heroes", title: "Heroes")
+        let filled = try await db.applyTrackYears([(matchKey: key, year: 1977)])
+        XCTAssertEqual(filled, 1)
+
+        // Tweede walk, Roon levert nog steeds geen jaar.
+        let run2 = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("r1", artist: "Bowie", title: "Heroes", album: "Heroes")],
+            albumTitle: "Heroes", fingerprint: "fpH", generation: run2.generation)
+
+        let year = try await db.pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT year FROM tracks WHERE id = 'r1'")
+        }
+        XCTAssertEqual(year, 1977, "de walk mag een ingevuld jaartal niet wissen")
+    }
+
+    func testRoonsOwnYearStillWinsWhenItHasOne() async throws {
+        // COALESCE mag niet betekenen "eerste waarde wint voor altijd": als Roon
+        // wél een jaar levert, is dat een echte waarde en die hoort te landen.
+        let run = try await db.beginSyncRun()
+        var rec = roonRecord("r1", artist: "Bowie", title: "Heroes", album: "Heroes")
+        rec.year = nil
+        try await db.replaceAlbumTracks([rec], albumTitle: "Heroes", fingerprint: "fpH",
+                                        generation: run.generation)
+        rec.year = 1977
+        try await db.replaceAlbumTracks([rec], albumTitle: "Heroes", fingerprint: "fpH",
+                                        generation: run.generation)
+
+        let year = try await db.pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT year FROM tracks WHERE id = 'r1'")
+        }
+        XCTAssertEqual(year, 1977)
+    }
+
+    func testTheBatchPathPreservesYearsToo() async throws {
+        // replaceAlbumBatch is wat de échte sync gebruikt (25 albums per
+        // transactie); replaceAlbumTracks is de losse variant.
+        func batch(_ gen: Int) -> [DatabaseManager.AlbumBatchItem] {
+            [DatabaseManager.AlbumBatchItem(
+                records: [roonRecord("r1", artist: "Bowie", title: "Heroes", album: "Heroes")],
+                albumTitle: "Heroes", fingerprint: "fpH", generation: gen, append: false)]
+        }
+        let run1 = try await db.beginSyncRun()
+        try await db.replaceAlbumBatch(batch(run1.generation))
+        let key = TrackIdentity.matchKey(artist: "Bowie", album: "Heroes", title: "Heroes")
+        _ = try await db.applyTrackYears([(matchKey: key, year: 1977)])
+
+        let run2 = try await db.beginSyncRun()
+        try await db.replaceAlbumBatch(batch(run2.generation))
+
+        let year = try await db.pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT year FROM tracks WHERE id = 'r1'")
+        }
+        XCTAssertEqual(year, 1977)
+    }
 }

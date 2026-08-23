@@ -33,7 +33,13 @@ extension DatabaseManager {
                     VALUES \(placeholders)
                     ON CONFLICT(id) DO UPDATE SET
                       title=excluded.title, artist=excluded.artist, album=excluded.album,
-                      album_key=excluded.album_key, year=excluded.year, is_live=excluded.is_live,
+                      album_key=excluded.album_key, is_live=excluded.is_live,
+                      -- COALESCE, geen overschrijving: Roon's jaar komt uit een
+                      -- subtitle-string die zelden te parsen valt — 1.071 van de
+                      -- 89.752 rijen droegen er een (gemeten 2026-08-23), terwijl
+                      -- de bestandstags er 59.136 leveren. Zonder dit wiste élke
+                      -- Roon-walk de jaartallen die applyTrackYears net invulde.
+                      year=COALESCE(excluded.year, year),
                       match_key=excluded.match_key, image_key=excluded.image_key
                 """
                 var args: [DatabaseValueConvertible?] = []
