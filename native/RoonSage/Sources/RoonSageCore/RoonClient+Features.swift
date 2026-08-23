@@ -142,11 +142,22 @@ extension RoonClient {
     public func syncAudioFeatures(from baseURL: String) async -> DatabaseManager.AudioFeatureDiagnostic? {
         guard let payload = await fetchFeaturePayload(from: baseURL) else { return nil }
         let db = database
+        // Only the server of record owns the library. A thin client's library
+        // arrives whole via the :5767 share (which carries `source`), so running
+        // the ingest there would write a second, `local::`-keyed row beside the
+        // `import::`-keyed one it was just handed.
+        let ingestLocal = controlMode == .direct
         let diag = await Task.detached { () -> DatabaseManager.AudioFeatureDiagnostic? in
             try? await db?.upsertAudioFeatures(payload.features)
             // Fuzzy fallback rewrites tracks.match_key for confident matches so the
             // DJ/Sonic joins pick them up; apply on a real sync.
             let d = try? await db?.reconcileFeatureMatches(payload.identities, apply: true)
+            // AFTER reconcile: everything still unmatched is a file Roon has no
+            // row for, so it becomes a local library row. Before reconcile we'd
+            // add rows for tracks Roon does have, just spelled differently.
+            if ingestLocal, let ingest = try? await db?.ingestLocalTracks(payload.localRows) {
+                Log.info("Lokale bibliotheekbron: \(ingest.inserted) nieuw, \(ingest.refreshed) bijgewerkt, \(ingest.reclaimed) teruggegeven aan Roon, \(ingest.total) totaal", category: .network)
+            }
             // Backfill tracks.year from the analyzer's file tags (Roon Browse has no
             // year). After reconcile so fuzzy-rewritten match_keys also resolve.
             _ = try? await db?.applyTrackYears(payload.years)
@@ -274,6 +285,10 @@ extension RoonClient {
         // (match_key, Deezer genres) — second genre signal (DeezerGenreEnricher),
         // stored in track_deezer_genres, joined by match_key like mb genres.
         var deezerGenres: [(matchKey: String, genres: [String])]
+        // The same rows seen as library candidates: artist/title/album/year from
+        // the file tags. Feeds `ingestLocalTracks`, which turns the ones Roon has
+        // no row for into `source='local'` library rows.
+        var localRows: [DatabaseManager.LocalTrackRow]
     }
 
     /// Fetch + parse the analyzer `/features` JSON off the main actor.
@@ -291,7 +306,9 @@ extension RoonClient {
             var years: [(matchKey: String, year: Int)] = []
             var genres: [(matchKey: String, genres: [String])] = []
             var deezerGenres: [(matchKey: String, genres: [String])] = []
+            var localRows: [DatabaseManager.LocalTrackRow] = []
             features.reserveCapacity(arr.count); identities.reserveCapacity(arr.count)
+            localRows.reserveCapacity(arr.count)
             for o in arr {
                 guard let mk = o["match_key"] as? String, !mk.isEmpty else { continue }
                 features.append(DatabaseManager.AudioFeatureRow(
@@ -318,9 +335,20 @@ extension RoonClient {
                 if let y = o["year"] as? Int, y > 1900 { years.append((mk, y)) }
                 if let g = o["mb_genres"] as? [String], !g.isEmpty { genres.append((mk, g)) }
                 if let dg = o["deezer_genres"] as? [String], !dg.isEmpty { deezerGenres.append((mk, dg)) }
+                // Library candidate. Empty title = no row to show; the analyser
+                // exports "" for a file whose tags it couldn't read.
+                if let t = o["title"] as? String, !t.isEmpty {
+                    let year = o["year"] as? Int
+                    localRows.append(DatabaseManager.LocalTrackRow(
+                        matchKey: mk,
+                        artist: (o["artist"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                        title: t,
+                        album: (o["album"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                        year: (year ?? 0) > 1900 ? year : nil))
+                }
             }
             return FeaturePayload(features: features, identities: identities, years: years,
-                                  genres: genres, deezerGenres: deezerGenres)
+                                  genres: genres, deezerGenres: deezerGenres, localRows: localRows)
         }.value
     }
 

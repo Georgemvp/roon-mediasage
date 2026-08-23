@@ -58,8 +58,14 @@ extension DatabaseManager {
             if !append {
                 // Old-session rows of this album (item_keys differ, so the id
                 // upsert can't dedupe them) + pre-v10 legacy rows by title.
+                // Scoped to source='roon': a local (analyser-sourced) row can
+                // carry the same album name, and the album_fp IS NULL branch
+                // would delete it on every walk of a same-titled Roon album.
                 try db.execute(
-                    sql: "DELETE FROM tracks WHERE album_fp = ? OR (album_fp IS NULL AND album = ?)",
+                    sql: """
+                        DELETE FROM tracks WHERE source = 'roon'
+                          AND (album_fp = ? OR (album_fp IS NULL AND album = ?))
+                    """,
                     arguments: [fingerprint, albumTitle])
             }
             let chunk = Self.rowsPerChunk(columns: 10)
@@ -108,10 +114,14 @@ extension DatabaseManager {
     public func finishSyncRun(generation: Int, pruneStale: Bool = true) async throws {
         try await pool.write { db in
             if pruneStale {
+                // source='roon' scopes the prune to the walk's own rows. Without
+                // it every analyser-sourced row is deleted here: it carries no
+                // checkpoint of this generation, by construction.
                 try db.execute(
                     sql: """
-                        DELETE FROM tracks WHERE album_fp IS NULL OR album_fp NOT IN
-                          (SELECT fingerprint FROM sync_album_checkpoints WHERE generation = ?)
+                        DELETE FROM tracks WHERE source = 'roon'
+                          AND (album_fp IS NULL OR album_fp NOT IN
+                            (SELECT fingerprint FROM sync_album_checkpoints WHERE generation = ?))
                     """,
                     arguments: [generation])
             }
@@ -142,8 +152,12 @@ extension DatabaseManager {
             let chunk = Self.rowsPerChunk(columns: 10)
             for item in items {
                 if !item.append {
+                    // Same source='roon' scope as replaceAlbumTracks above.
                     try db.execute(
-                        sql: "DELETE FROM tracks WHERE album_fp = ? OR (album_fp IS NULL AND album = ?)",
+                        sql: """
+                            DELETE FROM tracks WHERE source = 'roon'
+                              AND (album_fp = ? OR (album_fp IS NULL AND album = ?))
+                        """,
                         arguments: [item.fingerprint, item.albumTitle])
                 }
                 var start = 0

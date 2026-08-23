@@ -93,4 +93,15 @@ public enum TrackIdentity {
     public static func cleanTitle(_ title: String?) -> String {
         stripRemaster(stripFeat(stripTrackPrefix(title ?? "")))
     }
+
+    /// Live-recording heuristic on title + album context, shared by every source
+    /// that writes `tracks.is_live` (the Roon walk reads Roon's subtitle, the
+    /// local ingest reads the file's album tag). One definition, so a track can't
+    /// be live on one route and studio on the other — `excludeLive` filters the
+    /// stations, DJ sets and Sonic DNA on exactly this flag.
+    public static func looksLive(title: String?, context: String?) -> Bool {
+        let hints = ["live", "concert", "unplugged", "acoustic"]
+        let combined = ((title ?? "") + (context ?? "")).lowercased()
+        return hints.contains { combined.contains($0) }
+    }
 }

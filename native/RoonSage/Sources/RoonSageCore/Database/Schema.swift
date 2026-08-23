@@ -769,6 +769,22 @@ enum Schema {
             }
         }
 
+        // Where a library row came from. The Roon walk is no longer the only
+        // source: the analyser knows 66.378 on-disk files, of which ~19.5k never
+        // reconcile onto a Roon row (measured 2026-08-23) — their analyses were
+        // already synced into track_audio_features but had no `tracks` row to
+        // join, so no feature in the app could reach them.
+        //
+        // The column exists because the Roon walk PRUNES: finishSyncRun deletes
+        // every row without a checkpoint of the current generation, and
+        // replaceAlbumTracks deletes by album name when album_fp is NULL. Both
+        // would wipe a non-Roon row on the next sync. Every delete in the walk is
+        // therefore scoped to source='roon' — the walk only ever owns its own rows.
+        migrator.registerMigration("v49_track_source") { db in
+            try db.execute(sql: "ALTER TABLE tracks ADD COLUMN source TEXT NOT NULL DEFAULT 'roon'")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tracks_source ON tracks(source)")
+        }
+
         try migrator.migrate(db)
     }
 }

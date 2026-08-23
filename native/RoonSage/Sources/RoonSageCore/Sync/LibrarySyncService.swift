@@ -138,9 +138,7 @@ actor LibrarySyncService {
                 // album contributed a phantom "Play Album" track (mirrors the
                 // Python filter in roon_browse.py).
                 guard let sub = item.subtitle, !sub.isEmpty else { continue }
-                let liveHints = ["live", "concert", "unplugged", "acoustic"]
-                let combinedTitle = (item.title + (item.subtitle ?? "")).lowercased()
-                let isLive = liveHints.contains { combinedTitle.contains($0) }
+                let isLive = TrackIdentity.looksLive(title: item.title, context: item.subtitle)
                 // For compilations Roon Browse returns the track artist in item.subtitle;
                 // use it so the match_key aligns with the file-tag artist in the analyzer.
                 let (trackArtist, _) = isCompilation ? Self.parseSubtitle(item.subtitle) : (nil, nil)

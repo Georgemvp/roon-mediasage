@@ -1,0 +1,300 @@
+import AnalyzerCore
+import AudioAnalysis
+import GRDB
+import XCTest
+@testable import RoonSageCore
+
+/// The library's second source (DatabaseManager+LocalLibrary): analysed on-disk
+/// tracks that the Roon walk produced no row for become `source='local'` rows,
+/// they survive a full resync, and they step aside as soon as Roon covers them.
+final class LocalLibrarySourceTests: XCTestCase {
+    private var dbURL: URL!
+    private var db: DatabaseManager!
+
+    override func setUpWithError() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roonsage-local-lib-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        dbURL = dir.appendingPathComponent("library.db")
+        db = try DatabaseManager(url: dbURL)
+    }
+
+    override func tearDownWithError() throws {
+        db = nil
+        if let dir = dbURL?.deletingLastPathComponent() {
+            try? FileManager.default.removeItem(at: dir)
+        }
+    }
+
+    private func local(_ artist: String, _ title: String, album: String, year: Int? = nil)
+    -> DatabaseManager.LocalTrackRow {
+        DatabaseManager.LocalTrackRow(
+            matchKey: TrackIdentity.matchKey(artist: artist, album: album, title: title),
+            artist: artist, title: title, album: album, year: year)
+    }
+
+    private func roonRecord(_ id: String, artist: String, title: String, album: String) -> TrackRecord {
+        TrackRecord(id: id, title: title, artist: artist, album: album, albumKey: "ak-\(id)",
+                    matchKey: TrackIdentity.matchKey(artist: artist, album: album, title: title))
+    }
+
+    // MARK: - Ingest
+
+    func testIngestAddsOnlyTracksRoonDoesNotHave() async throws {
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("r1", artist: "Solti", title: "Elektra", album: "Strauss")],
+            albumTitle: "Strauss", fingerprint: "fpA", generation: run.generation)
+
+        let result = try await db.ingestLocalTracks([
+            local("Solti", "Elektra", album: "Strauss"),          // Roon has it
+            local("Solti", "Salome", album: "Strauss"),           // Roon doesn't
+            local("Menuhin", "Chaconne", album: "The Century"),   // Roon doesn't
+        ])
+
+        XCTAssertEqual(result.offered, 3)
+        XCTAssertEqual(result.inserted, 2)
+        XCTAssertEqual(result.total, 2)
+        let total = try await db.trackCount()
+        XCTAssertEqual(total, 3)
+    }
+
+    func testLocalRowIsPlayableByItsOwnRecomputedMatchKey() async throws {
+        // The whole reason no new playback code is needed: LocalPlayability
+        // recomputes the key from artist/album/title, and the row was built from
+        // the very tags the analyser keyed on. If those two ever diverge, a local
+        // row silently becomes unplayable.
+        let row = local("Sir Georg Solti", "Die Frau ohne Schatten (2011 Remaster)", album: "Strauss")
+        _ = try await db.ingestLocalTracks([row])
+
+        let stored = try await db.pool.read { db in
+            try TrackRecord.fetchOne(db, sql: "SELECT * FROM tracks WHERE source = 'local'")
+        }
+        let record = try XCTUnwrap(stored)
+        XCTAssertEqual(record.id, DatabaseManager.localKeyPrefix + row.matchKey)
+        XCTAssertEqual(LocalPlayability.matchKey(for: record), row.matchKey)
+        XCTAssertEqual(
+            LocalPlayability.partition([record], playableKeys: [row.matchKey]).playable.count, 1)
+    }
+
+    func testReIngestRefreshesInsteadOfDuplicating() async throws {
+        _ = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "Heroes")])
+        let second = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "\"Heroes\"", year: 1977)])
+
+        XCTAssertEqual(second.inserted, 0)
+        XCTAssertEqual(second.refreshed, 1)
+        XCTAssertEqual(second.total, 1)
+        let album = try await db.pool.read { db in
+            try String.fetchOne(db, sql: "SELECT album FROM tracks WHERE source = 'local'")
+        }
+        XCTAssertEqual(album, "\"Heroes\"")
+    }
+
+    func testKeylessAndTitlelessRowsAreRejected() async throws {
+        let result = try await db.ingestLocalTracks([
+            DatabaseManager.LocalTrackRow(matchKey: "", artist: "X", title: "T", album: "A", year: nil),
+            DatabaseManager.LocalTrackRow(matchKey: "k", artist: "X", title: "  ", album: "A", year: nil),
+        ])
+        XCTAssertEqual(result.offered, 2)
+        XCTAssertEqual(result.inserted, 0)
+        XCTAssertEqual(result.total, 0)
+    }
+
+    func testDuplicateKeysInOnePayloadCollapseToOneRow() async throws {
+        // Two files normalising onto one match_key would collide on the primary
+        // key inside a single INSERT statement.
+        let result = try await db.ingestLocalTracks([
+            local("Bowie", "Heroes", album: "Heroes"),
+            local("Bowie", "Heroes (2017 Remaster)", album: "Heroes"),
+        ])
+        XCTAssertEqual(result.inserted, 1)
+        XCTAssertEqual(result.total, 1)
+    }
+
+    // MARK: - Surviving the Roon walk
+
+    func testLocalRowsSurviveAFullSyncWithPrune() async throws {
+        _ = try await db.ingestLocalTracks([local("Menuhin", "Chaconne", album: "The Century")])
+
+        // A complete Roon walk that never mentions that album: the prune must
+        // leave it alone, because the walk only owns source='roon' rows.
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("r1", artist: "Bowie", title: "Heroes", album: "Heroes")],
+            albumTitle: "Heroes", fingerprint: "fpH", generation: run.generation)
+        try await db.finishSyncRun(generation: run.generation)
+
+        let locals = try await db.localTrackCount()
+        XCTAssertEqual(locals, 1)
+        let total = try await db.trackCount()
+        XCTAssertEqual(total, 2)
+    }
+
+    func testSameTitledRoonAlbumDoesNotDeleteTheLocalRow() async throws {
+        // replaceAlbumTracks' legacy branch deletes by album NAME when album_fp
+        // is NULL. A local row sharing that album name must not be caught by it.
+        _ = try await db.ingestLocalTracks([local("Menuhin", "Chaconne", album: "The Century")])
+
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("r1", artist: "Menuhin", title: "Partita", album: "The Century")],
+            albumTitle: "The Century", fingerprint: "fpC", generation: run.generation)
+
+        let locals = try await db.localTrackCount()
+        XCTAssertEqual(locals, 1)
+    }
+
+    func testRoonCatchingUpReclaimsTheLocalRow() async throws {
+        _ = try await db.ingestLocalTracks([local("Menuhin", "Chaconne", album: "The Century")])
+        let before = try await db.localTrackCount()
+        XCTAssertEqual(before, 1)
+
+        // Next walk: Roon now indexes the same track.
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("r1", artist: "Menuhin", title: "Chaconne", album: "The Century")],
+            albumTitle: "The Century", fingerprint: "fpC", generation: run.generation)
+        try await db.finishSyncRun(generation: run.generation)
+
+        let result = try await db.ingestLocalTracks([local("Menuhin", "Chaconne", album: "The Century")])
+        XCTAssertEqual(result.reclaimed, 1)
+        XCTAssertEqual(result.inserted, 0)
+        XCTAssertEqual(result.total, 0)
+        let total = try await db.trackCount()
+        XCTAssertEqual(total, 1)
+    }
+
+    // MARK: - First-seen
+
+    func testFirstSeenIsBackdatedNotStampedToday() async throws {
+        // A pre-existing library stamp is the oldest thing we know about; the
+        // new rows must inherit it, or 19.5k tracks announce themselves as "new
+        // today" in the on-this-day / new-in-library views.
+        try await db.pool.write { db in
+            try db.execute(sql: "INSERT INTO track_first_seen (match_key, first_seen) VALUES ('seed','2024-01-02T03:04:05Z')")
+        }
+        _ = try await db.ingestLocalTracks([local("Menuhin", "Chaconne", album: "The Century")])
+
+        let stamps = try await db.pool.read { db in
+            try String.fetchAll(db, sql: "SELECT first_seen FROM track_first_seen WHERE match_key != 'seed'")
+        }
+        XCTAssertEqual(stamps, ["2024-01-02T03:04:05Z"])
+    }
+
+    // MARK: - Album grouping
+
+    func testLocalRowsOfOneAlbumShareAnAlbumKey() async throws {
+        _ = try await db.ingestLocalTracks([
+            local("Menuhin", "Chaconne", album: "The Century"),
+            local("Menuhin", "Partita", album: "The Century"),
+            local("Bowie", "Heroes", album: "Heroes"),
+        ])
+        let albums = try await db.pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(DISTINCT album_key) FROM tracks WHERE source = 'local'")
+        }
+        XCTAssertEqual(albums, 2)
+    }
+
+    // MARK: - Library share (:5767)
+
+    func testSourceSurvivesTheShareRoundtrip() async throws {
+        // The client needs to know a row is analyser-sourced: it carries no Roon
+        // image_key, so artwork has to come from the analyser instead.
+        try await db.upsertTracks([
+            TrackRecord(id: "roon-1", title: "Heroes", artist: "Bowie", album: "Heroes",
+                        albumKey: "ak1", matchKey: "bowie\u{1f}heroes", imageKey: "img1"),
+        ])
+        _ = try await db.ingestLocalTracks([local("Menuhin", "Chaconne", album: "The Century")])
+
+        let json = try await db.exportLibraryJSON()
+        let dir2 = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roonsage-local-share-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir2, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir2) }
+        let dst = try DatabaseManager(url: dir2.appendingPathComponent("library.db"))
+
+        let imported = try await dst.importLibrary(json: json)
+        XCTAssertEqual(imported, 2)
+        let locals = try await dst.localTrackCount()
+        XCTAssertEqual(locals, 1)
+        let roonSide = try await dst.pool.read { db in
+            try String.fetchAll(db, sql: "SELECT title FROM tracks WHERE source = 'roon' ORDER BY title")
+        }
+        XCTAssertEqual(roonSide, ["Heroes"])
+    }
+
+    // MARK: - Measurement against the real library (opt-in)
+
+    /// Repeatable measurement of what this actually does to Casper's library.
+    /// Skipped unless both databases are pointed at explicitly — it works on
+    /// COPIES, never on the live files (the analyser holds their WAL open):
+    ///
+    ///     ROONSAGE_REAL_LIBRARY_DB="$HOME/Library/Application Support/RoonSage/library.db" \
+    ///     ROONSAGE_REAL_ANALYZER_DB="$HOME/Library/Application Support/RoonSageAnalyzer/analyzer.db" \
+    ///     swift test --filter testMeasureAgainstTheRealLibrary
+    func testMeasureAgainstTheRealLibrary() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let libSrc = env["ROONSAGE_REAL_LIBRARY_DB"], let anSrc = env["ROONSAGE_REAL_ANALYZER_DB"] else {
+            throw XCTSkip("Set ROONSAGE_REAL_LIBRARY_DB + ROONSAGE_REAL_ANALYZER_DB to measure.")
+        }
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("roonsage-measure-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        let libCopy = dir.appendingPathComponent("library.db")
+        let anCopy = dir.appendingPathComponent("analyzer.db")
+        try fm.copyItem(at: URL(fileURLWithPath: libSrc), to: libCopy)
+        try fm.copyItem(at: URL(fileURLWithPath: anSrc), to: anCopy)
+
+        // The real payload: the analyser's own /features export, parsed the way
+        // RoonClient.fetchFeaturePayload parses it.
+        let store = try FeatureStore(path: anCopy.path)
+        let json = store.exportJSON(includeEmbedding: false)
+        let arr = try XCTUnwrap(try JSONSerialization.jsonObject(with: json) as? [[String: Any]])
+        var rows: [DatabaseManager.LocalTrackRow] = []
+        for o in arr {
+            guard let mk = o["match_key"] as? String, !mk.isEmpty,
+                  let t = o["title"] as? String, !t.isEmpty else { continue }
+            let year = o["year"] as? Int
+            rows.append(DatabaseManager.LocalTrackRow(
+                matchKey: mk,
+                artist: (o["artist"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                title: t,
+                album: (o["album"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                year: (year ?? 0) > 1900 ? year : nil))
+        }
+
+        let real = try DatabaseManager(url: libCopy)
+        let before = try await real.pool.read { db in
+            try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM track_audio_features f
+                LEFT JOIN (SELECT DISTINCT match_key k FROM tracks) t ON t.k = f.match_key
+                WHERE t.k IS NULL
+                """) ?? 0
+        }
+        let tracksBefore = try await real.trackCount()
+        let reachableBefore = try await real.analyzedTrackIdentities(excludeLive: false).count
+        let result = try await real.ingestLocalTracks(rows)
+        let after = try await real.pool.read { db in
+            try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM track_audio_features f
+                LEFT JOIN (SELECT DISTINCT match_key k FROM tracks) t ON t.k = f.match_key
+                WHERE t.k IS NULL
+                """) ?? 0
+        }
+        let reachableAfter = try await real.analyzedTrackIdentities(excludeLive: false).count
+        let tracksAfter = try await real.trackCount()
+        print("""
+            METING lokale bibliotheekbron
+              feature-rijen aangeboden   : \(result.offered)
+              tracks vóór                : \(tracksBefore)
+              tracks ná                  : \(tracksAfter)
+              lokale rijen               : \(result.total) (nieuw \(result.inserted))
+              features zonder tracks-rij : \(before) -> \(after)
+              analyzedTrackIdentities    : \(reachableBefore) -> \(reachableAfter)
+            """)
+        XCTAssertLessThan(after, before)
+        XCTAssertGreaterThan(result.inserted, 0)
+        XCTAssertGreaterThan(reachableAfter, reachableBefore)
+    }
+}

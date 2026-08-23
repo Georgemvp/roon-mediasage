@@ -137,6 +137,24 @@ actor BrowseService {
             throw BrowseError.playbackFailed
         }
 
+        // `local::` — a library row the analyser contributed, for an on-disk file
+        // the Roon walk never produced a row for. Roon never issued an item_key
+        // for it, so there is nothing to browse. Unlike the two prefixes above,
+        // the key holds the NORMALISED match key (diacritics folded, punctuation
+        // collapsed), not display text — so the search terms come from the row's
+        // own artist/title, which every call site already passes.
+        if itemKey.hasPrefix(Self.localPrefix) {
+            let sTitle = title ?? ""
+            guard !sTitle.isEmpty else {
+                Log.warning("playByBrowse: local:: key without a title, nothing to search for", category: .roon)
+                throw BrowseError.playbackFailed
+            }
+            Log.debug("playByBrowse via search (local row): artist='\(artist ?? "")' title='\(sTitle)' action=\(action)", category: .roon)
+            if try await playViaSearch(artist: artist ?? "", title: sTitle, zoneID: zoneID, action: action) { return }
+            Log.warning("playViaSearch found no Roon result for local row '\(artist ?? "") - \(sTitle)'", category: .roon)
+            throw BrowseError.playbackFailed
+        }
+
         // Try the stored library key first. Transport errors propagate (real
         // connection failure → surfaced); a stale key returns a valid response
         // with an empty list, so `executePlayAction` reports `false` and we
@@ -271,6 +289,8 @@ actor BrowseService {
     static let qobuzSearchPrefix = "qobuz_search::"
     /// Library rows imported from another device (DatabaseManager.importKeyPrefix).
     static let importPrefix = DatabaseManager.importKeyPrefix
+    /// Library rows contributed by the analyser (DatabaseManager.localKeyPrefix).
+    static let localPrefix = DatabaseManager.localKeyPrefix
 
     struct SearchResult: Sendable {
         let title: String

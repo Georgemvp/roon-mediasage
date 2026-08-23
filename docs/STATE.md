@@ -1,17 +1,18 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
-Lees docs/STATE.md en ga verder met "fix alles" uit de audit. Pak de VOLGENDE
-batch uit ## Next. Het UX-speler-plan is AF en sinds 2026-08-22 ook interactief
-geverifieerd; wat nu bovenaan ligt zijn de vier punten onder "NOG OPEN" in het
-bovenste blok van ## Now.
+Lees docs/STATE.md en ga verder met `native/docs/STANDALONE_LIBRARY_PLAN.md`:
+fase 1 (de bibliotheek krijgt een tweede bron) is AF, gemeten en lokaal gecommit
+— **nog niet gepusht en niet getagd**. De volgende stap is fase 2 (lokale
+albumhoezen), want de 15.053 nieuwe bibliotheekrijen hebben er geen.
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
 nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
-Laatst geshipt: v1.10.273 / ios-v1.7.239 / analyzer-v1.1.203 (getagd 22-08 21:08,
-alle vier workflows groen). De mini draait nog analyzer-v1.1.202: die DMG is een
-artefact, geen uitrol — installeren is de handmatige bootout → installeren →
-bootstrap. `native/RoonSage/Package.swift` staat bewust ongecommit — zie het
-tweede item onder ## Done.
+Laatst getagd: v1.10.274 / ios-v1.7.240 / analyzer-v1.1.204. De mini draait
+analyzer-v1.1.202: een tag levert een DMG, geen uitrol — installeren is de
+handmatige bootout → installeren → bootstrap. **Fase 1 zit in de analyzer, dus
+hij werkt pas op de mini ná zo'n uitrol.**
+`native/RoonSage/Package.swift` staat bewust ongecommit — zie het tweede item
+onder ## Done.
 Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
 bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 ═══════════════════════════════════════════════════════════════════ -->
@@ -20,6 +21,68 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+NU (2026-08-23, ochtend): **DE BIBLIOTHEEK LOS VAN ROON — PLAN GESCHREVEN, FASE 1
+AF EN GEMETEN.** (user: "Ga daar in werken en begin maak een duidelijk plan en
+voer die uit.") Plan: `native/docs/STANDALONE_LIBRARY_PLAN.md`, vier fasen.
+**Lokaal gecommit, NIET gepusht, NIET getagd** — een tag stuurt de analyzer via
+de CI-DMG naar de mini en daar is deze sessie niet om gevraagd.
+
+**De vondst.** De app heeft twee identiteitssystemen: `tracks` is een afdruk van
+Roon's Browse-boom mét Roon's sessie-gebonden `item_key` als primaire sleutel,
+`track_features` is een afdruk van de schijf met een genormaliseerde `match_key`.
+De fuzzy brug ertussen lekte: **19.537 volledig geanalyseerde tracks stonden in
+`track_audio_features` zonder `tracks`-rij**. Hun analyses waren al
+gesynchroniseerd en kostten al schijf en geheugen, maar `analyzedTrackIdentities()`
+joint `tracks → track_audio_features`, dus geen enkele functie kon erbij.
+
+**Fase 1: de bibliotheek krijgt een tweede bron.** Migratie `v49_track_source`
+(kolom `tracks.source`), alle drie de deletes van de Roon-walk begrensd tot
+`source='roon'` — zonder die grens gooit `finishSyncRun` élke niet-Roon-rij weg,
+want die draagt per constructie geen checkpoint. `ingestLocalTracks`
+(`DatabaseManager+LocalLibrary.swift`) draait in `syncAudioFeatures` direct ná
+`reconcileFeatureMatches`, en alleen in `.direct`-modus: de server bezit de
+bibliotheek, een thin client krijgt hem compleet via :5767.
+
+**Afspelen kostte geen nieuwe code.** `LocalPlayability.matchKey(for:)`
+herberekent de sleutel uit artiest/album/titel, en de rijen zijn gebouwd uit
+precies de tags waarop de analyzer keyde — dus ze streamen meteen via `/audio`.
+Op een Roon-zone gaat `local::` door dezelfde synthetische-sleutel-tak als
+`import::`, met dit verschil dat de zoektermen uit de rij zelf komen (de sleutel
+draagt de genormaliseerde match key, geen weergavetekst).
+
+**Gemeten tegen kopieën van de echte databases** (herhaalbaar:
+`ROONSAGE_REAL_LIBRARY_DB=… ROONSAGE_REAL_ANALYZER_DB=… swift test --filter
+testMeasureAgainstTheRealLibrary`; zonder die twee slaat de test zichzelf over):
+66.377 rijen aangeboden · tracks 89.752 → 104.805 · 15.053 lokale rijen ·
+features zonder tracks-rij 19.537 → 4.484 · **`analyzedTrackIdentities()` 49.166
+→ 64.219**. Dat laatste is de opbrengst: +15.053 tracks (31%) voor stations,
+DJ-sets, Music Map en Sonic Search. De 4.484 die overblijven zijn verweesd —
+sleutels van vóór een normaliser-wijziging plus rijen zonder BPM, waar geen
+analyse meer achter zit; apart onderhoud, niet deze fase.
+
+**Twee vallen die dit had kunnen slopen, allebei afgevangen en getest.** (1) De
+trigger `trg_tracks_first_seen` zou 15.053 rijen als "vandaag nieuw" stempelen en
+"op deze dag" overspoelen — de ingest zaait `track_first_seen` daarom vooraf met
+de oudste bekende datum. (2) `replaceAlbumTracks` verwijdert bij `album_fp IS
+NULL` op álbumnaam; een lokale rij met dezelfde albumnaam ging daar zonder de
+`source`-grens elke walk aan onderdoor.
+
+**Onderweg opgeruimd:** de live-heuristiek stond alleen in `LibrarySyncService`
+en kreeg hier bijna een tweede kopie. Nu één definitie,
+`TrackIdentity.looksLive(title:context:)` — anders kon dezelfde track live zijn
+via de ene bron en studio via de andere, en `excludeLive` filtert álle stations
+op precies die vlag.
+
+**Verified: `swift build` exit 0 · `swift test` 996 tests, 0 fouten, 1
+overgeslagen (baseline 984) · `swift build -c release --product RoonSage`
+exit 0 · swiftlint 466 violations / 2 serious — exact gelijk aan de baseline ·
+check-localization `--strict` exit 0, 1134 sleutels, 0 missend, 0 geïnterpoleerd,
+0 wees.**
+
+---
+_Hieronder de `## Now` van de vorige sessie (de 360°-audit). Bewaard, niet
+geschrapt._
+
 NU (2026-08-23, nacht): **360°-AUDIT VOLLEDIG UITGEVOERD — BATCH A, B ÉN C AF.**
 (user: "Pak alles aan. Echt alles zodat ik morgenochtend wakker wordt en de
 volledige audit verbeteringen zijn uitgevoerd en ik weer door kan.")
@@ -1101,7 +1164,9 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **Committen, pushen en taggen** — alles staat ongecommit in de boom. Push + tag stuurt de analyzer via de CI-DMG naar de mini; dat is bewust niet gedaan zonder opdracht. Gewijzigd: `RoonClient.swift`, `RoonClient+Transport.swift`, `RoonClient+Remote.swift`, `TransportIntent.swift` (nieuw), `VectorIndex.swift`, `MusicBrainzDiscoveryClient.swift`, 20 bestanden in `RoonSageUI`, `SearchFieldFocus.swift` (nieuw), de 3 bestanden van het macOS-target, beide `Localizable.strings`, `check-localization.sh`, `QueueOwnershipTests.swift` + `TransportIntentTests.swift` (nieuw), `docs/NATIVE_APP_AUDIT.md`, `docs/STATE.md`.
+- **Fase 2 van `native/docs/STANDALONE_LIBRARY_PLAN.md`: lokale albumhoezen.** De 15.053 nieuwe bibliotheekrijen hebben er geen — er is nul lokale artwork-code in de repo, alle zeven weergaveplekken gaan via `client.imageURL(forKey:)` = Roon's image-API. Nodig: embedded artwork via `MetadataReader` (AVFoundation `commonKeyArtwork`), anders `cover.jpg`/`folder.jpg` naast het bestand; een `/artwork?match_key=…` op :5766 naar analogie van `/audio`; en één resolver die op `tracks.source` beslist welke bron.
+- **Fase 1 pushen + taggen** (`v1.10.275` / `ios-v1.7.241` / `analyzer-v1.1.205`) en de analyzer via de CI-DMG uitrollen — fase 1 zit ín de analyzer, dus op de mini gebeurt er niets tot die uitrol. Bewust niet gedaan zonder opdracht.
+- **4.484 verweesde rijen in `track_audio_features`** — sleutels die de huidige `/features`-export niet meer produceert (oude normaliser, of `bpm IS NULL`). Geen analyse meer achter; kandidaat voor een onderhoudsronde.
 - **Op het toestel beoordelen.** Alles is code-only geverifieerd; vier wijzigingen wíl je zien: de optimistic play/pause (moet direct reageren), het live volume tijdens slepen, de `zonesAreStale`-pil als je de Core even wegtrekt, en ⌘F op de Mac.
 - **Optioneel: `swiftlint --fix`** voor de resterende 464 opmaakwaarschuwingen — één commando, maar een diff van honderden regels over 306 bestanden. Bewust apart gehouden zodat hij de inhoudelijke wijzigingen niet onleesbaar maakt.
 - **Batch B/C-restanten die er bewust niet in zitten:** de laatste 2 `empty_count` (Codable wire-veld `DiscoveryDigestStatus.count`; hernoemen breekt het server/client-contract voor een false positive) en de spatiebalk als play/pause op macOS (mag niet vuren met focus in een tekstveld — apart uit te zoeken).

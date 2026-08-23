@@ -32,7 +32,7 @@ extension DatabaseManager {
             }
             var tracks: [[String: Any]] = []
             let rows = try Row.fetchAll(db, sql: """
-                SELECT id, title, artist, album, album_key, year, is_live, match_key, image_key, album_fp
+                SELECT id, title, artist, album, album_key, year, is_live, match_key, image_key, album_fp, source
                 FROM tracks
             """)
             tracks.reserveCapacity(rows.count)
@@ -54,6 +54,11 @@ extension DatabaseManager {
                 } else if let al = r["album"] as String?, !al.isEmpty {
                     o["fp"] = al + "|" + (r["artist"] as String? ?? "")
                 }
+                // Row source travels with the row: a client needs it to know that
+                // an album has no Roon image_key and must resolve artwork from the
+                // analyser instead. Only emitted when it isn't the default, so the
+                // payload (87.820 rows) doesn't grow for a Roon-only library.
+                if let v = r["source"] as String?, !v.isEmpty, v != "roon" { o["s"] = v }
                 if let id = r["id"] as String?, let g = genresByTrack[id], !g.isEmpty { o["g"] = g }
                 if let mk = r["match_key"] as String?, let mg = mbByKey[mk], !mg.isEmpty { o["mbg"] = mg }
                 tracks.append(o)
@@ -73,6 +78,7 @@ extension DatabaseManager {
 
         var records: [TrackRecord] = []
         var fps: [String?] = []
+        var sources: [String] = []
         var genrePairs: [(String, String)] = []
         var mbGenrePairs: [(String, String)] = []   // (match_key, genre)
         records.reserveCapacity(items.count)
@@ -106,6 +112,9 @@ extension DatabaseManager {
                 imageKey: o["ik"] as? String
             ))
             fps.append(o["fp"] as? String)
+            // Absent "s" = a Roon row, or an export from a server that predates
+            // the column. Both mean 'roon'.
+            sources.append(o["s"] as? String ?? "roon")
             if let genres = o["g"] as? [String] {
                 for g in genres { genrePairs.append((id, g)) }
             }
@@ -121,7 +130,8 @@ extension DatabaseManager {
 
         // Immutable copies: the async pool.write closure is @Sendable and may not
         // capture the mutable build-up vars (older Swift rejects it as a data race).
-        let outRecords = records, outFps = fps, outGenrePairs = genrePairs, outMBGenrePairs = mbGenrePairs
+        let outRecords = records, outFps = fps, outSources = sources
+        let outGenrePairs = genrePairs, outMBGenrePairs = mbGenrePairs
         try await pool.write { db in
             try db.execute(sql: "DELETE FROM tracks")
             try db.execute(sql: "DELETE FROM sync_album_checkpoints")
@@ -129,22 +139,23 @@ extension DatabaseManager {
             // explicitly — the import replaces the whole library snapshot.
             try db.execute(sql: "DELETE FROM track_mb_genres")
 
-            let chunk = Self.rowsPerChunk(columns: 10)
+            let chunk = Self.rowsPerChunk(columns: 11)
             var start = 0
             while start < outRecords.count {
                 let end = min(start + chunk, outRecords.count)
                 let slice = outRecords[start..<end]
-                let placeholders = slice.map { _ in "(?,?,?,?,?,?,?,?,?,?)" }.joined(separator: ",")
+                let placeholders = slice.map { _ in "(?,?,?,?,?,?,?,?,?,?,?)" }.joined(separator: ",")
                 var args: [DatabaseValueConvertible?] = []
-                args.reserveCapacity(slice.count * 10)
+                args.reserveCapacity(slice.count * 11)
                 for (offset, r) in slice.enumerated() {
                     args.append(contentsOf: [r.id, r.title, r.artist, r.album, r.albumKey,
                                              r.year, r.isLive, r.matchKey, r.imageKey,
-                                             outFps[start + offset]] as [DatabaseValueConvertible?])
+                                             outFps[start + offset],
+                                             outSources[start + offset]] as [DatabaseValueConvertible?])
                 }
                 try db.execute(sql: """
                     INSERT INTO tracks
-                      (id, title, artist, album, album_key, year, is_live, match_key, image_key, album_fp)
+                      (id, title, artist, album, album_key, year, is_live, match_key, image_key, album_fp, source)
                     VALUES \(placeholders)
                 """, arguments: StatementArguments(args))
                 start = end
