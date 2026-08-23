@@ -109,7 +109,7 @@ public struct LibraryView: View {
         }
     }
 
-    private let gridColumns = [GridItem(.adaptive(minimum: 150), spacing: Spacing.lg)]
+    private var gridColumns: [GridItem] { coverGridColumns(compact: compactPicker) }
 
     enum SortField: String, CaseIterable, Identifiable {
         case title = "Title", artist = "Artist", album = "Album", year = "Year", bpm = "BPM", random = "Random"
@@ -717,7 +717,9 @@ public struct LibraryView: View {
                             chip(showDuplicates
                                     ? LS("library.duplicatesShown")
                                     : String(format: LS("library.duplicatesHidden"), hiddenDuplicates),
-                                 icon: showDuplicates ? "square.on.square.fill" : "square.on.square",
+                                 // `square.on.square.fill` does not exist in SF
+                                 // Symbols, so the "on" chip drew no icon at all.
+                                 icon: showDuplicates ? "square.fill.on.square" : "square.on.square",
                                  on: showDuplicates)
                         }
                         .buttonStyle(.plain)
@@ -1229,7 +1231,11 @@ public struct LibraryView: View {
             if let stats {
                 statsHero(stats).plainCardRow()
                 if !recentlyAdded.isEmpty {
-                    trackShelf(LS("library.recentlyAdded"), "clock.badge.plus", recentlyAdded).plainCardRow()
+                    // Not `clock.badge.plus`: that name does not exist, so this
+                    // one shelf header rendered without an icon while every
+                    // other one had one — the row read as a different kind of
+                    // section than its neighbours.
+                    trackShelf(LS("library.recentlyAdded"), "plus.circle", recentlyAdded).plainCardRow()
                 }
                 if !recentPlayed.isEmpty {
                     trackShelf(LS("library.recentlyPlayedShelf"), "play.circle", recentPlayed).plainCardRow()
@@ -1537,6 +1543,9 @@ struct LibraryTrackRow: View {
     @Environment(RoonClient.self) private var client
     let track: DatabaseManager.LibraryTrackRow
     let canPlay: Bool
+    /// Off on a screen that is already about one artist (the artist page), where
+    /// repeating the name on every row only pushed the album out of view.
+    var showsArtist = true
     let onPlay: () -> Void
 
     /// Downloaded rows carry a small mark. Read from the in-memory key set, not
@@ -1577,14 +1586,17 @@ struct LibraryTrackRow: View {
                     }
                 }
                 HStack(spacing: 6) {
-                    if let a = track.artist {
+                    if showsArtist, let a = track.artist {
                         Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     // The album, which a library row had never shown — while BPM
                     // and musical key were on every single one. For most listening
                     // "which album is this from" beats "what tempo is it".
                     if let al = track.album, !al.isEmpty {
-                        Text("· \(al)").font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                        // The separator belongs to the artist before it; without
+                        // one the row would open on a dangling "·".
+                        Text(showsArtist ? "· \(al)" : al)
+                            .font(.caption).foregroundStyle(.tertiary).lineLimit(1)
                     }
                     // BPM + Camelot key are mixing information: precise, useful if
                     // you beatmatch, meaningless ("4A") if you don't — and they
@@ -1638,12 +1650,17 @@ struct LibraryTrackRow: View {
 
 struct AlbumGridCell: View {
     let album: DatabaseManager.AlbumResult
+    /// Off on a screen that is already about one artist, where the subtitle
+    /// otherwise repeats that artist's name under every single cover.
+    var showsArtist = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            AlbumArtView(imageKey: album.imageKey, size: 150, cornerRadius: Radius.lg)
-            Text(album.album).font(.callout).lineLimit(1)
-            Text(albumSubtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        VStack(alignment: .leading, spacing: 4) {
+            AlbumArtView(imageKey: album.imageKey, fillingWidth: 150, cornerRadius: Radius.lg)
+            Text(album.album).font(.caption.weight(.medium)).lineLimit(1)
+            if !albumSubtitle.isEmpty {
+                Text(albumSubtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -1652,7 +1669,7 @@ struct AlbumGridCell: View {
 
     private var albumSubtitle: String {
         var parts: [String] = []
-        if let a = album.artist, !a.isEmpty { parts.append(a) }
+        if showsArtist, let a = album.artist, !a.isEmpty { parts.append(a) }
         if let y = album.year { parts.append(String(y)) }
         return parts.joined(separator: " · ")
     }
@@ -1664,11 +1681,15 @@ struct ArtistGridCell: View {
     let artist: DatabaseManager.ArtistResult
 
     var body: some View {
-        VStack(spacing: 6) {
-            AlbumArtView(imageKey: artist.imageKey, size: 150, cornerRadius: 75)
-            Text(artist.name).font(.callout).lineLimit(1)
+        VStack(spacing: 4) {
+            // A radius far larger than any column width rounds a square all the
+            // way to a circle, which is what a grid cell needs when its width is
+            // only known at layout time.
+            AlbumArtView(imageKey: artist.imageKey, fillingWidth: 150, cornerRadius: 999)
+            Text(artist.name).font(.caption.weight(.medium)).lineLimit(1)
+                .multilineTextAlignment(.center)
             Text(LibraryView.artistSummary(albums: artist.albumCount, tracks: artist.trackCount))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())

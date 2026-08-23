@@ -513,6 +513,7 @@
 "libraryDetail.readMore"         = "Lees meer";
 "libraryDetail.removeFavorite"   = "Verwijder uit favorieten";
 "libraryDetail.showLess"         = "Toon minder";
+"libraryDetail.showAllReleases"  = "Alle %d";
 "libraryDetail.similarInLibrary" = "Vergelijkbaar in je bibliotheek";
 "libraryDetail.sonicallySimilar" = "Sonisch vergelijkbaar";
 

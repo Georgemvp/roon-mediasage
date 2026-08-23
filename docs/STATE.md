@@ -22,6 +22,58 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+
+NU (2026-08-23, middag): **BIBLIOTHEEK- EN ARTIESTPAGINA HERZIEN, VISUEEL
+GEVERIFIEERD OP DE SIMULATOR MET DE ECHTE BIBLIOTHEEK.** (user: "Gebruik de gui
+automatisering en maak de library view mooier en overzichtelijker ook de artist
+view is momenteel bij artiesten waar ik veel muziek van heb veel te lang.")
+Lokaal gewijzigd, **niet gecommit, niet gepusht, niet getagd.**
+
+**Wat er mis was, gemeten en niet geraden.** De rasters stonden op
+`GridItem(.adaptive(minimum: 150))`; op een 402 pt iPhone past dat exact twee
+kolommen, dus 13.153 albums en 13.000+ artiesten kwamen vier tegels per scherm
+langs. De hoezen hadden bovendien een vaste `size: 150` binnen een cel van
+177 pt, dus ze stonden links in hun eigen cel met een rafelige goot ernaast. De
+artiestpagina zette élk album van de artiest in één `LazyVGrid`: Queen 92,
+London Philharmonic Orchestra 217 — 46 respectievelijk 109 rijen hoezen, en
+"Live", "Compilaties" en "Vergelijkbaar in je bibliotheek" zaten daarachter.
+
+**Wat er nu staat.** (1) `coverGridColumns(compact:)` in `Shelves.swift` is de
+enige definitie van een hoesraster: 112 pt op compacte breedte (drie per rij op
+een iPhone), 150 pt op iPad en Mac — die waren nooit het krappe geval en zijn
+deze sessie niet te meten. (2) `AlbumArtView(imageKey:fillingWidth:cornerRadius:)`
+is vierkant en vult de kolombreedte, zodat het raster een raster wordt.
+(3) De artiestpagina heeft een kop met portret, naam en telling, en de vijf
+werkwoorden op een eigen rij — ze deelden er één, en "Speel alles" verloor zijn
+label. (4) Elke discografie-sectie toont zes hoezen plus het aantal en een
+"Alle N"-knop naar `ArtistAlbumsGridView`; de pagina is nu even hoog bij vier
+albums als bij 217. (5) "Meest gespeeld" herhaalt de artiestnaam niet meer
+(`LibraryTrackRow(showsArtist:)`), en de albumtegels op de artiestpagina ook
+niet (`AlbumGridCell(showsArtist:)`). (6) Twee SF Symbols bestonden niet —
+`clock.badge.plus` (kop "Recent toegevoegd" tekende gewoon geen icoon) en
+`square.on.square.fill` (de dubbelen-chip in de aan-stand) — vervangen door
+`plus.circle` en `square.fill.on.square`. (7) Dezelfde kop-fix op
+`AlbumDetailView`: "Speel" was daar een gouden capsule zónder label.
+
+**Eén echte bug gevonden tijdens het verifiëren.** Vanaf `ArtistAlbumsGridView`
+opende een album wél en klapte meteen terug — bewijs in het simulatorlog: de
+Wikipedia-review-fetch van `AlbumDetailView.task` vuurde en werd direct
+gecancelled. Oorzaak: dat scherm wordt zelf met een *bestemming*-link geduwd, en
+een `NavigationLink(value:)` bovenop zo'n link laat de stack vallen. Nu overal
+bestemming-links op dat pad.
+
+**GUI-automatisering werkt nu end-to-end, en dat was het meeste werk.** Zie
+`## Facts` — simulator + `idb`, plus `~/bin/macui` om de analyzer-app op de mini
+te bedienen. De simulator kon niet online komen: elk verzoek kreeg 401 en de
+wachtrij in "Apparaten" liep vol met tientallen "iPhone 17"-regels. Oorzaak
+gevonden in het simulatorlog: `-34018 "Client has neither application-identifier
+nor keychain-access-groups entitlements"` — een build met `CODE_SIGNING_ALLOWED=NO`
+heeft géén entitlements, dus `KeychainStore.load` gaf altijd nil en
+`ensureDeviceToken()` muntte **een nieuw token per request**. Opgelost door de
+entitlements via de linker-sectie mee te geven; `codesign --entitlements` werkt
+niet op de simulator (dat geeft EBADEXEC bij het starten).
+
+────────────────────────────────────────────────────────────────────────
 NU (2026-08-23, ochtend): **DE BIBLIOTHEEK LOS VAN ROON — PLAN GESCHREVEN, FASE 1
 EN 2 AF, PLUS DE HARDE IDENTITEIT UIT DE TAGS.** (user: "Ga daar in werken en begin maak een duidelijk plan en
 voer die uit.") Plan: `native/docs/STANDALONE_LIBRARY_PLAN.md`, vier fasen.
@@ -1291,6 +1343,8 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
+- **Beoordelen op de Mac.** De rasters zijn alleen op de iPhone-simulator gemeten. macOS houdt bewust de 150 pt-tegel (`coverGridColumns(compact:)` krijgt daar `false`), dus er zou niets moeten veranderen — maar dat is niet gezien, alleen gebouwd. De Mac-client draaien op de mini is geen optie (Roon-extensie).
+- **Bibliotheek- en artiestherziening committen + taggen** (`v1.10.275` / `ios-v1.7.241` / `analyzer-v1.1.205`). Bewust niet gedaan zonder opdracht in dit gesprek.
 - **Fase 3, herzien** (`native/docs/STANDALONE_LIBRARY_PLAN.md` §5d): sleutel op de identiteit die er nu ís — `release_track_mbid` → `recording_mbid`/`isrc` → een deterministische terugval, met het schema in de sleutel (`isrc::`, `mb::`, `k::`) zoals `local::` en `import::` dat al doen. Twee dingen niet vergeten: Roon's Browse-API geeft géén identifiers, dus dit repareert alleen de bestandskant; en de dekking wordt ~80% ISRC / ~24% MB-id, dus de terugval blijft nodig.
 - **De identiteits-backfill één keer laten lopen op de mini** — ~48 ms per bestand, dus ~1 uur voor 66.378 rijen. Hervatbaar, geen audio-decode. Hij start vanzelf bij de volgende analyzer-launch (`autoIdentityIfEnabled`), dus dit gebeurt bij de uitrol.
 - **Fase 1+2+identiteit pushen + taggen** (`v1.10.275` / `ios-v1.7.241` / `analyzer-v1.1.205`) en de analyzer via de CI-DMG uitrollen. Allebei de fasen zitten ín de analyzer (de ingest draait alleen in `.direct`-modus, `/artwork` is een analyzer-endpoint), dus op de mini gebeurt er niets tot die uitrol. Bewust niet gedaan zonder opdracht.
@@ -1342,12 +1396,15 @@ ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AU
 - findPlaylist → enum PlaylistLookup {found/absent/failed} — waarom: read-fout mag geen duplicaat-playlist maken
 
 ## Facts
+- **GUI-verificatie op de iOS-simulator, volledige route (2026-08-23).** Alles zit in `~/bin/rs-sim` (`setup` / `build` / `tap` / `swipe` / `text` / `shot` / `log`). Die linker-sectie is niet optioneel: zonder entitlements geeft de simulator-Keychain `-34018` en munt de client een nieuw device-token per request, waardoor hij nooit goedgekeurd raakt en "Apparaten" volloopt. `codesign --force --sign - --entitlements` is géén alternatief — de app start dan niet (EBADEXEC/POSIX 163). Aansturen met `idb` (`pip3 install --user fb-idb`, CLI op `~/Library/Python/3.9/bin/idb`, companion: `idb_companion --udid <udid> --grpc-port 10882` + `idb connect localhost 10882`); punten = schermafdruk-pixels ÷ 3. Schermafdruk: `xcrun simctl io <udid> screenshot`.
+- **De analyzer-app op de mini aansturen vanuit de shell:** `~/bin/macui` (Swift, CGEvent — bron `~/bin/macui.swift`, herbouwen met `swiftc -O ~/bin/macui.swift -o ~/bin/macui`). `macui click X Y` / `scroll X Y REGELS` / `type` / `key` / `activate <naam>`. **`osascript … click at {x,y}` doet een AXPress op het element eronder en werkt NIET op SwiftUI-knoppen** — het meldt succes en er gebeurt niets. Zijbalkrijen wél selecteerbaar met `select row N of outline 1 of scroll area 1 of group 1 of splitter group 1 of group 1 of window "<titel>"`. Vensterhoek opvragen met `System Events … get {position, size} of window 1`, uitsnede met `screencapture -x -Rx,y,w,h`.
 - Test: cd native/RoonSage && swift test ; build: swift build ; release: swift build -c release --product RoonSage
 - Tag-namespaces: app vX.Y.Z · iOS ios-vX.Y.Z · analyzer analyzer-vX.Y.Z
 - Baseline build (2026-07-06): PASS (exit 0). Test-baseline vóór B1: 463 tests, 0 failures (prior task Done).
 - Kern-audit files: QobuzClient.swift, LibraryShareServer.swift (:91 enforceToken), RoonClient+DiscoverWeekly.swift (:355 searchQobuz-gate), AnalyzerCore/HTTPServer.swift (5766)
 
 ## Done
+- **BIBLIOTHEEK + ARTIESTPAGINA HERZIEN (2026-08-23) — RESULTAAT: drie hoezen per iPhone-rij i.p.v. twee, en de Queen-pagina eindigt na ~4 schermen i.p.v. ~30.** Gewijzigd: `Shelves.swift` (`coverGridColumns(compact:)`), `AlbumArtView.swift` (vierkante `fillingWidth`-variant), `LibraryView.swift` (raster + `LibraryTrackRow(showsArtist:)` + `AlbumGridCell(showsArtist:)` + twee niet-bestaande SF Symbols), `LibraryDetailViews.swift` (artiestkop, begrensde discografie + `ArtistAlbumsGridView`, albumkop), beide `Localizable.strings` (`libraryDetail.showAllReleases`). **Verified: `swift build` exit 0 · `swift test` "Executed 1032 tests, with 3 tests skipped and 0 failures (0 unexpected)" (gelijk aan baseline) · `swift build -c release --product RoonSage` exit 0 · swiftlint 466 violations / 2 serious (gelijk aan baseline) · visueel op iPhone 17-simulator (iOS 26.5) tegen de live analyzer op 192.168.178.59:5767, schermafdrukken in `/tmp/rs_ui/`.** Niet gecommit.
 - **AUDIT VOLLEDIG UITGEVOERD: BATCH A + B + C (2026-08-23) — RESULTAAT: 973 → 984 tests 0 fouten, 61 → 0 geïnterpoleerde sleutels, 5 → 2 serious lint, release + iOS-typecheck groen.** 21 bevindingen (5 🔴 / 8 🟠 / 4 🟡 / 4 🟢) uit `docs/NATIVE_APP_AUDIT.md`, alle uitgevoerd behalve drie expliciet gemotiveerde uitzonderingen (zie het statusblok in dat rapport). Twee dingen bleken groter dan de audit inschatte: het macOS-app-target had **nul** `LS()`-aanroepen, en `check-localization.sh` keek daar nooit — beide opgelost, en de gate is nu strenger in plaats van zwakker. Niet gecommit.
 - **360°-AUDIT + BATCH A (2026-08-22, laat) — RESULTAAT: 5 🔴 / 8 🟠 / 4 🟡 / 4 🟢 bevindingen, Batch A af en geverifieerd.** Rapport: `docs/NATIVE_APP_AUDIT.md`. Baseline vóór de fixes: RoonProtocol 12 tests / RoonSage 973 tests, beide 0 fouten; release build exit 0; 1033 sleutels, 0 missend, 61 geïnterpoleerd; swiftlint 469 violations / 5 serious. Na Batch A: 975 tests 0 fouten, 1034 sleutels, swiftlint ongewijzigd (dus geen nieuwe violations). Gewijzigd: `RoonClient.swift`, `LibraryView.swift`, `RootView.swift`, beide `Localizable.strings`, plus `QueueOwnershipTests.swift` (nieuw). Niet gecommit.
 - **GESHIPT + ANALYZER LIVE (2026-08-22 17:08) — `v1.10.271` / `ios-v1.7.237` / `analyzer-v1.1.201`.** Vijf commits: de offline-afspeelbug (kale SHA-namen zonder extensie), het UI-harnas dat nu ook tikt, de tabtitels + offlineglijbaan + ~120 vertaalde sleutels, Stations opnieuw ingedeeld (`native/docs/STATIONS_AUDIT.md`), en STATE.md. **Alle vier de workflows groen** (Native Tests, Analyzer DMG, macOS DMG, iOS TestFlight — "App Store Connect publish succeeded"). **Deploy via de CI-DMG-route**, zoals bij v1.1.200: `gh release download analyzer-v1.1.201`, handtekening + team gecontroleerd (`Developer ID Application: Casper Jansen (5W3QDZ94FH)`, identifier `com.roonsage.analyzer`), oude app bewaard als `/Applications/RoonSage Analyzer.app.bak-1.1.200`, `bootout` → installeren → `bootstrap` (nooit `open -a`). **Verified: 956 tests 0 failures · `swift build -c release` exit 0 · check-localization 985 sleutels, 0 missend / 0 wees · alle drie de UI-tests groen · mini draait analyzer-v1.1.201 als één pid (6558, was 72731), :5767 87.820 tracks, :5766 66.378 tracks, Roon verbonden, 5 zones, `/on-this-day` echte data, 0 ws-sluitingen sinds de herstart.** Client-app NIET gedeployd (constraint).

@@ -513,6 +513,7 @@
 "libraryDetail.readMore"         = "Read more";
 "libraryDetail.removeFavorite"   = "Remove from favourites";
 "libraryDetail.showLess"         = "Show less";
+"libraryDetail.showAllReleases"  = "All %d";
 "libraryDetail.similarInLibrary" = "Similar in your library";
 "libraryDetail.sonicallySimilar" = "Sonically similar";
 

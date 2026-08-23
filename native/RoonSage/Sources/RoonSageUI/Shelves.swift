@@ -30,6 +30,18 @@ public struct Cover: Identifiable {
     }
 }
 
+/// Columns for a cover grid: three per row at compact width (an iPhone in
+/// portrait), larger tiles wherever there is more room.
+///
+/// At a 150 pt minimum a 402 pt phone fitted exactly two columns, so a 13.000
+/// album grid showed four tiles per screen. iPad and Mac keep the bigger tile —
+/// they were never the cramped case, and this session could only measure the
+/// phone. One definition, shared by the library grids, the artist page and the
+/// full-discography screen, so the three stay one grid instead of drifting.
+public func coverGridColumns(compact: Bool) -> [GridItem] {
+    [GridItem(.adaptive(minimum: compact ? 112 : 150), spacing: Spacing.md)]
+}
+
 /// A section header: gold-tinted icon + title on the left, caller-supplied trailing
 /// control (a shuffle button, "play all", or `EmptyView()`) on the right.
 @MainActor @ViewBuilder

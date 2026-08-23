@@ -123,44 +123,57 @@ struct AlbumDetailView: View {
         .buttonStyle(.plain)
     }
 
+    /// Cover and titles on one row, the five verbs on the next.
+    ///
+    /// They all used to share the column beside a 120 pt cover: on an iPhone
+    /// that leaves about 250 pt for five controls, and the one with a word in it
+    /// lost. "Speel" rendered as a gold capsule with no label at all. Same shape
+    /// of fix as the artist header — the row of verbs gets the full width.
     private var header: some View {
-        HStack(alignment: .top, spacing: Spacing.lg) {
-            AlbumArtView(imageKey: album.imageKey, size: 120, cornerRadius: Radius.lg)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(album.album).font(.title3.bold()).lineLimit(2)
-                if let a = album.artist { Text(a).font(.callout).foregroundStyle(.secondary) }
-                Text(subtitle).font(.caption).foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(alignment: .top, spacing: Spacing.lg) {
+                AlbumArtView(imageKey: album.imageKey, size: 110, cornerRadius: Radius.lg)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(album.album).font(.title3.bold()).lineLimit(3)
+                    if let a = album.artist {
+                        Text(a).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Text(subtitle).font(.caption).foregroundStyle(.tertiary)
+                }
                 Spacer(minLength: 0)
-                HStack(spacing: Spacing.sm) {
-                    // Play + queue both follow the active output, so they work on
-                    // this device as well as on a zone — hence no separate
-                    // on-device button, and no zone in the disabled condition.
-                    Button { play(tracks) } label: { Label(LS("libraryDetail.play"), systemImage: "play.fill") }
-                        .buttonStyle(.borderedProminent).tint(Color.roonGold)
-                        .disabled(!client.hasActiveOutput || tracks.isEmpty)
-                    // Queue kept icon-only so the row fits on iPhone.
-                    Button { queue(tracks) } label: { Image(systemName: "text.append") }
-                        .buttonStyle(.bordered)
-                        .disabled(!client.hasActiveOutput || tracks.isEmpty)
-                        .accessibilityLabel(LS("libraryDetail.addToQueue"))
-                        .help(LS("libraryDetail.addToQueue"))
-                    Button {
-                        Haptics.tap()
-                        Task {
-                            await client.startAlbumRadio(albumKey: album.albumKey, title: album.album,
-                                                         artist: album.artist, imageKey: album.imageKey)
-                        }
-                    } label: { Image(systemName: "dot.radiowaves.left.and.right") }
-                        .buttonStyle(.bordered)
-                        .disabled(!client.hasActiveOutput)
-                        .accessibilityLabel(LS("libraryDetail.albumRadio"))
-                        .help(LS("libraryDetail.albumRadioHelp"))
-                    FavoriteStarButton(isOn: client.isFavoriteAlbum(album: album.album, artist: album.artist)) {
-                        Task { await client.toggleFavoriteAlbum(album: album.album, artist: album.artist) }
+            }
+            HStack(spacing: Spacing.sm) {
+                // Play + queue both follow the active output, so they work on
+                // this device as well as on a zone — hence no separate
+                // on-device button, and no zone in the disabled condition.
+                Button { play(tracks) } label: {
+                    Label(LS("libraryDetail.play"), systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent).tint(Color.roonGold)
+                .disabled(!client.hasActiveOutput || tracks.isEmpty)
+                // Queue kept icon-only so the row fits on iPhone.
+                Button { queue(tracks) } label: { Image(systemName: "text.append") }
+                    .buttonStyle(.bordered)
+                    .disabled(!client.hasActiveOutput || tracks.isEmpty)
+                    .accessibilityLabel(LS("libraryDetail.addToQueue"))
+                    .help(LS("libraryDetail.addToQueue"))
+                Button {
+                    Haptics.tap()
+                    Task {
+                        await client.startAlbumRadio(albumKey: album.albumKey, title: album.album,
+                                                     artist: album.artist, imageKey: album.imageKey)
                     }
-                    BookmarkButton(isOn: client.isBookmarkedAlbum(album: album.album, artist: album.artist)) {
-                        Task { await client.toggleBookmarkAlbum(album: album.album, artist: album.artist) }
-                    }
+                } label: { Image(systemName: "dot.radiowaves.left.and.right") }
+                    .buttonStyle(.bordered)
+                    .disabled(!client.hasActiveOutput)
+                    .accessibilityLabel(LS("libraryDetail.albumRadio"))
+                    .help(LS("libraryDetail.albumRadioHelp"))
+                FavoriteStarButton(isOn: client.isFavoriteAlbum(album: album.album, artist: album.artist)) {
+                    Task { await client.toggleFavoriteAlbum(album: album.album, artist: album.artist) }
+                }
+                BookmarkButton(isOn: client.isBookmarkedAlbum(album: album.album, artist: album.artist)) {
+                    Task { await client.toggleBookmarkAlbum(album: album.album, artist: album.artist) }
                 }
             }
         }
@@ -212,28 +225,22 @@ struct ArtistDetailView: View {
     @State private var similar: [ArtistSimilarity.Result] = []
     @State private var similarArtists: [DatabaseManager.ArtistResult] = []
 
-    private let columns = [GridItem(.adaptive(minimum: 150), spacing: Spacing.lg)]
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    private var compactWidth: Bool { hSizeClass == .compact }
+    #else
+    private var compactWidth: Bool { false }
+    #endif
+    private var columns: [GridItem] { coverGridColumns(compact: compactWidth) }
+
+    /// How many releases a discography section shows before it hands the rest
+    /// over to its own screen. Two rows of three on a phone.
+    private let discographyPreview = 6
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(artist.name).font(.title2.bold())
-                        Text(LibraryView.artistSummary(albums: artist.albumCount, tracks: artist.trackCount))
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button { playArtist() } label: { Label(LS("libraryDetail.playAll"), systemImage: "play.fill") }
-                        .buttonStyle(.borderedProminent).tint(Color.roonGold)
-                        .disabled(!client.hasActiveOutput)
-                    FavoriteStarButton(isOn: client.isFavoriteArtist(artist.name)) {
-                        Task { await client.toggleFavoriteArtist(artist.name) }
-                    }
-                    BookmarkButton(isOn: client.isBookmarkedArtist(artist.name)) {
-                        Task { await client.toggleBookmarkArtist(artist.name) }
-                    }
-                }
+                header
 
                 if let bio, !bio.isEmpty { bioSection(bio) }
 
@@ -248,20 +255,7 @@ struct ArtistDetailView: View {
                     let grouped = groupedAlbums
                     let showHeaders = grouped.count > 1
                     ForEach(grouped, id: \.type) { group in
-                        if showHeaders {
-                            Text(group.type.label).font(.headline)
-                        }
-                        LazyVGrid(columns: columns, spacing: Spacing.lg) {
-                            ForEach(group.albums) { album in
-                                NavigationLink(value: album) { AlbumGridCell(album: album) }
-                                    .buttonStyle(.plain)
-                                    .contextMenu {
-                                        PlayActionsMenu(fetch: { [client] in
-                                            await client.tracksForAlbum(album.albumKey).map(\.asTrackRecord)
-                                        })
-                                    }
-                            }
-                        }
+                        discographySection(group.type, group.albums, showHeader: showHeaders)
                     }
                 }
 
@@ -284,6 +278,90 @@ struct ArtistDetailView: View {
             topPlayed = await client.topPlayedTracks(artist: artist.name, limit: 5)
             similar = await client.similarLibraryArtists(to: artist.name, limit: 10)
             similarArtists = await resolveSimilar(similar)
+        }
+    }
+
+    // MARK: - Header
+
+    /// Portrait, name, counts — then the verbs on a row of their own.
+    ///
+    /// All five used to share one `HStack`, so "Speel alles" competed with the
+    /// artist's name for the same width: on a phone the name wrapped to two
+    /// lines and the button lost its label. The artist also had no picture at
+    /// all, which is why the page opened flatter than the album page next to it.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(spacing: Spacing.lg) {
+                AlbumArtView(imageKey: artist.imageKey, size: 84, cornerRadius: 42)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(artist.name).font(.title2.bold()).lineLimit(2)
+                    Text(LibraryView.artistSummary(albums: artist.albumCount, tracks: artist.trackCount))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: Spacing.sm) {
+                Button { playArtist() } label: {
+                    Label(LS("libraryDetail.playAll"), systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent).tint(Color.roonGold)
+                .disabled(!client.hasActiveOutput)
+                FavoriteStarButton(isOn: client.isFavoriteArtist(artist.name)) {
+                    Task { await client.toggleFavoriteArtist(artist.name) }
+                }
+                BookmarkButton(isOn: client.isBookmarkedArtist(artist.name)) {
+                    Task { await client.toggleBookmarkArtist(artist.name) }
+                }
+            }
+        }
+    }
+
+    // MARK: - Discografie
+
+    /// One discography group, capped at `discographyPreview`.
+    ///
+    /// The grid used to hold every release an artist had: 92 for Queen, 217 for
+    /// the London Philharmonic Orchestra — 46 and 109 rows of covers, and the
+    /// sections underneath (Live, Compilaties, "Vergelijkbaar in je bibliotheek")
+    /// sat behind all of them. Six covers say what the group holds, the count
+    /// says how much more there is, and the rest is one tap away — so the page
+    /// is the same height whether the artist has four releases or 217.
+    @ViewBuilder
+    private func discographySection(_ type: AlbumGrouping.AlbumType,
+                                    _ albums: [DatabaseManager.AlbumResult],
+                                    showHeader: Bool) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                if showHeader {
+                    Text(type.label).font(.headline)
+                    Text(albums.count.formatted())
+                        .font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+                }
+                Spacer(minLength: 0)
+                if albums.count > discographyPreview {
+                    NavigationLink {
+                        ArtistAlbumsGridView(title: artist.name, subtitle: type.label, albums: albums)
+                    } label: {
+                        Text(String(format: LS("libraryDetail.showAllReleases"), albums.count))
+                            .font(.caption.bold())
+                            .foregroundStyle(Color.roonGold)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            LazyVGrid(columns: columns, spacing: Spacing.lg) {
+                ForEach(albums.prefix(discographyPreview)) { album in
+                    NavigationLink(value: album) { AlbumGridCell(album: album, showsArtist: false) }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            PlayActionsMenu(fetch: { [client] in
+                                await client.tracksForAlbum(album.albumKey).map(\.asTrackRecord)
+                            })
+                        }
+                }
+            }
         }
     }
 
@@ -315,7 +393,10 @@ struct ArtistDetailView: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             LT("libraryDetail.mostPlayed").font(.headline)
             ForEach(topPlayed) { track in
-                LibraryTrackRow(track: track, canPlay: client.hasActiveOutput) {
+                // No artist on these rows: it is the name at the top of the
+                // page, repeated five times, and it was the thing crowding the
+                // album out of the subtitle.
+                LibraryTrackRow(track: track, canPlay: client.hasActiveOutput, showsArtist: false) {
                     playRows([track])
                 }
                 .contextMenu { PlayActionsMenu(fetch: { [track.asTrackRecord] }, trackRadioSeed: track.asTrackRecord) }
@@ -388,6 +469,60 @@ struct ArtistDetailView: View {
     private func playArtist() {
         Haptics.tap()
         Task { await client.playArtist(name: artist.name) }
+    }
+}
+
+// MARK: - One discography section, in full
+
+/// Everything in one release group, pushed from the artist page.
+///
+/// The links here name their destination instead of pushing an
+/// `AlbumResult` value, even though the Bibliotheek stack registers a
+/// `navigationDestination` for exactly that type. This screen is itself pushed
+/// by a destination-based link, and a value pushed on top of one of those is
+/// dropped by the stack: the album detail appeared, ran its `.task` (the
+/// Wikipedia review fetch shows up in the log) and popped straight back to this
+/// grid. Same-kind links all the way down is the fix.
+@MainActor
+struct ArtistAlbumsGridView: View {
+    let title: String
+    let subtitle: String
+    let albums: [DatabaseManager.AlbumResult]
+
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    private var compactWidth: Bool { hSizeClass == .compact }
+    #else
+    private var compactWidth: Bool { false }
+    #endif
+    private var columns: [GridItem] { coverGridColumns(compact: compactWidth) }
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: Spacing.lg) {
+                ForEach(albums) { album in
+                    NavigationLink {
+                        AlbumDetailView(album: album)
+                    } label: {
+                        AlbumGridCell(album: album, showsArtist: false)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(Spacing.lg)
+        }
+        .navigationTitle(subtitle)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 0) {
+                    Text(subtitle).font(.headline).lineLimit(1)
+                    Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+        }
+        #endif
     }
 }
 
