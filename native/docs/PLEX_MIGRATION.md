@@ -55,88 +55,79 @@ App                        Plex-client + DJ/curatie + Roon-casting
 
 Elke fase eindigt groen en laat de app werkend achter.
 
-### Fase 1 — Plex als bibliotheekbron ✅ AF (`7ad4a0b`, `eda751a`)
-`PlexClient` + `ingestPlexTracks` + `PlexSyncService`. Staat **default uit**.
-Geverifieerd op een kopie van de echte `library.db`: 65.719/65.719 ingevoerd,
-58.827 Roon-rijen verdrongen, 16,4 s.
+### Fase 1 — Plex als bibliotheekbron ✅ AF EN LIVE (`7ad4a0b`, `eda751a`)
+`PlexClient` + `ingestPlexTracks` + `PlexSyncService`. Eerst geverifieerd op een
+kopie van `library.db` (65.719/65.719, 16,4 s), daarna **echt gedraaid op de mini**
+onder `analyzer-v1.1.215`:
 
-**Volgende concrete stap:** `plex_sync_enabled` aanzetten op de mini en één run
-op de échte database laten draaien.
+```
+tracks                    89.752 → 96.644   (plex 65.719, roon 30.925)
+analyses zonder trackrij  19.537 →  8.959
+```
 
-### Fase 2 — vergelijkbaar/radio delegeren aan Plex
-Eén `PlexSonicClient` rond `/nearest`, met `SonicSelection.dropNearDuplicates`
-erachter. Vervangt de kNN-paden in `RoonClient+Features` (SimilarTracks) en de
-station-opbouw. Achter een schakelaar, zodat de eigen `RadioEngine` de terugval
-blijft als Plex een endpoint wijzigt.
-*Raakt niet:* Alchemy, Song Paths, Sonic DNA — die hebben vectoren nodig.
+Backup vóór de import: `backups/library-pre-plex-20260823-161349.db`.
 
-### Fase 3 — de Roon Browse-walk uitzetten als catalogus
-`LibrarySyncService` (268 regels) van "bron" naar "alleen de Qobuz/streaminglaag".
-Plex dekt de bestanden; Roon levert nog wat er geen bestand voor is
-(~13.175 Qobuz-only tracks).
+### Fase 2 — vergelijkbaar/radio via Plex ✅ AF (`5edb9a2`)
+`PlexClient.nearest` achter `plex_sonic_enabled`, met
+`SonicSelection.dropNearDuplicates` erachter en `RadioEngine` als terugval.
+*Raakt niet:* Alchemy, Song Paths, Sonic DNA — die hebben ruwe vectoren nodig.
+
+### Fase 3 — Roon degradeert tot de laag zonder bestanden ✅ AF (`bc4c514`)
+`fileBackedOwnedKeys` filtert bij het **schrijven**, op trackniveau: de walk maakt
+geen rij meer aan voor wat Plex bezit, en een half gedekt album krijgt de rest
+gewoon van Roon. Wat overblijft is de Qobuz/streaminglaag — gemeten 30.925 rijen.
 
 ### Fase 4a — inloggen + rechtstreeks afspelen ✅ AF (`f01977a`, `13ed12c`)
-`PlexAuth` (plex.tv PIN-flow → eigen token per apparaat → Keychain) en
-`plexStreamURLs` → `streamURLOverride`. Geverifieerd tegen de echte server:
-`HTTP 206 audio/flac`, dus range-support en dus seeken. **Nog niet op een echt
-toestel gespeeld** — het bewijs is HTTP + unit-tests, niet AVPlayer op een iPhone.
+De blokkade was niet de stream-URL maar de auth: `PlexClient.localToken()` leest
+het **admin**-token uit `Preferences.xml` en dat bestaat alleen op de
+servermachine. Dat naar een iPhone sturen zou een volledig-toegang-credential over
+het netwerk zetten. Dus `PlexAuth`: plex.tv PIN-flow → eigen token per apparaat →
+Keychain. Daarna is afspelen klein: `plexStreamURLs` → `streamURLOverride`.
 
-### Fase 4b — artwork, offline en transcode van Plex (open)
-Artwork loopt nu nog via de analyzer (`/artwork` op match_key), offline downloads
-ook. Plex kan beide: `thumb` is al opgeslagen bij de sync, en Plex Pass heeft een
-sync/download-API. Dit is wat er nog tussen zit voordat fase 5 kan.
+Geverifieerd tegen de echte server: `HTTP 206 audio/flac`, dus range-support en
+dus seeken. **Nog niet op een echt toestel gespeeld** — het bewijs is HTTP plus
+unit-tests, niet AVPlayer op een iPhone.
 
-### Fase 4 — audio van Plex in plaats van :5766
+### Fase 4b — artwork, offline en transcode van Plex (OPEN)
+Wat nu nog via de analyzer loopt en naar Plex kan:
+`AudioStreaming` (101) · `AudioTranscoder` (315) · `LocalTranscode` (129) ·
+`LocalAudioCache` (364) · `RoonClient+Downloads` (202) ·
+`DatabaseManager+Offline` (130) · `ArtworkProvider` (141).
+De `thumb` wordt al bij de sync opgeslagen. **Vereist Plex Pass** voor
+transcode-sessies en de sync/download-API.
 
-> **Blokkade, gevonden 2026-08-23 bij het uitwerken.** Fase 4 is niet "de
-> stream-URL omzetten". De client heeft dan een **eigen Plex-token** nodig, en
-> dat is er niet: `PlexClient.localToken()` leest het admin-token uit
-> `Preferences.xml`, wat alleen op de servermachine bestaat. Dat token naar een
-> iPhone sturen zou het admin-token over het netwerk zetten — dezelfde klasse
-> lek als SEC-M2, maar erger, want het geeft toegang tot de héle Plex-server.
->
-> **Fase 4 begint dus met een Plex-inlog** (plex.tv PIN/OAuth-flow → eigen
-> client-token → Keychain). Pas daarna is de stream-URL een kleine wijziging: de
-> haak bestaat al (`LocalPlayback.Track.streamURLOverride`, nu gebruikt voor
-> Qobuz-CDN-URL's) en `PlexClient.streamURL(partKey:)` staat er.
->
-> Eén detail voor later: de part-key (`Media[0].Part[0].key`) wordt bij de sync
-> niet opgeslagen. Ophalen via `/library/metadata/<ratingKey>` op afspeelmoment
-> kost één klein verzoek — goedkoper dan er een kolom voor te migreren.
+### Fase 5 — de analyzer krimpt tot een kleine server (OPEN)
 
-`AudioStreaming` (101) + `AudioTranscoder` (315) + `LocalTranscode` (129) +
-`LocalAudioCache` (364) + `RoonClient+Downloads` (202) +
-`DatabaseManager+Offline` (130) vervangen door Plex' stream-/transcode-/sync-API.
-**Vereist Plex Pass** — dat heeft de user.
-
-### Fase 5 — de analyzer krimpt tot een kleine server
-
-> **Correctie (2026-08-23).** Een eerdere versie van dit plan zei "de analyzer
-> stopt met server zijn". Dat klopt niet: een iPhone kan de 66.239 embeddings
-> niet zinnig lokaal houden (~135 MB) en het CLAP-tekstmodel al helemaal niet,
-> dus er moet iets blijven serveren. Hij wordt geen batchjob — hij wordt een
-> **kleine** server.
+> **Correctie (2026-08-23).** Een eerdere versie zei "de analyzer stopt met server
+> zijn". Dat klopt niet: een iPhone kan de 66.239 embeddings niet zinnig lokaal
+> houden (~135 MB) en het CLAP-tekstmodel al helemaal niet. Hij wordt geen
+> batchjob — hij wordt een **kleine** server.
 
 ```
 nu:      :5767  44 endpoints  +  :5766  8 endpoints   = 52
 straks:  :5766  ~4 endpoints  (/features, /embeddings, /text-embed, /health)
 ```
 
-Wat vervalt: de hele bibliotheek-mirror (`LibraryShareServer`, 1.172 regels), de
+Wat vervalt: de bibliotheek-mirror (`LibraryShareServer`, 1.172 regels), de
 playback-proxy, de offline-wachtrij, `/audio`, `/artwork`, en de
-apparaatgoedkeuring voor audio. Wat blijft is een klein ding dat vectoren en
-scalars uitdeelt.
+apparaatgoedkeuring voor audio.
 
-Het tokenprobleem verdwijnt daarmee niet volledig — de resterende endpoints
-hebben nog steeds auth — maar wel op de plek waar het pijn doet. Volgens de eigen
-memory is een verlopen client-token de #1 oorzaak van "wil niet verbinden"; na
-deze fase valt bij een auth-storing een aanbeveling weg in plaats van dat de
-muziek stopt, want het audio-pad ligt dan bij Plex.
+Het tokenprobleem verdwijnt niet volledig — de resterende endpoints hebben nog
+auth — maar wel waar het pijn doet: bij een auth-storing valt dan een aanbeveling
+weg in plaats van dat de muziek stopt.
 
-**Geschatte omvang die vervalt:** ~2.800 regels in fase 3–5, plus de ZeroTier-
-afhankelijkheid en de twee poorten. Wat blijft: `RoonProtocol`, `Theme`/
-`NowPlaying`, `Camelot.swift`, `SonicSimilarity`/`SonicSelection`, CLAPEngine en
-een afgeslankte embedding-API.
+### Openstaand vóór fase 5: waar gaat de gebruikersdata heen?
+
+`listening_history` (44.157 rijen), `track_feedback` en `playlists` staan alleen in
+`library.db` op de mini. Wordt de analyzer optioneel, dan verdampt dat.
+**Aanname nu:** de client houdt ze zelf en de analyzer wordt sync-peer — Plex
+accepteert geen teruggedateerde historie-import, dus verhuizen zou die data
+vernietigen. Dit is Caspers beslissing en nog niet bevestigd.
+
+**Geschatte omvang die vervalt in fase 4b–5:** ~2.800 regels, plus de
+ZeroTier-afhankelijkheid en één van de twee poorten. Wat blijft: `RoonProtocol`,
+`Theme`/`NowPlaying`, `Camelot.swift`, `SonicSimilarity`/`SonicSelection`,
+CLAPEngine en een afgeslankte embedding-API.
 
 ## 5. Bekende risico's
 
