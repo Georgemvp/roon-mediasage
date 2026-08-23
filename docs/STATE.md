@@ -189,11 +189,22 @@ RoonSageAnalyzerApp · swiftlint 466 violations / 2 serious — één minder dan
 baseline, dus geen nieuwe · check-localization `--strict` exit 0, 1134 sleutels,
 0 missend, 0 geïnterpoleerd, 0 wees.**
 
-**GESHIPT + GROEN (2026-08-23): `v1.10.275` / `ios-v1.7.241` /
-`analyzer-v1.1.205` én `v1.10.276` / `ios-v1.7.242` / `analyzer-v1.1.206`**, alle
-workflows success (Native Tests, Analyzer DMG,
-macOS DMG, iOS TestFlight). De mini draait nog analyzer-v1.1.202 — een tag levert
-een DMG, geen uitrol.
+**GESHIPT + GROEN (2026-08-23): vier releases, `v1.10.275` t/m `v1.10.278`
+(+ `ios-v1.7.241..244`, `analyzer-v1.1.205..208`)** — alle workflows success.
+
+**ANALYZER LIVE OP DE MINI: `analyzer-v1.1.208`.** Via de CI-DMG-route (lokaal
+signeren kan niet, zie ## Open items): `gh release download` → handtekening
+gecontroleerd (`Developer ID Application: Casper Jansen (5W3QDZ94FH)`,
+`com.roonsage.analyzer`) → `bootout` → oude app bewaard als `.bak-1.1.202` →
+kopiëren → `bootstrap`. **Eén pid (79802), :5766 66.378 tracks, :5767 89.752
+tracks, Roon opnieuw geregistreerd bij Caspers-Mac-mini.** Client-app NIET
+gedeployd (constraint).
+
+**Live geverifieerd:** `/artwork` levert echte JPEG's, zowel uit het bestand
+(15.035 / 22.520 / 42.030 bytes) als uit een `cover.jpg` ernaast (14.704 en
+7.165 bytes voor Bowie's *Lazarus*, dat zelf geen ingebedde hoes heeft). De
+identiteits-backfill loopt: binnen enkele minuten 765 rijen gecontroleerd,
+MusicBrainz-ids 0 → 93.
 
 ---
 _Hieronder de `## Now` van de vorige sessie (de 360°-audit). Bewaard, niet
