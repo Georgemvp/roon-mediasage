@@ -12,10 +12,12 @@ import GRDB
 /// the library, the stations, the DJ sets and Music Map. The data was already
 /// synced; only the library row was missing.
 ///
-/// A local row is deliberately second-class: it is written **only** where the
-/// Roon walk *and* the fuzzy reconcile produced nothing, and it is dropped again
-/// the moment a Roon row claims the same `match_key`. Roon stays the primary
-/// catalogue; this fills its gaps.
+/// **The analyser is the primary catalogue** (user, 2026-08-23: *"bak 2 moet dus
+/// de belangrijkste bak zijn … Zelfs als Roon wegvalt moet alles gewoon
+/// werken"*). Every analysed file becomes a library row here. A Roon row only
+/// survives where the analyser has nothing for that recording — in practice the
+/// Qobuz/streaming layer, which has no file to walk. When a local row claims a
+/// key, the Roon row for it is displaced (and hands over its genres first).
 ///
 /// Playback needs no new code. `LocalPlayability.matchKey(for:)` recomputes the
 /// key from artist/album/title, and these rows are built from the very tags the
@@ -58,7 +60,7 @@ extension DatabaseManager {
         public var inserted: Int
         /// Existing local rows refreshed from newer file tags.
         public var refreshed: Int
-        /// Local rows dropped because a Roon row now carries the same key.
+        /// Roon rows displaced because the analyser now owns that recording.
         public var reclaimed: Int
         /// Local rows dropped because the analyser no longer offers that file —
         /// deleted from disk, or re-tagged onto a different album.
@@ -102,8 +104,9 @@ extension DatabaseManager {
         localKeyPrefix + localAlbumFingerprint(album: album, artist: artist)
     }
 
-    /// Merge the analyser's on-disk tracks into the library as `source='local'`
-    /// rows, for every key Roon doesn't already cover.
+    /// Make the analyser's on-disk tracks the library: every analysed file
+    /// becomes a `source='local'` row, and the Roon rows those rows now own are
+    /// displaced.
     ///
     /// Call this **after** `reconcileFeatureMatches(apply: true)`: reconcile
     /// rewrites `tracks.match_key` for confident fuzzy matches, so running first
@@ -113,20 +116,6 @@ extension DatabaseManager {
     public func ingestLocalTracks(_ rows: [LocalTrackRow]) async throws -> LocalIngestResult {
         let offered = rows.count
         return try await pool.write { db in
-            // Roon caught up on a key we filled in earlier: drop our row rather
-            // than show the same track twice. Done first, so a Roon row that
-            // arrived this sync also blocks a re-insert below.
-            try db.execute(sql: """
-                DELETE FROM tracks WHERE source = ? AND match_key IN
-                  (SELECT match_key FROM tracks
-                   WHERE source = 'roon' AND match_key IS NOT NULL AND match_key != '')
-                """, arguments: [Self.localSource])
-            let reclaimed = db.changesCount
-
-            let roonKeys = Set(try String.fetchAll(db, sql: """
-                SELECT match_key FROM tracks
-                WHERE source = 'roon' AND match_key IS NOT NULL AND match_key != ''
-                """))
             let existingLocal = Set(try String.fetchAll(
                 db, sql: "SELECT id FROM tracks WHERE source = ?", arguments: [Self.localSource]))
 
@@ -138,7 +127,6 @@ extension DatabaseManager {
                 // A row without a key can't be joined to its own features, and a
                 // row without a title can't be shown — neither is a library row.
                 guard !key.isEmpty, !r.title.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-                guard !roonKeys.contains(key) else { continue }
                 // Dedup on the ROW id, not on the content key: the same recording
                 // on two albums is two library rows (that is the whole point of
                 // putting the album in the id), but the same recording twice on
@@ -251,6 +239,31 @@ extension DatabaseManager {
                       album_fp=excluded.album_fp, source=excluded.source
                 """, arguments: StatementArguments(args))
                 start += slice.count
+            }
+
+            // Displace the Roon rows this library now owns. Their genres move
+            // first: Roon's genre hierarchy is keyed on the ROW (track_genres.
+            // track_id, ON DELETE CASCADE), so deleting the row without this
+            // would drop the only genre 1,2% of analysed tracks have (measured
+            // 2026-08-22 on the stations work — MB ∪ Deezer covers the rest).
+            //
+            // Guarded by the same brake as the prune: never displace on a
+            // truncated payload.
+            var reclaimed = 0
+            if !candidates.isEmpty, candidates.count * 2 >= existingLocal.count {
+                try db.execute(sql: """
+                    INSERT OR IGNORE INTO track_genres (track_id, genre)
+                    SELECT l.id, g.genre
+                    FROM track_genres g
+                    JOIN tracks r ON r.id = g.track_id AND r.source = 'roon'
+                    JOIN tracks l ON l.source = ? AND l.match_key = r.match_key
+                    """, arguments: [Self.localSource])
+                try db.execute(sql: """
+                    DELETE FROM tracks WHERE source = 'roon' AND match_key IN
+                      (SELECT match_key FROM tracks
+                       WHERE source = ? AND match_key IS NOT NULL AND match_key != '')
+                    """, arguments: [Self.localSource])
+                reclaimed = db.changesCount
             }
 
             let total = try Int.fetchOne(

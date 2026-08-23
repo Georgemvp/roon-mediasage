@@ -376,6 +376,47 @@ nog wegvallen zijn dezelfde opname twee keer op één album.
 beter. Wat er nog aan vast zit is de identiteit van de Roon-rijen zelf
 (`tracks.id` = een sessie-sleutel) en de Qobuz-laag (fase 4).
 
+## 5f. De omslag — de analyzer is nu de primaire bak (2026-08-23)
+
+> User, halverwege de uitvoering: *"Ja bak 2 moet dus de belangrijkste bak zijn.
+> De Roon bak is enkel voor als ik via zone wat wil afspelen. Maar RoonSage moet
+> dus een zelfstandige speler worden die zijn eigen muziek indentificatie heeft
+> en zelfstandig is. Zelfs als Roon wegvalt moet alles gewoon werken. Roon
+> control is dan iets ernaast."*
+
+Tot hier vulde de ingest alleen de gaten: elke Roon-rij won. Dat is omgedraaid.
+
+**De ingest neemt élk geanalyseerd bestand op**, niet alleen wat Roon miste, en
+verdringt daarna de Roon-rijen die de analyzer nu bezit. Voordat zo'n rij
+verdwijnt geeft hij zijn genres over: Roon's genrehiërarchie hangt aan de rij
+(`track_genres.track_id`, `ON DELETE CASCADE`), en 1,2% van de geanalyseerde
+tracks heeft alleen een Roon-tag als genre.
+
+**De walk schrijft niet meer wat de analyzer al bezit.** Zonder dat zou elke
+Roon-walk ~51.000 rijen schrijven die de eerstvolgende feature-sync weer
+verdringt. Op een machine waarvan de analyzer nog niets heeft gelopen is die set
+leeg en gedraagt de walk zich exact zoals altijd — een verse installatie blijft
+dus werken.
+
+**Wat er van Roon overblijft** is precies wat de analyzer níét kan hebben: geen
+bestand op schijf. Dat is de Qobuz/streaming-laag, plus de rijen die Roon anders
+spelt dan de tags (klassiek, vooral).
+
+### Gemeten op de echte bibliotheek
+
+```
+tracks                     : 89.752 -> 90.759
+  waarvan van de analyzer  : 65.759   (élk geanalyseerd bestand)
+  waarvan van Roon         : ~25.000  (Qobuz + anders gespeld)
+analyzedTrackIdentities    : 49.166 -> 60.658
+```
+
+**Wat hier nog niet af is.** De ~25.000 resterende Roon-rijen bevatten naast de
+13.175 echte Qobuz-tracks ook ~10.700 die wél op schijf staan maar onder een
+andere spelling — dubbelingen die de fuzzy matcher niet pakt. Harde identiteit
+(ISRC, sinds vandaag gelezen) is daar het gereedschap voor, maar Roon levert zelf
+geen identifier, dus die kant blijft matchen op naam.
+
 ## 6. Maten om achteraf te toetsen
 
 | maat | vóór | nu | doel |

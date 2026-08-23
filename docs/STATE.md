@@ -166,7 +166,24 @@ Roon wél levert houdt voorrang). Regressietest op beide paden — de losse
 `replaceAlbumTracks` én `replaceAlbumBatch`, dat laatste is wat de echte sync
 gebruikt — en bewezen rood vóór de fix.
 
-**Verified: `swift build` exit 0 · `swift test` 1029 tests, 0 fouten, 3
+**DE OMSLAG: de analyzer is nu de primaire bibliotheekbron.** (user, midden in
+de uitvoering: *"bak 2 moet dus de belangrijkste bak zijn … Zelfs als Roon
+wegvalt moet alles gewoon werken. Roon control is dan iets ernaast"* — verbatim
+in ## Constraints.) De ingest neemt élk geanalyseerd bestand op in plaats van
+alleen de gaten, en verdringt daarna de Roon-rijen die hij bezit; zo'n rij geeft
+eerst zijn genres over, want Roon's genres hangen aan de rij en 1,2% van de
+tracks heeft er geen ander. En de walk schrijft niet meer wat de analyzer al
+bezit — zonder dat zou elke walk ~51.000 rijen schrijven die de volgende
+feature-sync weer verdringt. Is er nog niets geanalyseerd, dan is die set leeg en
+gedraagt de walk zich exact als vroeger (verse installatie blijft werken).
+
+**Gemeten:** tracks 89.752 → 90.759, waarvan **65.759 van de analyzer** en
+~25.000 van Roon (de Qobuz-laag plus wat Roon anders spelt); `analyzedTrackIdentities`
+49.166 → **60.658**. Nog niet af: van die ~25.000 zijn er ~10.700 wél op schijf
+maar anders gespeld — harde identiteit is daar het gereedschap voor, maar Roon
+levert zelf geen identifier.
+
+**Verified: `swift build` exit 0 · `swift test` 1032 tests, 0 fouten, 3
 overgeslagen (baseline 984) · `swift build -c release` groen voor RoonSage én
 RoonSageAnalyzerApp · swiftlint 466 violations / 2 serious — één minder dan de
 baseline, dus geen nieuwe · check-localization `--strict` exit 0, 1134 sleutels,
@@ -1296,6 +1313,7 @@ ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AU
 - B8+ Features: skip re-steer, Siri-intents, Control Center, NL steering, share-cards, "op deze dag", gapless, taste-timemachine, scenes, CarPlay, crossfade, loudness, chat-agent
 
 ## Constraints
+- "Ja bak 2 moet dus de belangrijkste bak zijn. De Roon bak is enkel voor als ik via zone wat wil afspelen. Maar RoonSage moet dus een zelfstandige speler worden die zijn eigen muziek indentificatie heeft en zelfstandig is. Zelfs als Roon wegvalt moet alles gewoon werken. Roon control is dan iets ernaast" — de analyzer (eigen scan + eigen identiteit) is de PRIMAIRE bibliotheekbron; de Roon-walk levert alleen nog wat de analyzer niet kan hebben (de Qobuz/streaming-laag). Roon is uitvoer, geen catalogus. Niets in de app mag een werkende Roon-verbinding vereisen om de bibliotheek te tonen (user, 2026-08-23)
 - "Behalve lord of the rings trilogie, die moeten in hdr etc blijven" — FileFlows-transcode op /Volumes/8tbDrive: de LOTR-trilogie NOOIT aanraken (4K DV/HDR10 REMUX blijft byte-identiek); de `FileNameMatches`-node met literal `Lord of the Rings` is bewezen werkend en mag niet naar regex (user, 2026-07-29)
 - "Test alle functies in RoonSage iOS, gebruik enkel max mini als zone" — bij de iOS-functietest ALLEEN de Roon-zone "Mac mini" gebruiken voor playback; nooit op andere zones spelen (user, 2026-07-22)
 - "Ik vind het niet erg als het dagen duurt, ik wil gewoon dat de analyse helemaal klopt zoals bij audiomuse" — analysekwaliteit (full-track-dekking) gaat vóór analyseduur (user, 2026-07-13)

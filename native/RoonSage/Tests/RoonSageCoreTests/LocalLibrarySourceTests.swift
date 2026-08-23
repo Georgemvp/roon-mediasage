@@ -40,23 +40,94 @@ final class LocalLibrarySourceTests: XCTestCase {
 
     // MARK: - Ingest
 
-    func testIngestAddsOnlyTracksRoonDoesNotHave() async throws {
+    func testIngestTakesEveryAnalysedFileAndDisplacesTheRoonRow() async throws {
+        // De analyzer is de primaire catalogus (user, 2026-08-23). Een Roon-rij
+        // voor een bestand dat wij zelf gelopen hebben is een duplicaat.
         let run = try await db.beginSyncRun()
         try await db.replaceAlbumTracks(
             [roonRecord("r1", artist: "Solti", title: "Elektra", album: "Strauss")],
             albumTitle: "Strauss", fingerprint: "fpA", generation: run.generation)
 
         let result = try await db.ingestLocalTracks([
-            local("Solti", "Elektra", album: "Strauss"),          // Roon has it
-            local("Solti", "Salome", album: "Strauss"),           // Roon doesn't
-            local("Menuhin", "Chaconne", album: "The Century"),   // Roon doesn't
+            local("Solti", "Elektra", album: "Strauss"),          // Roon heeft hem óók
+            local("Solti", "Salome", album: "Strauss"),
+            local("Menuhin", "Chaconne", album: "The Century"),
         ])
 
         XCTAssertEqual(result.offered, 3)
-        XCTAssertEqual(result.inserted, 2)
-        XCTAssertEqual(result.total, 2)
+        XCTAssertEqual(result.inserted, 3)
+        XCTAssertEqual(result.reclaimed, 1, "de Roon-rij voor Elektra is verdrongen")
+        XCTAssertEqual(result.total, 3)
         let total = try await db.trackCount()
-        XCTAssertEqual(total, 3)
+        XCTAssertEqual(total, 3, "geen duplicaat naast elkaar")
+    }
+
+    func testARoonOnlyRowSurvives() async throws {
+        // Dat is precies de Qobuz/streaming-laag: Roon kent hem, er is geen
+        // bestand, dus de analyzer kan hem niet hebben. Die rij moet blijven.
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("q1", artist: "LPO", title: "Calm Classical", album: "Curated")],
+            albumTitle: "Curated", fingerprint: "fpQ", generation: run.generation)
+
+        _ = try await db.ingestLocalTracks([local("Menuhin", "Chaconne", album: "The Century")])
+
+        let roonRows = try await db.pool.read { db in
+            try String.fetchAll(db, sql: "SELECT title FROM tracks WHERE source = 'roon'")
+        }
+        XCTAssertEqual(roonRows, ["Calm Classical"])
+    }
+
+    func testTheWalkStopsWritingWhatTheAnalyserAlreadyOwns() async throws {
+        // Anders zou élke walk ~51.000 rijen schrijven die de eerstvolgende
+        // feature-sync weer verdringt.
+        _ = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "Heroes")])
+
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("r1", artist: "Bowie", title: "Heroes", album: "Heroes"),
+             roonRecord("r2", artist: "Bowie", title: "Ashes to Ashes", album: "Heroes")],
+            albumTitle: "Heroes", fingerprint: "fpH", generation: run.generation)
+
+        let roonTitles = try await db.pool.read { db in
+            try String.fetchAll(db, sql: "SELECT title FROM tracks WHERE source = 'roon' ORDER BY title")
+        }
+        XCTAssertEqual(roonTitles, ["Ashes to Ashes"], "Heroes is van de analyzer, die schrijft Roon niet meer")
+    }
+
+    func testAFreshMachineWithoutAnalysedFilesBehavesExactlyAsBefore() async throws {
+        // Geen lokale rijen = geen filter. De walk moet zich dan gedragen zoals
+        // hij altijd deed, anders is een verse installatie stuk.
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("r1", artist: "Bowie", title: "Heroes", album: "Heroes"),
+             roonRecord("r2", artist: "Bowie", title: "Ashes to Ashes", album: "Heroes")],
+            albumTitle: "Heroes", fingerprint: "fpH", generation: run.generation)
+        let total = try await db.trackCount()
+        XCTAssertEqual(total, 2)
+    }
+
+    func testDisplacedRoonRowsHandOverTheirGenres() async throws {
+        // Roon's genrehiërarchie hangt aan de RIJ (track_genres.track_id, ON
+        // DELETE CASCADE). Zonder overdracht verliest 1,2% van de geanalyseerde
+        // tracks het enige genre dat ze hebben.
+        let run = try await db.beginSyncRun()
+        try await db.replaceAlbumTracks(
+            [roonRecord("r1", artist: "Bowie", title: "Heroes", album: "Heroes")],
+            albumTitle: "Heroes", fingerprint: "fpH", generation: run.generation)
+        try await db.pool.write { db in
+            try db.execute(sql: "INSERT INTO track_genres (track_id, genre) VALUES ('r1','art rock')")
+        }
+
+        _ = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "Heroes")])
+
+        let genres = try await db.pool.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT g.genre FROM track_genres g JOIN tracks t ON t.id = g.track_id
+                WHERE t.source = 'local'
+                """)
+        }
+        XCTAssertEqual(genres, ["art rock"])
     }
 
     func testLocalRowIsPlayableByItsOwnRecomputedMatchKey() async throws {
@@ -190,26 +261,6 @@ final class LocalLibrarySourceTests: XCTestCase {
 
         let locals = try await db.localTrackCount()
         XCTAssertEqual(locals, 1)
-    }
-
-    func testRoonCatchingUpReclaimsTheLocalRow() async throws {
-        _ = try await db.ingestLocalTracks([local("Menuhin", "Chaconne", album: "The Century")])
-        let before = try await db.localTrackCount()
-        XCTAssertEqual(before, 1)
-
-        // Next walk: Roon now indexes the same track.
-        let run = try await db.beginSyncRun()
-        try await db.replaceAlbumTracks(
-            [roonRecord("r1", artist: "Menuhin", title: "Chaconne", album: "The Century")],
-            albumTitle: "The Century", fingerprint: "fpC", generation: run.generation)
-        try await db.finishSyncRun(generation: run.generation)
-
-        let result = try await db.ingestLocalTracks([local("Menuhin", "Chaconne", album: "The Century")])
-        XCTAssertEqual(result.reclaimed, 1)
-        XCTAssertEqual(result.inserted, 0)
-        XCTAssertEqual(result.total, 0)
-        let total = try await db.trackCount()
-        XCTAssertEqual(total, 1)
     }
 
     // MARK: - First-seen

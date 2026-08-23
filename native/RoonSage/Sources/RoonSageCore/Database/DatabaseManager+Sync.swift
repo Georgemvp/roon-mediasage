@@ -44,6 +44,30 @@ extension DatabaseManager {
     }
 
 
+    /// Match keys the analyser already owns. The Roon walk skips those records:
+    /// the analyser is the primary catalogue (user, 2026-08-23), so a Roon row
+    /// for a file we walked ourselves is a duplicate that would be displaced by
+    /// the very next feature sync anyway — churning ~51.000 rows every walk.
+    ///
+    /// Empty on a machine whose analyser hasn't synced yet, and then the walk
+    /// behaves exactly as it always did.
+    static func analyzerOwnedKeys(_ db: Database) throws -> Set<String> {
+        Set(try String.fetchAll(db, sql: """
+            SELECT match_key FROM tracks
+            WHERE source = 'local' AND match_key IS NOT NULL AND match_key != ''
+        """))
+    }
+
+    /// Records the walk should still write — everything the analyser doesn't own.
+    static func writableRoonRecords(_ records: [TrackRecord], ownedByAnalyzer: Set<String>)
+    -> [TrackRecord] {
+        guard !ownedByAnalyzer.isEmpty else { return records }
+        return records.filter { r in
+            guard let k = r.matchKey, !k.isEmpty else { return true }
+            return !ownedByAnalyzer.contains(k)
+        }
+    }
+
     /// Years the analyser filled in on an album's rows, keyed by content.
     ///
     /// The walk REPLACES an album: it deletes the album's rows and inserts them
@@ -103,6 +127,7 @@ extension DatabaseManager {
                     """,
                     arguments: [fingerprint, albumTitle])
             }
+            let records = Self.writableRoonRecords(records, ownedByAnalyzer: try Self.analyzerOwnedKeys(db))
             let chunk = Self.rowsPerChunk(columns: 10)
             var start = 0
             while start < records.count {
@@ -191,8 +216,10 @@ extension DatabaseManager {
     public func replaceAlbumBatch(_ items: [AlbumBatchItem]) async throws {
         guard !items.isEmpty else { return }
         try await pool.write { db in
+            let owned = try Self.analyzerOwnedKeys(db)
             let chunk = Self.rowsPerChunk(columns: 10)
             for item in items {
+                let records = Self.writableRoonRecords(item.records, ownedByAnalyzer: owned)
                 let preservedYears = item.append ? []
                     : try Self.analyzerYears(db, fingerprint: item.fingerprint, albumTitle: item.albumTitle)
                 if !item.append {
@@ -205,8 +232,8 @@ extension DatabaseManager {
                         arguments: [item.fingerprint, item.albumTitle])
                 }
                 var start = 0
-                while start < item.records.count {
-                    let slice = item.records[start..<min(start + chunk, item.records.count)]
+                while start < records.count {
+                    let slice = records[start..<min(start + chunk, records.count)]
                     let placeholders = slice.map { _ in "(?,?,?,?,?,?,?,?,?,?)" }.joined(separator: ",")
                     let sql = """
                         INSERT INTO tracks
