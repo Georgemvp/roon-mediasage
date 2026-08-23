@@ -1,0 +1,1656 @@
+<!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
+Lees docs/STATE.md en ga verder met `native/docs/STANDALONE_LIBRARY_PLAN.md`:
+fase 1 (tweede bibliotheekbron), fase 2 (lokale albumhoezen) én de harde
+identiteit uit de tags zijn AF, gemeten en lokaal gecommit — **nog niet gepusht
+en niet getagd**. Fase 3 is herzien op wat DroppedNeedle en SoulSync bleken te
+doen; zie §5d van het plan en ## Next.
+Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
+swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
+STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
+nooit de client-app op de mini deployen. Doe één batch, niet "alles" tegelijk.
+Laatst getagd: v1.10.281 / ios-v1.7.247 / analyzer-v1.1.211. De mini draait
+analyzer-v1.1.202: een tag levert een DMG, geen uitrol — installeren is de
+handmatige bootout → installeren → bootstrap. **Fase 1 zit in de analyzer, dus
+hij werkt pas op de mini ná zo'n uitrol.**
+`native/RoonSage/Package.swift` staat bewust ongecommit — zie het tweede item
+onder ## Done.
+Wil je i.p.v. de volgende batch een specifiek onderdeel? Vervang de 2e zin door
+bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
+═══════════════════════════════════════════════════════════════════ -->
+
+## Goal
+Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
+
+## Now
+NU (2026-08-23, namiddag): **NAVIDROME + SHELV — VIJF FASES ERIN EN GESHIPT.**
+(user: "Opdracht: RoonSage Verrijken met Best-Practices uit Navidrome & Shelv",
+vijf fases; daarna "commit puh en tag".) **GESHIPT: commit `6e252b1`, gepusht naar
+`main`, getagd `v1.10.281` / `ios-v1.7.247` / `analyzer-v1.1.211`.**
+
+**Wat er al bleek te staan** — fase 1 t/m 4 waren grotendeels af: `Shelves.swift`
++ de overzicht-feed, de LRC-parser + karaoke-`LyricsView`, een downloadwachtrij en
+de AAC-transcoder. De opdracht is dus uitgevoerd als *gaten vullen*, niet als
+herbouw.
+
+**Fase 1** — drie ontbrekende planken: `randomAlbums()` (de énige ongerangschikte
+plank, zodat de staart van 13k albums bereikbaar is), `sonicallyRecommendedAlbums()`
+(CLAP-centroïde van je huidige topartiesten, mét die artiesten uitgesloten) en
+"Vergeten parels" op `dormantAlbums(days: 180)`. Hoestegel 130 → 140 pt via één
+`coverTileSize`. "Toon alles" duwt naar `ArtistAlbumsGridView(showsArtist: true)`.
+
+**Fase 2** — songteksten aan de analyzer-kant. `LRCParser`/`SYLTParser` staan nu in
+`AudioAnalysis` (één parser; `LyricsService.parseLRC` verwijst ernaar),
+`MetadataReader.lyrics()` leest USLT/SYLT/Vorbis, `LyricsProvider` doet
+`.lrc`-sidecars, `LyricsBackfill` is hervatbaar (negatieven worden gestempeld), en
+**`GET /lyrics?matchKey=` staat op 5766**. `resolveLyrics` vraagt nu eerst de
+analyzer, pas daarna LRCLIB. *Bewust géén hook in `LibraryWalker`*: die slaat 24k
+geanalyseerde rijen over, dus een hook daar zou de bestaande bibliotheek nooit
+raken — de backfill dekt alles.
+
+**Fase 3** — `OfflineDownloadManager` op `URLSessionDownloadDelegate` met een
+**achtergrondsessie**: downloads overleven suspend, en de bestanden worden
+*verplaatst* i.p.v. via `Data` in RAM gelezen (een FLAC is 30–40 MB). `AppDelegate`
+in de iOS-app vangt `handleEventsForBackgroundURLSession`. Nieuw: schema v50
+`offline_tracks.local_path` (bestandsNAAM, geen pad — de container-UUID verandert
+bij herinstallatie), "Houd favorieten offline" (alleen ge-sterde ALBUMS; verwijdert
+nooit iets), en `DownloadStatusMark`/`AlbumDownloadButton` met wachtend/bezig/klaar.
+
+**Fase 4** — Opus naast AAC. `AudioTranscoder.Codec`, Opus via ffmpeg
+(`/opt/homebrew/bin/ffmpeg`, v8.1.2), `format=opus` op `/audio`, en `transcoded()`
+geeft de codec terug die hij *echt* maakte — zonder ffmpeg valt hij terug op AAC.
+Client: `LocalTranscode.Format` + kiezer, maar alleen zichtbaar als
+`AVURLAsset.isPlayableExtendedMIMEType("audio/ogg; codecs=\"opus\"")` waar is.
+Gemeten op deze machine: waar. iOS 17 kon ik niet meten — vandaar de runtime-probe
+in plaats van een aanname.
+
+**Fase 5** — helemaal nieuw. `SmartPlaylistRules` (snake_case JSON: `genre`,
+`bpm_range`, `camelot_keys`, `energy_range`, `last_played_days_ago`,
+`min_play_count`, `sonic_similarity`) → `SmartPlaylistEngine.compile` → één SQL
+`WHERE`. `sonic_similarity` kán niet in SQL (blob-embeddings), dus de SQL-stap
+overfetcht ×8 en `RoonClient.smartPlaylistTracks` herrangschikt. UI: vierde tab
+"Regels" in `CreateHubView`. `RecapService` maakt week-/maandterugblikken via
+`syncExternalPlaylists(sourcePrefix: "recap:")` — idempotent, snoeit oude periodes,
+raakt eigen playlists niet aan; dagelijkse taak op de server-build.
+
+**Geverifieerd, kaal, met echte exit-codes:** `RoonProtocol swift test` 0 ·
+`RoonSage swift test` 0 (**1074 tests, 3 skipped, 0 failures**; was 1032) ·
+`swift build -c release --product RoonSage` 0 · `xcodegen generate` 0 ·
+swiftlint 474 violations / 2 serious — beide serious zijn pre-existing
+(`DiscoveryDigestNotifier.swift`, `DiscoverySettingsView.swift`), baseline 469.
+
+**Twee dingen die het bouwen opleverde.** (1) De strings-catalogustest ving
+`core.error.downloadTrackFailed` en `core.recap.*` als onvertaald — de tweede keer
+omdat mijn uitgelijnde `"key"    = "…"` niet matcht op de parser, die exact `" = "`
+verwacht; alle toegevoegde regels zijn nu genormaliseerd. (2) De release-build
+waarschuwde dat `Compiled: Sendable` een `[DatabaseValueConvertible]` droeg — dat
+existential is niet Sendable in GRDB 6.29.3. Nu `[DatabaseValue]` (concreet, wél
+Sendable) in plaats van een `@preconcurrency`-onderdrukking.
+
+────────────────────────────────────────────────────────────────────────
+
+
+NU (2026-08-23, begin middag): **HET BIBLIOTHEEKOVERZICHT IS EEN FEED GEWORDEN.**
+(user: "Ga door library view heen, het is nu heel chaotisch het moet meer gaan
+lijken op dit" + vier schermafdrukken van Plexamp.) Wat de referentie doet en wij
+niet deden: kleinkapitaal-koppen op een haarlijn met een chevron rechts, en
+afwisselend een hoezenplank en een compacte lijst — acht planken achter elkaar
+lezen als één herhaalde textuur, en dat was precies het "chaotisch".
+
+**Gewijzigd.** `sectionHeader` is nu kleinkapitaal + kerning boven een `Divider`,
+zónder het gouden icoon (met acht secties in één feed waren dat acht concurrerende
+merktekens); `shelf` verloor datzelfde icoon; nieuw is `compactRows` — vier rijen
+met een 46 pt-thumb en een verticaal ⋮-menu. De speelbadge op een hoes is van een
+gouden `.title2`-schijf naar een witte `.body` op een zwarte scrim gegaan.
+Drie nieuwe secties, allemaal op data die er al was maar nergens in de bibliotheek
+stond: **VANDAAG** ("2 jaar geleden", uit `onThisDay()` — dat voedde alleen de
+deelkaart en de serversamenvatting), **MEEST GESPEELD IN <MAAND>** (`playStats(since:)`
+→ `tracksByMatchKeys`) en **MEER VAN <PLATENLABEL>** (`labelOfTheWeek()`, per week
+deterministisch). De feed-volgorde is bewust afwisselend: Vandaag → plank → lijst →
+plank → lijst → plank → chips → tegels.
+
+**Twee dingen die het verifiëren opleverde.** (1) De labeltabellen waren léég —
+0 rijen in `label` en `album_label` terwijl 31.119 feature-rijen wél een label
+dragen; `ensureLabelsBuilt()` draaide alleen als je de labelverkenner in de Lab
+opende. Het overzicht roept hem nu aan, ná alle zichtbare secties, en de functie
+keert vanzelf vroeg terug zodra de tabellen gevuld zijn. (2) De labelsectie tekende
+**twee** chevrons: een `NavigationLink` ergens in een `List`-rij laat de List zijn
+eigen disclosure-indicator aan de rand zetten. `sectionChevron` is daarom een
+`Button` en de push loopt via `navigationDestination(isPresented:)`.
+
+────────────────────────────────────────────────────────────────────────
+
+
+NU (2026-08-23, middag): **BIBLIOTHEEK- EN ARTIESTPAGINA HERZIEN, VISUEEL
+GEVERIFIEERD OP DE SIMULATOR MET DE ECHTE BIBLIOTHEEK.** (user: "Gebruik de gui
+automatisering en maak de library view mooier en overzichtelijker ook de artist
+view is momenteel bij artiesten waar ik veel muziek van heb veel te lang.")
+**GESHIPT: `005db57`, getagd `v1.10.279` / `ios-v1.7.245` / `analyzer-v1.1.209`.**
+
+**Wat er mis was, gemeten en niet geraden.** De rasters stonden op
+`GridItem(.adaptive(minimum: 150))`; op een 402 pt iPhone past dat exact twee
+kolommen, dus 13.153 albums en 13.000+ artiesten kwamen vier tegels per scherm
+langs. De hoezen hadden bovendien een vaste `size: 150` binnen een cel van
+177 pt, dus ze stonden links in hun eigen cel met een rafelige goot ernaast. De
+artiestpagina zette élk album van de artiest in één `LazyVGrid`: Queen 92,
+London Philharmonic Orchestra 217 — 46 respectievelijk 109 rijen hoezen, en
+"Live", "Compilaties" en "Vergelijkbaar in je bibliotheek" zaten daarachter.
+
+**Wat er nu staat.** (1) `coverGridColumns(compact:)` in `Shelves.swift` is de
+enige definitie van een hoesraster: 112 pt op compacte breedte (drie per rij op
+een iPhone), 150 pt op iPad en Mac — die waren nooit het krappe geval en zijn
+deze sessie niet te meten. (2) `AlbumArtView(imageKey:fillingWidth:cornerRadius:)`
+is vierkant en vult de kolombreedte, zodat het raster een raster wordt.
+(3) De artiestpagina heeft een kop met portret, naam en telling, en de vijf
+werkwoorden op een eigen rij — ze deelden er één, en "Speel alles" verloor zijn
+label. (4) Elke discografie-sectie toont zes hoezen plus het aantal en een
+"Alle N"-knop naar `ArtistAlbumsGridView`; de pagina is nu even hoog bij vier
+albums als bij 217. (5) "Meest gespeeld" herhaalt de artiestnaam niet meer
+(`LibraryTrackRow(showsArtist:)`), en de albumtegels op de artiestpagina ook
+niet (`AlbumGridCell(showsArtist:)`). (6) Twee SF Symbols bestonden niet —
+`clock.badge.plus` (kop "Recent toegevoegd" tekende gewoon geen icoon) en
+`square.on.square.fill` (de dubbelen-chip in de aan-stand) — vervangen door
+`plus.circle` en `square.fill.on.square`. (7) Dezelfde kop-fix op
+`AlbumDetailView`: "Speel" was daar een gouden capsule zónder label.
+
+**Eén echte bug gevonden tijdens het verifiëren.** Vanaf `ArtistAlbumsGridView`
+opende een album wél en klapte meteen terug — bewijs in het simulatorlog: de
+Wikipedia-review-fetch van `AlbumDetailView.task` vuurde en werd direct
+gecancelled. Oorzaak: dat scherm wordt zelf met een *bestemming*-link geduwd, en
+een `NavigationLink(value:)` bovenop zo'n link laat de stack vallen. Nu overal
+bestemming-links op dat pad.
+
+**GUI-automatisering werkt nu end-to-end, en dat was het meeste werk.** Zie
+`## Facts` — simulator + `idb`, plus `~/bin/macui` om de analyzer-app op de mini
+te bedienen. De simulator kon niet online komen: elk verzoek kreeg 401 en de
+wachtrij in "Apparaten" liep vol met tientallen "iPhone 17"-regels. Oorzaak
+gevonden in het simulatorlog: `-34018 "Client has neither application-identifier
+nor keychain-access-groups entitlements"` — een build met `CODE_SIGNING_ALLOWED=NO`
+heeft géén entitlements, dus `KeychainStore.load` gaf altijd nil en
+`ensureDeviceToken()` muntte **een nieuw token per request**. Opgelost door de
+entitlements via de linker-sectie mee te geven; `codesign --entitlements` werkt
+niet op de simulator (dat geeft EBADEXEC bij het starten).
+
+────────────────────────────────────────────────────────────────────────
+NU (2026-08-23, ochtend): **DE BIBLIOTHEEK LOS VAN ROON — PLAN GESCHREVEN, FASE 1
+EN 2 AF, PLUS DE HARDE IDENTITEIT UIT DE TAGS.** (user: "Ga daar in werken en begin maak een duidelijk plan en
+voer die uit.") Plan: `native/docs/STANDALONE_LIBRARY_PLAN.md`, vier fasen.
+**Lokaal gecommit, NIET gepusht, NIET getagd** — een tag stuurt de analyzer via
+de CI-DMG naar de mini en daar is deze sessie niet om gevraagd.
+
+**De vondst.** De app heeft twee identiteitssystemen: `tracks` is een afdruk van
+Roon's Browse-boom mét Roon's sessie-gebonden `item_key` als primaire sleutel,
+`track_features` is een afdruk van de schijf met een genormaliseerde `match_key`.
+De fuzzy brug ertussen lekte: **19.537 volledig geanalyseerde tracks stonden in
+`track_audio_features` zonder `tracks`-rij**. Hun analyses waren al
+gesynchroniseerd en kostten al schijf en geheugen, maar `analyzedTrackIdentities()`
+joint `tracks → track_audio_features`, dus geen enkele functie kon erbij.
+
+**Fase 1: de bibliotheek krijgt een tweede bron.** Migratie `v49_track_source`
+(kolom `tracks.source`), alle drie de deletes van de Roon-walk begrensd tot
+`source='roon'` — zonder die grens gooit `finishSyncRun` élke niet-Roon-rij weg,
+want die draagt per constructie geen checkpoint. `ingestLocalTracks`
+(`DatabaseManager+LocalLibrary.swift`) draait in `syncAudioFeatures` direct ná
+`reconcileFeatureMatches`, en alleen in `.direct`-modus: de server bezit de
+bibliotheek, een thin client krijgt hem compleet via :5767.
+
+**Afspelen kostte geen nieuwe code.** `LocalPlayability.matchKey(for:)`
+herberekent de sleutel uit artiest/album/titel, en de rijen zijn gebouwd uit
+precies de tags waarop de analyzer keyde — dus ze streamen meteen via `/audio`.
+Op een Roon-zone gaat `local::` door dezelfde synthetische-sleutel-tak als
+`import::`, met dit verschil dat de zoektermen uit de rij zelf komen (de sleutel
+draagt de genormaliseerde match key, geen weergavetekst).
+
+**Gemeten tegen kopieën van de echte databases** (herhaalbaar:
+`ROONSAGE_REAL_LIBRARY_DB=… ROONSAGE_REAL_ANALYZER_DB=… swift test --filter
+testMeasureAgainstTheRealLibrary`; zonder die twee slaat de test zichzelf over):
+66.377 rijen aangeboden · tracks 89.752 → 104.805 · 15.053 lokale rijen ·
+features zonder tracks-rij 19.537 → 4.484 · **`analyzedTrackIdentities()` 49.166
+→ 64.219**. Dat laatste is de opbrengst: +15.053 tracks (31%) voor stations,
+DJ-sets, Music Map en Sonic Search. De 4.484 die overblijven zijn verweesd —
+sleutels van vóór een normaliser-wijziging plus rijen zonder BPM, waar geen
+analyse meer achter zit; apart onderhoud, niet deze fase.
+
+**Twee vallen die dit had kunnen slopen, allebei afgevangen en getest.** (1) De
+trigger `trg_tracks_first_seen` zou 15.053 rijen als "vandaag nieuw" stempelen en
+"op deze dag" overspoelen — de ingest zaait `track_first_seen` daarom vooraf met
+de oudste bekende datum. (2) `replaceAlbumTracks` verwijdert bij `album_fp IS
+NULL` op álbumnaam; een lokale rij met dezelfde albumnaam ging daar zonder de
+`source`-grens elke walk aan onderdoor.
+
+**Onderweg opgeruimd:** de live-heuristiek stond alleen in `LibrarySyncService`
+en kreeg hier bijna een tweede kopie. Nu één definitie,
+`TrackIdentity.looksLive(title:context:)` — anders kon dezelfde track live zijn
+via de ene bron en studio via de andere, en `excludeLive` filtert álle stations
+op precies die vlag.
+
+**Fase 2: lokale albumhoezen.** `MetadataReader.artwork(url:)` (ID3 `APIC`, FLAC
+`METADATA_BLOCK_PICTURE`), `AnalyzerCore/ArtworkProvider` met sidecar-terugval
+(`cover`/`folder`/`front`/`album`/`artwork` × jpg/jpeg/png/webp, in die volgorde,
+hoofdletter-ongevoelig tegen de échte mapinhoud), ImageIO-schaling en een cache
+van 512 — missers inbegrepen, anders wordt een map zonder hoes bij elke
+scrollbeweging opnieuw gelijst. Nieuw endpoint `GET /artwork?match_key=…&size=…`
+op :5766, zelfde auth als `/audio`, `size` geklemd op 32…1200.
+
+**De UI hoefde niet aangeraakt.** Een lokale rij krijgt als `image_key` dezelfde
+`local::`-markering die zijn id draagt, en `RoonClient.imageURL(forKey:)` kiest
+daarop. Alle zeven weergaveplekken namen al een image key aan.
+
+**Gemeten, tegen echte bestanden:** steekproef van 200 lokale rijen → 182 hoezen
+ingebed, 16 als `cover.jpg` ernaast, 2 nergens = **99% dekking**. En `/artwork`
+end-to-end over HTTP: 200 OK, `image/jpeg`, 199×200 px, **14.143 bytes** — die
+hoes zit als ~1 MB in het bestand, en de uplink hier is 39 Mbps.
+
+**Harde identiteit uit de tags** (user: *"kijk ook naar dropped needle en
+soulsync hoe zij bibliotheek inscannen etc. Volgens mij gaat dat met metabrainz
+en accousticID"*). Klopt voor DN, half voor SoulSync — en de meting bracht iets
+anders naar boven.
+
+- **DroppedNeedle** identificeert in drie lagen: `automatic` (MB-matcher, 12.270),
+  `embedded` (MB-tags al in het bestand, 9.296), `manual` (7.148). **AcoustID is
+  de kléinste laag** — 4.239 pogingen, 2.655 `matched` — een laatste redmiddel,
+  geen eerste stap. Dekking 28.714/67.110 (43%).
+- **SoulSync** heeft geen bibliotheekscanner; AcoustID zit er als *verificatie ná
+  een download* (`library_reorganize.py`). Wat wél telt: SoulSync schrijft
+  identiteit terug in de tags.
+- **Wat er dus echt op schijf ligt** (steekproef 385, mutagen): **ISRC 80%**,
+  MB recording/release-track-id 24%, `deezer_track_id` 27%, AcoustID 0%. RoonSage
+  las géén van beide: de 36.962 ISRC's in `analyzer.db` kwamen uit de
+  dataset-sidecar (fuzzy metadata-match). **41% van de bestanden droeg een ISRC
+  die nergens werd opgepikt**; waar beide bronnen iets hadden waren ze het 89%
+  eens, en het verschil zijn sidecar-missers.
+
+**Daar zat een echte bug.** `MetadataReader` matchte rauwe tagnamen met
+`contains("ARTIST")` — en `MUSICBRAINZ_ARTISTID` bevat "ARTIST",
+`MUSICBRAINZ_ALBUMID` bevat "ALBUM". In bestanden waar de MB-tag eerst werd
+opgesomd belandde de **UUID als artiest- én albumnaam**: 412 rijen, gesleuteld op
+een UUID, onvindbaar voor elke join en in de app zichtbaar als een artiest die
+`300c4c73-33ac-…` heet. De routering zit nu in een pure `applyRawTag`, precies
+zodat er een test tegenaan kan — die werd **bewezen rood** op de oude routering
+(4 failures) en groen op de nieuwe.
+
+**Gebouwd:** `TrackMetadata` draagt `isrc`/`recordingMBID`/`releaseTrackMBID`/
+`albumMBID`/`artistMBID` (genormaliseerd en gevalideerd — een malformed
+identifier is erger dan geen, want die joint rijen die niet hetzelfde zijn);
+vijf kolommen in `track_features` plus `identity_source`/`identity_checked_at`;
+de walker schrijft het mee uit dezelfde tag-lezing; `IdentityBackfill` haalt de
+achterstand op zónder audio te decoderen en repareert onderweg de UUID-namen.
+De tag wint van de sidecar, maar een ontbrekende tag wist de sidecar niet
+(COALESCE). `contentSignature()` kreeg een identiteitsterm — zonder die term
+pullen clients een in-place herschreven ISRC nooit op; dezelfde val als moods,
+arousal en de CLAP-retag.
+
+**Gemeten op een kopie van de echte `analyzer.db`** (1.931 rijen in scope: alle
+412 UUID-rijen + 1.500 willekeurige): ISRC 841 → **1.410** · 361 MB-ids gevonden ·
+artiest = UUID **412 → 0** · 412 rijen hersteld, **waarvan 352 duplicaten van een
+correcte rij** (66.378 → 66.026). Kosten ~48 ms per bestand, dus de volle
+backfill is ~1 uur, eenmalig en hervatbaar.
+
+**De bibliotheek zónder Roon, gemeten — en de sleutelfout die dat blootlegde.**
+Op een kopie is de bibliotheek volledig herbouwd uit alleen de bestanden. Daaruit
+bleek dat fase 1's rij-id (`local::<match_key>`) fout was: `match_key` is bewust
+albumvrij, dus dezelfde opname op twee albums viel samen op één primaire sleutel
+— 66.377 bestanden werden 59.517 rijen, **6.860 tracks verdwenen spoorloos**. De
+id is nu `local::<album>|<artiest>::<match_key>`; `image_key` blijft bewust op
+`match_key` alleen (twee rijen van dezelfde opname delen hoes én cache). Gevolg
+dat daarbij hoort: een gecorrigeerde albumtag landt op een nieuwe rij, dus de
+ingest ruimt de wees op — met de rem van `finishSyncRun`: een payload die met meer
+dan de helft kromp wist niets.
+
+Na die fix, **met Roon**: lokale rijen 15.053 → 15.532, `analyzedTrackIdentities`
+64.219 → 64.335. **Zonder Roon**: tracks 65.759 van 66.377 aangeboden · albums
+9.908 · 100% albumhoezen · **jaartal 1.071 (Roon) → 59.136 (tags)** · sonisch
+bereikbaar 49.166 → **60.621**. De standalone bibliotheek is dus op twee punten
+béter dan de Roon-bibliotheek. Wat er nog aan Roon vastzit is de identiteit van de
+Roon-rijen zelf en de Qobuz-laag (fase 4).
+
+**De jaartallen werden bij elke Roon-sync gewist.** De standalone-meting liet
+zien dat de app 1.071 jaartallen had terwijl de bestandstags er 59.136 leveren —
+en `applyTrackYears` vult die al in. Oorzaak: de walk **vervangt** een album (hij
+DELETE't de rijen en INSERT ze vers), dus de `ON CONFLICT`-tak draait nooit en
+alles wat alleen de analyzer weet sneuvelt op de delete. Mijn eerste fix
+(COALESCE op die tak) deed dan ook niets — zie ## Failed attempts. Nu wordt het
+door de analyzer ingevulde jaar bínnen dezelfde transactie bewaard en na de
+insert teruggezet, alleen waar de verse rij zelf geen jaar heeft (een jaar dat
+Roon wél levert houdt voorrang). Regressietest op beide paden — de losse
+`replaceAlbumTracks` én `replaceAlbumBatch`, dat laatste is wat de echte sync
+gebruikt — en bewezen rood vóór de fix.
+
+**DE OMSLAG: de analyzer is nu de primaire bibliotheekbron.** (user, midden in
+de uitvoering: *"bak 2 moet dus de belangrijkste bak zijn … Zelfs als Roon
+wegvalt moet alles gewoon werken. Roon control is dan iets ernaast"* — verbatim
+in ## Constraints.) De ingest neemt élk geanalyseerd bestand op in plaats van
+alleen de gaten, en verdringt daarna de Roon-rijen die hij bezit; zo'n rij geeft
+eerst zijn genres over, want Roon's genres hangen aan de rij en 1,2% van de
+tracks heeft er geen ander. En de walk schrijft niet meer wat de analyzer al
+bezit — zonder dat zou elke walk ~51.000 rijen schrijven die de volgende
+feature-sync weer verdringt. Is er nog niets geanalyseerd, dan is die set leeg en
+gedraagt de walk zich exact als vroeger (verse installatie blijft werken).
+
+**Gemeten:** tracks 89.752 → 90.759, waarvan **65.759 van de analyzer** en
+~25.000 van Roon (de Qobuz-laag plus wat Roon anders spelt); `analyzedTrackIdentities`
+49.166 → **60.658**. Nog niet af: van die ~25.000 zijn er ~10.700 wél op schijf
+maar anders gespeld — harde identiteit is daar het gereedschap voor, maar Roon
+levert zelf geen identifier.
+
+**Verified: `swift build` exit 0 · `swift test` 1032 tests, 0 fouten, 3
+overgeslagen (baseline 984) · `swift build -c release` groen voor RoonSage én
+RoonSageAnalyzerApp · swiftlint 466 violations / 2 serious — één minder dan de
+baseline, dus geen nieuwe · check-localization `--strict` exit 0, 1134 sleutels,
+0 missend, 0 geïnterpoleerd, 0 wees.**
+
+**GESHIPT + GROEN (2026-08-23): vier releases, `v1.10.275` t/m `v1.10.278`
+(+ `ios-v1.7.241..244`, `analyzer-v1.1.205..208`)** — alle workflows success.
+
+**ANALYZER LIVE OP DE MINI: `analyzer-v1.1.208`.** Via de CI-DMG-route (lokaal
+signeren kan niet, zie ## Open items): `gh release download` → handtekening
+gecontroleerd (`Developer ID Application: Casper Jansen (5W3QDZ94FH)`,
+`com.roonsage.analyzer`) → `bootout` → oude app bewaard als `.bak-1.1.202` →
+kopiëren → `bootstrap`. **Eén pid (79802), :5766 66.378 tracks, :5767 89.752
+tracks, Roon opnieuw geregistreerd bij Caspers-Mac-mini.** Client-app NIET
+gedeployd (constraint).
+
+**Live geverifieerd:** `/artwork` levert echte JPEG's, zowel uit het bestand
+(15.035 / 22.520 / 42.030 bytes) als uit een `cover.jpg` ernaast (14.704 en
+7.165 bytes voor Bowie's *Lazarus*, dat zelf geen ingebedde hoes heeft). De
+identiteits-backfill loopt: binnen enkele minuten 765 rijen gecontroleerd,
+MusicBrainz-ids 0 → 93.
+
+---
+_Hieronder de `## Now` van de vorige sessie (de 360°-audit). Bewaard, niet
+geschrapt._
+
+NU (2026-08-23, nacht): **360°-AUDIT VOLLEDIG UITGEVOERD — BATCH A, B ÉN C AF.**
+(user: "Pak alles aan. Echt alles zodat ik morgenochtend wakker wordt en de
+volledige audit verbeteringen zijn uitgevoerd en ik weer door kan.")
+Rapport + afvinklijst bovenaan `docs/NATIVE_APP_AUDIT.md`.
+**Code-only geverifieerd. NIET gecommit, NIET gepusht, NIET getagd** — een tag
+stuurt de analyzer via de CI-DMG naar de mini en daar is deze sessie niet om
+gevraagd.
+
+Verse uitkomsten (alle in één ronde gedraaid):
+`RoonProtocol` 12 tests 0 fouten · `RoonSage` **984 tests 0 fouten** (was 973) ·
+`swift build -c release --product RoonSage` compleet · iOS-typecheck
+`RoonSageUI` **BUILD SUCCEEDED** · check-localization **1134 sleutels, 0 missend
+in nl én en, 0 geïnterpoleerd, 0 wees, `--strict` exit 0** · swiftlint 466
+violations / **2 serious** (was 469 / 5).
+
+**Batch A** — de rode draad was toestand die Core bijhoudt maar die de UI nooit
+bereikte: A1 `ownsQueueSubscription` (wachtrij was op de cliënt tot 15 s leeg),
+A2 `isLoadingOverview` (skeleton was onbereikbaar, je zag "Nog geen bibliotheek"),
+A3 `loadFirstGridPage` (favorietenfilter zag maar 120 items na een tabwissel),
+A4 `zonesAreStale` in de banner (0 lezers), A5 `iOSTab(for:)` → nil (9 van de 17
+palet-bestemmingen kwamen stil op Bibliotheek uit).
+
+**Batch B** — B1 `TransportIntent`: optimistic UI op play/pause, shuffle, repeat,
+mute en volume, met rollback als het commando faalt en alleen als er niets
+nieuwers is geland (pure functie, 9 tests). Plus live volume tijdens het slepen
+(throttle 150 ms) i.p.v. pas bij loslaten. B2 de **61 geïnterpoleerde sleutels →
+0**. B3 het macOS-app-target bleek 25+ harde Nederlandse literals te hebben en
+**nul** `LS()`: menubalk, menubar-extra én de hele updater, nu alle 33
+gelokaliseerd. B4 ⌘1…9 volgt nu `SidebarSection.items`. B5 "wis de wachtrij"
+ingetrokken (Roon's API kán het niet) en in de zone-wachtrij uitgelegd. B6
+dedup-chip in de bibliotheek.
+
+**Batch C** — C1 zeven VoiceOver-labels + twee harde Engelse labels. C2
+`PlayerScrubber` als eigen view: de hele hero hertekende op 1 Hz, óók gepauzeerd,
+en maakte elke body-pass een nieuwe `Timer.publish`; nu tikt er niets tijdens
+pauze. C3 ⌘F via AppKit (`.searchFocused` is macOS 15+, dit project staat op 14).
+C4 `enumerated()` uit de wachtrij. C5 3 van de 5 `empty_count`.
+
+**`check-localization.sh` is uitgebreid en gaat nu wél gaten.** Hij scande alleen
+`RoonSageUI` + `RoonSageCore` en meldde daarom al die tijd "0 missing" over een
+app-target dat de catalogus niet eens gebruikte. Scant nu ook `RoonSage`,
+`RoonSageAnalyzerApp` en `native/iosapp`, en `--strict` (die in CI draait) faalt
+voortaan óók op een nieuwe geïnterpoleerde sleutel. Negatief getest: opzettelijke
+regressie → exit 1, na terugdraaien → exit 0.
+
+---
+_Hieronder de `## Now` van de vorige sessie (bibliotheek-view, geshipt als
+v1.10.273). Bewaard, niet geschrapt — zie het bovenste punt in `## Open items`._
+
+NU (2026-08-22, laat): **360°-AUDIT (UX + VOLLEDIGE FUNCTIONALITEIT) — RAPPORT AF,
+BATCH A GEÏMPLEMENTEERD EN GEVERIFIEERD.** (user: "Voer een grondige 360-graden
+audit uit ... stel een geprioriteerd actieplan op en repareer de gevonden issues
+incrementeel in batches.") Het rapport staat bovenaan `docs/NATIVE_APP_AUDIT.md`
+(2026-08-22); de audit van 2026-06-12 staat eronder onder "Historie".
+**Code-only geverifieerd. NIET gecommit, NIET gepusht, NIET getagd.**
+
+Verse uitkomsten na Batch A: `swift build` schoon · **975 tests, 0 fouten**
+(baseline was 973; +2 nieuw) · `swift build -c release --product RoonSage`
+compleet · check-localization **1034 sleutels, 0 missend in nl én en, 0 wees** ·
+swiftlint **469 violations / 5 serious — exact gelijk aan de baseline**, dus geen
+nieuwe geïntroduceerd. (`swiftlint` stond niet op de mini geïnstalleerd; nu via
+brew, CI deed `brew install swiftlint` al zelf.)
+
+Batch A, alle vijf af — de rode draad was **toestand die Core correct bijhoudt
+maar die de UI nooit bereikt**:
+- **A1 · `RoonClient.ownsQueueSubscription(mode:)`** — `startQueue`/`stopQueue` zijn
+  nu no-ops in `.server`-modus. De verzonden apps draaien `.server`; daar komt
+  `queueItems` uit de `PlaybackSnapshot`, terwijl beide functies hem als eerste
+  leegden en het Roon-abonnement daarna stil faalde (`try?` → nil → return).
+  Gevolg: de wachtrij openen op een **gepauzeerde** zone gaf tot **15 s** "niets in
+  de wachtrij" (PlaybackEventHub pusht alleen bij een gewijzigde digest, de
+  fallback-poll staat op 15 s), en hem sluiten blankte de "hierna"-pil én de
+  "nog N over"-teller van de speler. Test: `QueueOwnershipTests.swift`.
+- **A2 · `LibraryView.isLoadingOverview`** — de skeleton was onbereikbare code
+  (`loadOverview` zet `loadedModes` synchroon vóór de Task), dus het overzicht
+  toonde de hele laadtijd "Nog geen bibliotheek — synchroniseer je bibliotheek"
+  op een apparaat mét bibliotheek.
+- **A3 · `LibraryView.loadFirstGridPage(_:)`** — `fillAllPages` hing alleen aan
+  `onChange(of: favoritesOnly)`, dus na een tabwissel of een zoekopdracht
+  betekende "Alleen favorieten" weer "de favorieten binnen de eerste 120".
+- **A4 · `ReconnectingBanner` toont `zonesAreStale`** — die vlag werd op drie
+  plekken berekend en door géén enkele view gelezen. Tijdens de 45 s zone-grace
+  zag de app er volledig gezond uit; de waarheid kwam pas als foutmelding ná een
+  druk op play. Nieuwe sleutel `root.zonesStale` (nl + en).
+- **A5 · `RootView.iOSTab(for:)` geeft nu nil i.p.v. `.library`** — negen van de
+  zeventien palet-bestemmingen (Wachtrij, Playlists, Bewaard, DJ, Lab, Sonic Lab,
+  Music Map, Multitag, Smaak) kwamen op de iPhone stil op het bibliotheek-tabblad
+  uit. Tabloze bestemmingen worden nu gepresenteerd via `destinationSheet`.
+
+---
+_Hieronder staat de vorige `## Now` (bibliotheek-view, afgerond en geshipt als
+v1.10.273). Bewaard, niet geschrapt — zie het bovenste punt in `## Open items`._
+
+NU (2026-08-22, nacht): **DE BIBLIOTHEEK-VIEW — SNELLER EN DUIDELIJKER.**
+(user: "Verbeter de bibliotheek view van RoonSage iOS zodat het duidelijker is
+en sneller" + "geen simulator, ik ga slapen".) Dus **code-only geverifieerd**:
+`swift build` schoon, **973 tests 0 fouten**, check-localization 1033 sleutels /
+0 missend / 0 wees, interpolatiesleutels 63 → 61. **GESHIPT (2026-08-22 21:08):
+`v1.10.273` / `ios-v1.7.239` / `analyzer-v1.1.203`, alle vier workflows groen**
+(commit `373f24b`). De mini blijft op analyzer-v1.1.202 draaien: de tag levert
+een DMG, geen uitrol. Ronde A uit de UX-audit zat nog ongecommit in de werkmap
+en is meegegaan; `Package.swift` blijft bewust buiten de commit.
+
+**Sneller — vier ingrepen, allemaal werk dat nergens heen ging.**
+1. **`.onAppear` deed `reload()`.** Elke tabwissel — en elke terugkeer uit een
+   album- of artiestenscherm — gooide de overzichtsgegevens weg (zeven query's,
+   op een thin client evenveel netwerkrondes) én álle geladen trackpagina's mét
+   je scrollpositie. De bibliotheek verandert alleen bij een resync, en
+   `onChange(of: client.trackCount)` ving dat al af. Nu houdt `loadedModes` bij
+   welke modus data heeft voor de huidige zoekterm; `appear()` laadt alleen wat
+   ontbreekt. Zelfde ingreep als W1 op de stationslijst.
+2. **`Array(x.enumerated())` in de drie lijsten.** Een volledige kopie van de
+   lijst (tuples, dus geen COW) bij élke body-evaluatie — toetsaanslag,
+   selectie, synctik — puur om te weten welke rijen bijna onderaan zijn. De
+   laatste acht id's beantwoorden diezelfde vraag in acht elementen.
+3. **Het overzicht vroeg 300 rijen om er 15 te tonen** (`browseTracks` default),
+   en `libraryDurationSeconds()` — een SUM over de hele feature-tabel — werd bij
+   elke opening opgehaald in een `@State` die géén view leest. Weg.
+4. **Pull-to-refresh haalde `topTags(limit:28)` op in élke modus**, ook op de
+   albumgrid die geen tags toont; dat scant en JSON-parset de feature-tabel.
+   Nu alleen waar de chips staan. Plus: de Zoek-tab herhaalt zijn zoekopdracht
+   niet meer bij elke verschijning (`unifiedQuery`).
+
+**Duidelijker — vijf ingrepen.**
+1. **De sorteervolgorde en het favorietenfilter waren onzichtbaar geworden.**
+   Ronde A vouwde vier toolbars tot één ellips-menu — dat repareerde de titel,
+   maar verstopte juist de twee instellingen die bepalen wát je ziet: je kon een
+   korte bibliotheek niet van een gefilterde onderscheiden. Nu chips ónder de
+   modusknoppen (`browseBar`), die hun eigen stand tonen en in één tik omzetten,
+   in dezelfde strook als de tagfilters. Het menu houdt alleen nog "selecteer
+   meerdere" over — en Artiesten heeft daardoor helemáál geen menu meer.
+2. **"Alleen favorieten" loog.** Het filter draait client-side over de geladen
+   pagina's, en paginering *pauzeerde* zolang het aanstond: het betekende dus
+   "je favorieten onder de eerste 120 albums", zonder enig teken dat er meer
+   was. Aanzetten laadt nu eerst de rest van de catalogus (`fillAllPages`,
+   dubbel begrensd op groei én paginacap).
+3. **Lege grids gaven het verkeerde advies.** "Geen albums — synchroniseer je
+   bibliotheek" stond er ook als het echte antwoord "je hebt nog niets een ster
+   gegeven" was: advies om precies het enige te doen dat niet helpt. Drie
+   redenen, drie teksten.
+4. **Acht Nederlandse/Engelse literals** in een verder vertaald scherm: beide
+   selectiebalken, de bewaar-als-playlist-melding, de lege-tagtekst, "Start
+   Sonic Radio", "Info", en de artiestregel die zijn eigen meervoud-s bouwde
+   náást `artistSummary`, dat het al via de catalogus zei.
+5. **Eén naam per ding:** NL zei in hetzelfde scherm "Tracks" (modusknop,
+   zoeksectie) én "nummers" (artiestregel, meervoudsleutels).
+   `library.tracks` = "Nummers", en de titel/lege staat mee. Plus de vijf
+   navigatiekaarten onderaan (~450 pt meubilair, §2.6 van de audit) tot één
+   sectie "Jouw verzameling" met halfbrede tegels: zelfde vijf bestemmingen,
+   zelfde ondertitels, ruim de helft van de hoogte.
+
+**Onderweg opgeruimd:** `albumShelf`/`albumCover` in `LibraryView` waren dood
+(DiscoveryView heeft eigen exemplaren), en twee doc-comments beweerden dat
+BPM+toonsoort "ON by default" staan terwijl code én instelling `false` zijn —
+het soort comment waar je naar handelt en dan op zit te debuggen.
+
+**Nog te doen op dit onderdeel:** het echte prestatiebewijs ontbreekt nog, want
+alles hierboven is beredeneerd op een demo-seed van 15 tracks. De audit noemde
+dat zelf al als volgende stap: een seed van tienduizenden rijen, en dán meten
+(§3, "Niet gemeten en wel belangrijk").
+
+---
+
+AFGEBROKEN 22-08 22:20 — Casper ging slapen; de sessie is met SIGTERM gestopt
+vanuit de mediastack-chat, en de simulator `RoonSage-UX` is afgesloten en
+verwijderd (4,9 GB terug; het harnas maakt hem zelf opnieuw aan).
+
+**Waar hij stond.** Na de diepe UX-audit (`native/docs/UX_AUDIT_2026_08_22.md`,
+31 schermafdrukken, commit `1cf6f03`) liep hij de vier fixronden af. Ronde A
+("één naam per ding") was bezig; de laatste bewerking draaide de trackregel om,
+omdat BPM+key naast de albumnaam de artiest afkapte, en verhuisde "Edit" naar het
+contextmenu.
+
+**Ongecommit op main** (9 bestanden, niets gepusht — `Package.swift` staat
+bewust ongecommit, zie ## Done):
+`Package.swift` · `RoonSageCore/RoonClient+Discovery.swift` ·
+`RoonSageUI/{Appearance,LibraryDetailViews,LibraryView,SettingsView,StateViews}.swift` ·
+`Resources/{nl,en}.lproj/Localizable.strings`
+De laatste volledige testrun (973 tests, 0 fouten) was vóór deze bewerkingen —
+**eerst `swift build && swift test` opnieuw** voordat je verder gaat.
+
+**Openstaand uit de laatste opdracht ("audit ook in online modus"):** dat lukte
+niet. Er is geen pair-route, goedkeuren gaat via de analyzer-GUI die op afstand
+niet werkt, en de simulator-keychain is versleuteld — al het auditbeeld is dus
+offline met 15 demo-tracks. Twee onbevestigde vondsten uit die ronde: er zijn
+twee foutweergaven waarvan één onvertaald, en de app doet server-requests terwijl
+hij zichzelf offline noemt (een Nederlandse melding met een Engelse knop die een
+HTTP-401 toont terwijl er niets verbonden is).
+
+NU (2026-08-22, avond): **HET STATIONS-PLAN UITGEVOERD — fase 1 t/m 3 compleet,
+fase 4 deels; W11/W13 bewust gestopt.** (user: "Begin maar, doe alles.")
+Geshipt in vijf commits, `native/docs/STATIONS_PLAN.md` §5b houdt de stand bij.
+
+**Fase 1 — snelheid.** `RadioListCache` memoizeert de stationslijst per
+rotatiebucket (die was per definitie constant en werd bij élke verschijning van
+het scherm herberekend, want de "loaded"-vlag leefde in SwiftUI-`@State`). De
+Qobuz-spiegel hangt niet langer als scherm-brede `.task` maar aan zijn eigen
+sectie — dat scheelt 0,91 s netwerk (6,08 s koud) per opening. En
+`analyzedTrackIdentities()` bouwt de lijst zonder één embedding aan te raken; dat
+was ~165 MB voor een scherm met een dozijn tegels. **Bewust: de
+geheugendruk-handler laat de lijstcache staan** — die paar dozijn namen zijn juist
+wat de 165 MB-herlaadslag voorkomt.
+
+**Fase 2 — woordenschat.** Voor jou · Gast-DJ · Reizen · Genereer. Album Radio
+verhuisde naar de stations (het eindigt nooit; het stond tussen twee reizen die
+dat wél doen), de Qobuz-spiegel is van een tweede volledig raster teruggebracht
+tot één regel met een eigen scherm erachter.
+
+**Fase 3 — de persona overal.** `RoonClient.stationPersona` gaat mee bij élke
+station-start; de motor accepteerde dat al (`startRadio(djMode:)`) maar de UI bood
+het alleen op de nu spelende track. Lang-indrukken op een stationskaart geeft
+"Start als …". Het Gast-DJ-scherm is niet langer dood zonder muziek: kiezen zet nu
+de persona die je stations stuurt. De dial benoemt zijn eigen override.
+
+**Fase 4 — deels.** W12 is er: `RadioConfig.fromStation` maakt van elk
+automatisch station een bewaarbaar eigen station ("bewaar als eigen station" in
+het contextmenu). Onderweg bleek ik dáár zelf te dupliceren —
+`radioConfigFromAIRadio` had al dezelfde switch — dus dat is nu één mapping.
+
+**W11 EN W13 ZIJN GESTOPT, OP TWEE BEVINDINGEN UIT DE UITVOERING:**
+1. **De stabiele station-id is een anker in de echte wereld.** `artist:<lower>`
+   draagt `radiosync.selection.v1`, `radioHidden`, én `titleKey(id)` — en die
+   gecachete AI-titel ís de Qobuz-playlistnaam waarop `find-or-create` matcht
+   ("the one chosen key", aldus `RoonClient+ArtistRadio`). Omzetten naar
+   `custom:<uuid>` laat elke bestaande playlist opnieuw aanmaken **naast** de
+   oude, in Caspers echte Qobuz-account.
+2. **De twee gates verschillen bewust.** `bucketGate` matcht genres op
+   `SonicTrack.genres` (MB ∪ Deezer), `customGate` op Roon's `track_genres`. Ik
+   had dat al omgezet als "vergeten helft" — tot `b5325a9` (de commit die de
+   buckets omzette wegens "Daft Punk in jazz") letterlijk bleek te zeggen: *"Roon
+   genresByTrackID() blijft ongemoeid (artist-affiniteit/custom/SonicDNA hangen
+   eraan)."* Teruggedraaid; `StationGateParityTests` pint het verschil.
+
+**DE GENRE-POORT IS GELIJKGETROKKEN — na meting, niet op gevoel** (user: "Doe wat
+slim is"). Een eigen station leest nu de precieze genres (MB ∪ Deezer) met Roon's
+grove tag als terugval **alleen** voor tracks zonder enig precies genre. Eerst
+gemeten op `library.db`: 64.038 geanalyseerd, 56.786 met precies genre, **785
+(1,2 %) met alleen een Roon-tag**. Hard gelijktrekken had precies die 785 laten
+vallen — tracks waar geen tegenbewijs voor bestaat; de terugval houdt ze binnen
+én sluit Daft Punk uit jazz (die hééft precieze genres, dus valt nooit terug).
+Geen enkele bestaande test brak: die bouwen tracks zonder precieze genres en
+volgen dus de terugval-tak.
+
+**GESHIPT + LIVE (2026-08-22 20:47): `v1.10.272` / `ios-v1.7.238` /
+`analyzer-v1.1.202`**, alle vier workflows groen. Analyzer gedeployd via de
+CI-DMG-route (handtekening `5W3QDZ94FH` gecontroleerd, oude bewaard als
+`.bak-1.1.201`, `bootout` → installeren → `bootstrap`). Client-app NIET
+gedeployd (constraint).
+
+**Verified: 973 tests 0 failures (was 956) · `swift build -c release` exit 0 ·
+check-localization 999 sleutels, 0 missend / 0 wees · alle drie de UI-tests
+groen · vier segmenten gefotografeerd · mini draait analyzer-v1.1.202 als één pid
+(27224, was 17098), :5767 87.820 tracks, :5766 66.378, Roon verbonden, 5 zones,
+0 ws-sluitingen.**
+
+---
+
+NU (2026-08-22, avond): **FUNCTIONELE AUDIT VAN STATIONS + PLAN —
+`native/docs/STATIONS_PLAN.md`.** (user: "Controleer alle functies, kijk of de
+functies wel slim zijn of kunnen opgaan in andere functies … kijk of alles snel
+is. Maak een plan om deze view veel professioneler te maken.") De vorige ronde
+ging over vorm; deze over functie. **Geschreven, nog niets gebouwd.**
+
+**De diagnose:** onder Stations zit **één motor** (`startRadio →
+buildRadioCandidates → top-up`) met **vier deuren** die elkaar niet kennen. Een
+DJ-persona is per eigen doc-comment "a thin preset, not a new engine". Een
+categorie-radio zet dezelfde drie knoppen vanuit een bucket, een opgeslagen
+"Mijn radio" vanuit een `RadioConfig` — en dát model is de **superset van alle
+andere drie**: `genre:house` ís `RadioConfig(genres:["house"])`, een persona ís
+`RadioConfig(trackKeys:[seed])` + preset, Album Radio ís een config met
+albumtracks.
+
+**Gevolgen, geteld:** de avontuurlijkheidsdial bestaat **vijf keer** (globale
+schuif · persona-preset · `RadioConfig.adventurousness` · het stuurveld "verras
+me" · `generatePlaylist(adventurousness:)`) · **vier namen** voor hetzelfde
+concept (Sonic radios / My radios / AI radios on Qobuz / DJ modes) · **twee
+lijsten van dezelfde artiesten** onder elkaar op één scherm (live stations en de
+Qobuz-spiegel, zelfde seeds, aparte pijplijnen) · en de motor accepteert
+`djMode` op **élke** station-start terwijl de UI persona's alleen op de
+nu-spelende track aanbiedt.
+
+**Snelheid, gemeten tegen de draaiende analyzer (87.820 tracks):** `/ai-radios`
+**6,08 s koud / 0,91 s warm** — en die call draait bij élke opening van het
+Radio's-segment, voor een sectie die onderaan staat. `dailyRadios()` wordt bij
+elke segmentwissel volledig herberekend (`@State loaded` gaat mee met de view)
+terwijl het resultaat per `rotationStamp()` constant is; er is geen cache op dat
+niveau. En het **tonen** van een stationslijst trekt de hele geanalyseerde
+bibliotheek mét 512-dim CLAP-embeddings in RAM (~2,5 kB/track → **~165 MB bij
+66.378 tracks**) terwijl daar geen enkele embedding voor nodig is — dat is
+dezelfde druk die de analyzer vandaag "sonische caches vrijgegeven" liet loggen.
+
+**Het plan is vier fasen, los te shippen:** (1) snelheid — lijstcache per
+rotatiebucket, Qobuz-spiegel pas laden als hij in beeld komt, `radioLibraryLight()`
+zonder embeddings; (2) één woordenschat + de Qobuz-spiegel in de kaarten vouwen +
+Journeys splitsen op eindig/eindeloos; (3) de persona overal beschikbaar maken en
+één zichtbare dial met expliciete overrides; (4) `RadioConfig` als enig
+stationsmodel, waarna "bewaar dit als station" overal kan en Genereer "een station
+met een einde" wordt. Fase 4 pas ná 1-3.
+
+**LET OP — DIT WERK ZETTE DE SERVER-OF-RECORD ONDER DRUK.** Zwaar simulator- en
+buildwerk op deze mini heeft de swap tot 5,3 GB gevuld; de zojuist gedeployde
+analyzer werd **uitgeswapt en hing** (pid 6558: 0% CPU, RSS 1,2 MB, poort in
+LISTEN maar geen enkel antwoord binnen 60 s). Hersteld met bootout → bootstrap →
+nieuwe pid 17098, `:5767` 87.820 tracks. **Dit is exact de les van 2026-07-23 die
+al in ## Done staat ("draai de sim/builds NIET op de mini") en die vandaag opnieuw
+is opgelopen.** Nasleep: Simulator.app start sindsdien niet meer met een venster
+(`_LSOpenURLsWithCompletionHandler … -1712`), ook niet na een herstart van
+`CoreSimulatorService` — dus GUI-automatisering was deze sessie niet bruikbaar en
+de UI-observaties komen uit de XCUITest-afdrukken van de vorige ronde. XCUITest
+zelf werkt wél en heeft geen venster nodig; gebruik dat.
+
+---
+
+NU (2026-08-22, eind middag): **STATIONS OPNIEUW INGEDEELD — audit in
+`native/docs/STATIONS_AUDIT.md`.** (user: "Kan je de UX van de stations view
+verbeteren? Doe een uitgebreide audit en maak het beter, overzichtelijker en
+professioneler.")
+
+**De diagnose in één zin:** Stations was geen scherm maar vier schermen die
+toevallig in dezelfde tab stonden — geen gedeelde kop, geen gedeelde kaartvorm,
+geen gedeelde plek voor de primaire actie, en twee van de vier eisten nog een
+Roon-zone en deden op dit toestel dus niets.
+
+**Wat er mis was, geteld:**
+- **Drie titelniveaus** boven elke inhoud: de tab heet "Stations", het segment
+  heet "Radios", en daaronder stond een kop "Sonic radios". Kosten: 315 pt chrome
+  op een scherm van 874, waarvan 112 pt aan die derde kop.
+- **Je zag geen enkel station zonder te scrollen.** De volgorde was kop → een
+  link naar een ánder scherm → een schuifregelaar die pas geldt bij het vólgende
+  station → filterpillen → *dan pas* de stations, rond 600 pt.
+- **Twee schakelaars lagen boven op elkaar** op DJ-modi. Echt kapot, en op de
+  eerste schermafdruk meteen zichtbaar: twee `Toggle`s met een `.caption`-label
+  in een `VStack(spacing: .xs)`. SwiftUI maakt de rij zo hoog als het lábel, en
+  een switch is 31 pt — die liep dus de rij eronder in.
+- **Journeys had drie interactiemodellen voor drie dingen die hetzelfde
+  beloven:** Album Radio was een blok tekst zónder enige actie, Time Machine had
+  een stepper met twee knoppen, The Bridge was een `NavigationLink` met een
+  handgetekende chevron náást die van de `List`.
+- **Time Machine werkte niet op dit apparaat** (`selectedZone == nil` →
+  uitgeschakeld, plus `curateTracks(zoneID:)`), net als de drie speel-verbs in
+  Genereer. Dat waren de laatste zone-only acties in de app.
+- **Nederlands op een Engelse telefoon:** `LS("Lengte: \(count) tracks")` en twee
+  broertjes — interpolaties in de sleutel, die per constructie nooit oplossen.
+
+**Wat er nu staat.** Eén kop: de segmentkiezer zegt waar je bent, één regel
+eronder zegt wat het is, daarna komt inhoud. Radio's zet de filterpillen direct
+boven de stations en schuift alles wat géén station is eronder. DJ-modi zet de
+zes persona's boven en het autoplay-instellingenblok onder. Journeys is één
+`journeyCard`-vorm: icoon, naam, één regel, en precies één knop — Album Radio
+heeft er nu ook een ("Kies een album", want dáár start je hem). Alles speelt op
+de actieve uitvoer.
+
+**Drie dingen kwamen pas boven toen de rest was opgeruimd.** (1) `List` reserveert
+~54 pt boven zijn eerste rij voor een sectiekop die een kaartenfeed niet heeft —
+onder de oude hoge koppen viel dat niet op, eronder werd het een gat
+(`cardFeedList()`). (2) Een `NavigationLink` in een `List` tekent zijn eigen
+chevron én negeert `.buttonStyle(.bordered)` op zijn label, dus de Bridge-actie
+was kale tekst met een losse "›" terwijl de twee kaarten erboven echte knoppen
+hadden — nu een `Button` + `navigationDestination(isPresented:)`. (3) Op Genereer
+zeiden de segmentregel, de sectiekop én de placeholder alle drie hetzelfde; de
+sectiekop is weg.
+
+**Gemeten (zelfde simulator, vóór en na):** chrome vóór de eerste inhoud
+315 → **223 pt** · eerste stationstegel ~600 → **~288 pt** · titelniveaus 3 → **2** ·
+overlappende bedieningselementen 2 → **0** · interactiemodellen op Journeys
+3 → **1** · zone-only acties 3 → **0** · interpolatie-sleutels in deze tab 3 → **0** ·
+persona's zichtbaar zonder scrollen 2 → **6**.
+
+**Verified: 956 tests 0 failures · `swift build -c release` exit 0 ·
+check-localization 985 sleutels, 0 missend / 0 wees (interpolaties app-breed
+67 → 64) · alle drie de UI-tests groen · alle vier de segmenten gefotografeerd.**
+
+**Nieuw hergebruikbaar:** `SettingToggle` (schakelaarrij met een hoogte die de
+switch aankan) en `cardFeedList()` (bovenmarge voor een `List` die kaarten toont
+in plaats van secties). Allebei bedoeld voor de andere hubs — Zoek en Ontdek
+hebben dezelfde vorm en dus waarschijnlijk hetzelfde gat.
+
+---
+
+NU (2026-08-22, middag): **DE APP INTERACTIEF NAGELOPEN — EN OFFLINE AFSPELEN
+BLEEK KAPOT.** (user: "ga nu mijn roonsage app na en kijk of de ux verbeterd is
+en kijk hoe je het nog meer kan verbeteren".) Alle zes UX-batches waren af, maar
+het harnas liep alleen langs de vier tabs. Zodra het ook op een tegel tikte, was
+het eerste wat eruit kwam geen UX-oordeel maar een storing.
+
+**OFFLINE AFSPELEN WERKTE NIET. GEEN ENKELE GEDOWNLOADE TRACK.**
+`LocalAudioCache.filename(forKey:variant:)` is een kale SHA-256 hex, dus een
+gedownload of gecachet bestand heeft **geen padextensie** — en `AVURLAsset` leest
+het mediatype van de extensie af en snuffelt niet in de inhoud. Bewezen met
+dezelfde bytes onder twee namen: `x.m4a` geeft `playable=true, audioTracks=1`,
+de extensieloze kopie geeft `Cannot Open` met onderliggende fout **-12847**, en
+dat is precies wat de speler in de simulator logde bij elke tik op een tegel.
+
+Waarom dit maanden kon overleven: **streamen raakt het niet.** Een HTTP-antwoord
+draagt `Content-Type`, een bestand op schijf draagt niets. De tier brak dus
+precies en uitsluitend wanneer het netwerk weg was — het ene geval waarvoor hij
+bestaat. AVFoundation's out-of-band MIME-sleutel bestaat wel, maar staat in geen
+enkele publieke header (alleen in de `.tbd`), dus die is bewust niet gebruikt.
+In plaats daarvan krijgt elk bestand de extensie die zijn eigen header aanwijst
+(`fileExtension(forHeader:)`, 7 formaten), en `locate(base:in:)` **hernoemt wat er
+al staat** bij het eerste gebruik — geen migratie, geen herdownload. Een
+onherkenbare header krijgt geen extensie: liever geen hint dan een verkeerde.
+7 tests, waaronder het hernoempad en "verwijderen laat geen tweede kopie achter".
+
+**DE VIER TABS HADDEN ALLE VIER DE VERKEERDE TITEL.** SwiftUI laat de *diepste*
+`navigationTitle` winnen, dus elk hub-kind hernoemde de tab waarin het stond:
+Stations las "Radio's", Ontdek "Herontdek", Zoek **"Bibliotheek (15 tracks)"** —
+en de naam veranderde mee met elke tik op de segmentkiezer. Opgelost met
+`ScreenTitle.swift`: `.screenTitle(_:)` titelt alleen wanneer het scherm op
+zichzelf staat, `.hubContent()` markeert de drie hubs. Tien schermen om.
+
+**DE APP BLEEF OP HET VERBINDSCHERM HANGEN — het "VERMOEDEN, ONBEWEZEN"
+hieronder is nu bewezen en gerepareerd.** `RoonClient+Remote.swift` zet na vijf
+mislukte polls `.disconnected`, terwijl de offlineglijbaan in
+`RoonClient.swift:88-92` alleen op `.failed` reageert. Met een onbereikbare
+server bleef je dus staren naar drie knoppen over servers, met een volle
+bibliotheek en 15 downloads achter je. Nu: vijf missers zónder ooit een sessie
+deze run én mét lokale bibliotheek → offline. De `hasLiveSession`-poort houdt een
+echte hapering thuis op het herverbindpad.
+
+**DE HELFT VAN DE APP SPRAK NEDERLANDS OP EEN ENGELSE TELEFOON.** Geteld en
+omgezet: ~30 literals in `SonicRadioView` (het Stations-scherm was vrijwel
+volledig Nederlands), **63 playlist-sjablonen + 8 categorieën**, de zeven
+radiocategorieën (via `CoreStrings`, want Core ligt onder de catalogus), de
+wachtrijteller ("1 nummer"), de aftelklok op het verbindscherm, en drie
+VoiceOver-teksten. Catalogus **859 → 981 sleutels, 0 missend, 0 wees.**
+Sjabloonnamen gaan via `LSDynamic("playlistTemplate.<id>")` — een sleutel die
+pas op runtime bestaat, dus `check-localization.sh` kent nu een lijst dynamische
+prefixen in plaats van 71 valse wezen te melden.
+
+**KLEINE DINGEN DIE DE FOTO'S LIETEN ZIEN:** dubbele chevrons (`> >`) op elke
+kaart in Stations — een `NavigationLink` in een `List` tekent er zelf al een ·
+"DJ-modi" en "Sonic Journeys" stonden er als kaart **én** als segment één rij
+hoger, dezelfde kastjesfout die batch 3 een niveau hoger opruimde · de
+moduskiezer op de bibliotheek was icoon-only (huis, lijst, raster, twee mensen —
+een woordenschat die je eerst moet leren) terwijl "Overzicht · Tracks · Albums ·
+Artiesten" gewoon past · de Zoek-tab zette de cursor niet in het zoekveld ·
+de schaallabels van de avontuurlijkheidsschuif botsten met de schakelaar eronder.
+
+**HET HARNAS IS VERDIEPT, EN DAT WAS DE VOORWAARDE VOOR AL HET BOVENSTAANDE.**
+`seed-demo-library.py` schrijft nu ook `track_audio_features` **en echte audio in
+de pinned-downloadmap** — zonder featurerij noemt `LocalPlayability` geen enkele
+track speelbaar, dus filterde elk speelwerkwoord de hele bibliotheek weg en was
+de speler per constructie onfotografeerbaar. Daar kwam de bug uit. De walk heeft
+er twee tests bij (speler + wachtrij, en de vier Stations-segmenten) en twee
+taalonafhankelijke handvatten (`cover.tile`, `nowplaying.bar`) naast het
+bestaande `gear.settings`.
+
+**DE LEGE GOUDEN KNOP WAS TWEE FOUTEN OVER ELKAAR.** De "Speel nu"-knop op beide
+hero-kaarten in Ontdek was een volkomen lege gouden pil — geen tekst, geen icoon.
+(1) Het waren de enige `.borderedProminent`-knoppen in de app zonder eigen
+`.tint(...)`; met de geërfde app-tint verdween de inhoud in de vulling. Dat
+maakte het **icoon** zichtbaar en verder niets. (2) Wat overbleef was `Label` dat
+in een knop terugvalt op icon-only. Pas met `.labelStyle(.titleAndIcon)` erbij
+staat er "▶ Play now". Eén symptoom, twee oorzaken — de eerste fix "werkte" en
+was toch niet klaar; alleen de foto liet dat zien.
+
+**EEN VERBETERING DIE IK HEB TERUGGEDRAAID, EN DAAROM WEET IK NU WAAROM.**
+Automatisch focussen van het zoekveld op de Zoek-tab lijkt gratis winst (Plexamp
+en ARC doen het). Gemeten: het toetsenbord neemt de tabbalk mee omhoog, en de
+walk kon daarna **geen enkele tab meer selecteren** — je landt op Zoek en komt er
+niet meer uit zonder een toetsenbord weg te vegen dat je niet gevraagd had.
+Teruggedraaid, met de meting in een comment. Dit was ook de echte oorzaak van de
+"Ontdek-tab werd niet geselecteerd" die eerder als los raadsel openstond.
+
+**VALKUIL IN HET HARNAS ZELF:** `restoreLastTab()` heropent de laatst gebruikte
+tab en de UserDefaults van de simulator overleven tussen testruns, dus de tweede
+run begon waar de eerste eindigde. Drie tests faalden tegelijk ("geen speelbare
+tegel", "tab niet geselecteerd") puur door die aanname. `startOnLibrary()` zet nu
+elke test op dezelfde begintoestand.
+
+**Verified: 956 tests 0 failures (was 949) · `swift build` exit 0 ·
+check-localization 981 sleutels, 0 missend / 0 wees · alle drie de UI-tests
+groen · in de simulator gefotografeerd: de speler speelt écht (0:03/-0:34, hoes,
+BPM+toonsoort, het "staat op dit toestel"-pijltje), de wachtrij als tweede
+pagina, Stations met de juiste titel en één chevron, "Library (15 tracks)" en
+"Overview · Tracks · Albums · Artists" in het Engels, en "▶ Play now" op de
+hero-kaart.**
+
+**NOG OPEN, met schermafdruk als bewijs:**
+- De wachtrijpagina is **licht** terwijl het spelerscherm ernaast **donker** is;
+  twee pagina's van hetzelfde blad die als twee apps aanvoelen.
+- De golfvorm op de speler is **fel groen** in een verder volledig gouden app.
+- 67 interpolated keys resteren (was 69).
+- De offlinebanner kost twee regels op élk scherm, permanent — ~10% van de
+  hoogte, op elke tab, ook als je alleen je downloads afspeelt.
+- `heroCard` en `albumOfDayCard` in `DiscoveryView` zijn twee bijna identieke
+  kopieën van 70 regels. Dezelfde vorm als de twee spelers die batch 1 opvouwde;
+  dat de knopfix hierboven op twee plekken moest, is er het bewijs van.
+
+**GUI-AUTOMATISERING OP DE MINI WERKT NU — en de valkuil zat niet in de rechten.**
+Screen Recording en Accessibility staan aan, maar `displaysleep` is 10 minuten en
+het schermslot volgt onmiddellijk; daarna geeft `screencapture -x` een volkomen
+zwart bestand zonder foutmelding en opent Simulator.app géén venster. Zie
+`~/gui-wakker.sh` (status/aan/uit). **Maar voor deze app blijft XCUITest de juiste
+route:** dat draait ín de simulator, heeft geen enkel systeemrecht nodig en werkt
+ook met een slapend scherm. De GUI-route is voor vrij rondkijken en live logs —
+zo is de -12847 gevonden.
+
+NU (2026-08-22): **UX-PLAN OM ROONSAGE ALS SPELER TE LATEN VOELEN** (user: "Kijk
+hoe je de ux van roonsage kan verbeteren zodat het als een locale player net als
+plexamp of roon arc kan functioneren en het niet te ingewikkeld is qua ui" →
+"Maak een uitgebreid plan"). **Geschreven, nog niets gebouwd:**
+`native/docs/UX_PLAYER_PLAN.md` — 12 werkpakketten (U1-U12) in 6 batches, met
+getelde bevindingen uit commit 2c50e34 in plaats van indrukken.
+
+De motorkant is af (LOCAL_PLAYER_READINESS batch 1-5); wat overblijft is de
+*vorm*. Kern van de diagnose: 5 tabs waarvan 3 kastjes (`iOSCreateHub`,
+`iOSExploreHub`, Instellingen), koude start op een lege speler, mini-balk die je
+naar een tab gooit i.p.v. een blad over je context, en **twee volledige
+Nu-speelt-schermen** (1.421 regels) die al twee keer met de hand zijn
+gelijkgetrokken. Doel-architectuur: **Start · Bibliotheek · Zoek · Stations** +
+speler als overlay + Lab-kaart + tandwiel. Geen enkele feature verdwijnt.
+
+**BATCH 1 (U1) IS AF EN GETAGD — v1.10.263 / ios-v1.7.230.** Drie commits:
+1. `RoonSageCore/NowPlayingModel` — de rekenkunde die béide schermen elk apart
+   droegen: clamping, wandklok-interpolatie tussen polls, resttijd, m:ss, het
+   loop-rondje. Puur en `nonisolated` (`now` gaat erin), 20 tests, elk een geval
+   dat ooit een verkeerd getal gaf: delen door lengte 0, een pauzeklok die
+   doorliep, negatieve resttijd op een trackgrens, NaN-duur uit een AVAsset.
+2. `RoonSageUI/NowPlayingSurface` + `PlayerScreen` — het verschil tussen de
+   uitvoeren staat nu als **data** (volumevorm, Sonic Radio, songtekstbron),
+   niet als twee schermen. `LocalNowPlaying.swift` verwijderd.
+3. **Sonic Radio werkt nu ook op dit apparaat.** Dat ontbrak in het lokale menu
+   terwijl de motor het al kón: `startRadio(zoneID: nil)` → `deliver` →
+   `playToActiveOutput`, en `topUpRadioIfNeeded` heeft een eigen lokale tak
+   (`LocalQueue.upcomingCount`). Eén regel — dít is wat de splitsing verborg.
+
+Waar de twee schermen verschilden was dat bijna nooit met opzet; samengevoegd
+naar de béste van de twee: haptics op ⏮ (had alleen lokaal), de toegankelijke
+scrub-actie (alleen zone), en de uitweg onder "niets aan het spelen" (alleen
+zone — een stille telefoon zag er daardoor kapot uit). Twee dingen bewust
+gerepareerd: het volume-uitleesvenster toont 0 bij demping maar de slider houdt
+zijn niveau, en een poll tijdens het slepen trekt de knop niet meer terug.
+
+Catalogus **860 → 844**: de héle `localNowPlaying.*`-familie was een duplicaat
+van `nowPlaying.*` — precies wat de twee schermen zélf waren. Wees-sleutels
+1 → 0. Regels spelerscherm ~1.219 in twee kopieën → **704 in één**.
+
+**Verified: 949 tests 0 failures (was 929) · `swift build -c release --product
+RoonSage` exit 0 · iOS-simulator BUILD SUCCEEDED · check-localization 844
+sleutels, 0 missend / 0 wees.**
+**NIET geverifieerd: hoe het scherm eruitziet op het toestel** — dat vraagt een
+TestFlight-build. Ook onbewezen: of het lokale station hoorbaar doorspeelt als
+de wachtrij leegloopt (stond al open in LOCAL_PLAYER_READINESS §7).
+
+**BATCH 2 (U2 + U6) IS AF EN GETAGD — v1.10.265 / ios-v1.7.231.** De tab
+"Nu speelt" is weg; de speler komt als blad (`.sheet`, detent `.large`, zichtbare
+grijper) over waar je was, en de wachtrij reist met hem mee als tweede pagina.
+Alle navigatie loopt door één trechter, `RootView.go(to:)`: `.nowPlaying` is op
+een compacte iPhone geen selectie meer maar een presentatie, dus de mini-balk,
+het ⌘K-palet en elke lege-staat-knop blijven werken zonder te weten in welke
+schil ze zitten. Landen op Bibliotheek, laatste tab onthouden (`lastTab`), mét
+een grendel tegen een `.nowPlaying` uit een oudere build — een `TabView`-selectie
+zonder bijbehorende tag rendert een blanco tab.
+
+**TWEE DINGEN UIT MIJN EIGEN PLAN GECORRIGEERD, want de code wist het beter.**
+(1) Ik had geschreven dat de mini-balk één keer om de `TabView` hoort met
+`safeAreaInset`. Fout: `nowPlayingBarDocked` staat bewust per tab en is een
+`VStack`-broer, want een bodem-`safeAreaInset` op een `NavigationStack` inset de
+scrollinhoud van een `List` met grote titel niet — rijen schuiven eronder door
+(`NowPlayingBar.swift:190-198`). Gelaten zoals hij stond. (2) "Speelt er al
+muziek, open dan meteen de speler" heb ik bewust NIET gebouwd: bij het starten is
+er nog niets verbonden, dus dat blad zou een halve seconde ná de tabbalk uit het
+niets omhoogschuiven. De mini-balk toont al wat er speelt.
+
+**BIJVANGST UIT DE SIMULATOR: het verbindscherm was half Nederlands op een
+Engelse telefoon.** `LS("Opnieuw verbinden met \(saved)")` interpoleerde de host
+ín de sleutel, dus die kon nooit oplossen en viel terug op de Nederlandse
+literal — precies de bugklasse waar `check-localization.sh` blind voor is (het
+is geen puntsleutel). Twee sleutels erbij, catalogus 844 → 846.
+
+**DE SIMULATOR-GRENS, voor de volgende sessie.** Er stond geen simulator op deze
+machine; ik heb er één aangemaakt (iPhone 17, iOS 26.5) en de app erop gestart.
+`simctl` maakt wél schermafdrukken maar verstuurt **geen tikken**, en
+GUI-automatisering van het bureaublad is geblokkeerd (geen Accessibility-TCC).
+Zonder tik kom je niet voorbij het verbindscherm, dus **de tabbalk en het
+spelerblad zijn niet visueel geverifieerd**. Enige route daarheen: een
+XCUITest-target. De simulator is daarna opgeruimd.
+
+**VERMOEDEN, ONBEWEZEN:** met 12 rijen in `client-library.db` en een onbereikbare
+`lastRoonHost` bleef de app op het verbindscherm staan, terwijl
+`RoonClient.swift:88-92` belooft zelf naar de offlinemodus te glijden zodra een
+poging faalt én er een lokale bibliotheek is. Waarschijnlijk bereikt
+`connectionState` nooit `.failed` maar blijft hij `.disconnected` tussen pogingen.
+Los uit te zoeken.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 846 sleutels, 0 missend / 0 wees.**
+
+**BATCH 3 (U3 + U10 + U11) IS AF EN GETAGD — v1.10.266 / ios-v1.7.232.**
+**Vier tabs, en ze landen alle vier op inhoud:** Bibliotheek · Zoek · Ontdek ·
+Stations. `iOSCreateHub` en `iOSExploreHub` — de twee `List`s die alleen naar een
+hub linkten — zijn weg; hun hubs zijn nu zélf de tab. Instellingen is een
+tandwiel op Bibliotheek plus een blad; `go(to:)` vangt `.settings` op dezelfde
+plek af als `.nowPlaying`, dus ⌘K "Ga naar Instellingen" werkt nog.
+
+**Zoek is een eigen tab** (Bibliotheek · Sonisch · Vraag het) en er is bewust
+GEEN tweede zoekimplementatie gebouwd: de gecombineerde artiest/album/track-zoek
+(P7) zit in `LibraryView`, mét de "toon alles"-doorstap en de sonische
+doorgeefrij. `LibraryView(searchOnly:)` hergebruikt dat en verbergt alleen de
+moduskiezer tot een doorstap hem nodig maakt. Een eigen kopie zou letterlijk de
+fout van de twee spelers herhalen.
+
+**Genereer** hoort nu bij Stations (alle vier beantwoorden "zet iets op"; ze
+verschillen alleen in eindeloos versus eindig). **Lab** — Sonic Lab, Music Map,
+Multitag, DJ (set·live), smaak — is één kaart op het bibliotheekoverzicht, met
+per gereedschap een regel gewone taal, want "Sonic DNA" en "Multitag" zeggen
+niemand iets. Playlists en Bewaard staan daar nu ook, in dezelfde kaartvorm als
+Gedownload. Sidebar **29 → 11 items**, met dezelfde woorden als de telefoon.
+Catalogus 846 → 854 (14 nieuw; 6 wezen van de gesloopte kastjes verwijderd).
+
+**Eén maat uit mijn eigen plan geschrapt: "tikken naar Sonic Search".** Die was 2
+en werd 2. De winst zat nooit in tikken maar in wat je onderweg moest wéten; een
+tabbalk waarin twee van de vijf knoppen een lijst openen die naar een hub linkt
+is furniture. Vervangen door "verzonnen eigennamen in het navigatiepad": 9 → 0 in
+de tabbalk.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 854 sleutels, 0 missend / 0 wees.**
+**NIET geverifieerd: hoe de vier tabs eruitzien** — zie de simulator-grens
+hierboven (geen tikken mogelijk).
+
+**BATCH 5 (U7) IS AF EN GETAGD — v1.10.267 / ios-v1.7.233.** Eén `Form` van 21
+secties werd twee deuren: **Dit apparaat** (uiterlijk, taal, loudness,
+transcode, cache, downloads, Qobuz lokaal, over — 8) en **Server & diensten**
+(Roon, serversync, bibliotheek, LLM, externe diensten, Discogs, Last.fm,
+Qobuz-account, analyzer — hoogstens 9, en 3 op een telefoon). `SettingsHomeView`
+is de menupagina, `SettingsView(scope:)` rendert de helft.
+
+**De as is verlegd, en dat is het punt.** De oude poort was `role` — server of
+client — en dat was de verkeerde vraag. Op 11-08 bleek dat vier secties over hoe
+audio op dít apparaat klinkt binnen `if role == .server` stonden en dus
+onzichtbaar waren op het enige apparaat waar ze toe doen (v1.10.257). Toen zijn
+vier secties uit één `if` gehaald; nu zit de les in de structuur: `SettingsScope`
+dwingt per sectie het antwoord af op "configureert dit de server, of hoe het hier
+klinkt".
+
+**Als modifier, niet als `if`.** `.scoped(.device, in: scope)` hangt per
+top-level sectie aan het sluithaakje. Een conditional om 500 regels heen zou de
+halve file opnieuw hebben ingesprongen en de echte wijziging in witruimte
+begraven. `scope: .all` blijft voor de twee plekken waar de instellingen al een
+paneel in een groter venster zijn: de macOS ⌘,-scene en het Server-tabblad van
+de analyzer-app.
+
+**VAL DIE IK ZELF MAAKTE EN GEVONDEN HEB:** mijn insertiescript plakte
+`.scoped(...)` bij twee blokken achter een regelcommentaar
+(`} // end role == .server.scoped(…)`), waardoor de poort ín het commentaar viel
+en dus **niets deed** — die twee blokken zouden op béíde pagina's zijn verschenen.
+Het compileert prima; alleen een telling van alle top-level kinderen mét hun
+scope liet het zien. Bij zulke mechanische bewerkingen is die telling het bewijs,
+niet de build.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 859 sleutels, 0 missend / 0 wees.**
+
+**BATCH 4 (U4 + U5) IS AF EN GETAGD — v1.10.268 / ios-v1.7.234.**
+
+**U4 is anders uitgevoerd dan gepland, en dat is een API-grens.** Het plan zei
+"één lijst met Dit apparaat · AirPlay-doelen · Roon-zones". Dat kán niet:
+`AVRoutePickerView` toont het systeemblad zélf en er is geen publieke API om
+routes op te sommen of de kiezer te openen, dus de echte view moet op het scherm
+staan. In de view-hiërarchie graaien om een tik na te bootsen werkt vandaag en
+breekt stil op een volgende OS-versie. Wél gedaan: beide knoppen in **één
+capsule** (menu links, AirPlay rechts achter een dun streepje, alleen zichtbaar
+als dit apparaat de uitvoer is — AirPlay routeert geen Roon-zone).
+
+**DE ECHTE VONDST: er waren drie kopieën van de bestemmingenlijst** — de pil op
+Nu speelt, de toolbar-kiezer in `RootView` en die in `AIComponents` — en ze waren
+al uit elkaar gelopen: elk zijn eigen icoonlogica, en alle drie zetten "dit
+apparaat" ónder een scheidingslijn ná de zones. Die volgorde stamt uit de tijd
+dat lokaal afspelen de uitzondering was; het is de standaarduitvoer sinds
+v1.10.228. Nu één `OutputMenuContent`: dit apparaat eerst, dan de zones, geen
+streep. `RootView.zonePicker` is nog één regel.
+
+**U5:** de wachtrij had geen handvat — op de telefoon één onaangekondigde
+zijwaartse veeg, en de paginabolletjes die dat hadden kunnen verklappen zijn
+juist weggehaald omdat ze tikken opslokten (v1.10.229). Nu een knop in de
+voetrij die op de telefoon naar de tweede pagina bládert in plaats van een blad
+op een blad te stapelen (`\.showQueue` in de environment; zonder pager valt hij
+terug op een sheet). "3 van 24" staat tússen de twee tijdtellers — dat is
+positie-informatie, net als de klok, en die rij had de ruimte al. Een Roon-zone
+zegt "nog 12": die meldt alleen wat er nog komt, dus een "van N" zou verzonnen
+zijn.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 858 sleutels, 0 missend / 0 wees** (3 wezen van de
+verwijderde `zonePicker` opgeruimd).
+
+**BATCH 6 (U8 + U9) IS AF EN GETAGD — v1.10.269 / ios-v1.7.235. HET PLAN IS
+ROND.** Allebei de pakketten werden kleiner bij aanraking met de code, en dat is
+het resultaat, geen tekort.
+
+**Wat erin zit:** `MarqueeText` (KOEL K7, laatste open punt daar) — alleen bij
+echte overloop, rust aan beide uiteinden, volledig stil onder Reduce Motion, en
+alleen de títeI op de speler. Een "dit staat op je toestel"-pijltje in de speler
+(de bibliotheekrijen droegen dat al, de speler niet — juist daar vraag je je af
+of het blijft spelen zonder netwerk); alleen bij lokale uitvoer, want een
+Roon-zone streamt van de Core. En het downloadwerkwoord liegt niet meer: bij één
+track staat er nu "Van dit apparaat verwijderen" als hij er al is, in plaats van
+onverstoorbaar "Bewaar op dit apparaat" met als enige weg terug het aparte
+downloadscherm.
+
+**Bewust niet gedaan, met reden:** veeg links/rechts over de hoes voor
+vorige/volgende — horizontaal vegen bladert op dit scherm al naar de wachtrij,
+en twee betekenissen voor één gebaar in hetzelfde gebied is erger dan geen
+gebaar. Veeg omhoog voor songtekst — dubbelt een knop, in een gebied waar het
+blad de verticale sleep bezit. Lang indrukken voor volledig scherm — vervangt
+een werkende vindbare tik door een verborgen gebaar. Filter "alleen gedownload"
+— `DownloadsView` ís die lijst al; een tweede implementatie over gepagineerde
+SQL toont op pagina 1 vrijwel niets en liegt dus. Marquee in de mini-balk —
+vaste chrome op élk scherm, permanente animatie is daar ruis.
+
+**En tweederde van U9 bestond al:** het downloadwerkwoord zat in élk contextmenu
+en de badge op élke bibliotheekrij (batch 4 van LOCAL_PLAYER_READINESS). Dat
+bleek door te kijken, niet door het plan te herlezen.
+
+**Verified: 949 tests 0 failures · release-build exit 0 · iOS-simulator BUILD
+SUCCEEDED · check-localization 859 sleutels, 0 missend / 0 wees.**
+
+---
+
+**HET UX-PLAN IS AF: zes batches, v1.10.263 → v1.10.269 / ios-v1.7.230 →
+ios-v1.7.235.** Vijf van de zeven maten uit §7 gehaald en gemeten: tabbalk 5
+(waarvan 3 kastjes) → 4 echte bestemmingen · spelercode 1.421 regels in 2
+bestanden → 704 in 1 · instellingen 21 secties → 8 en ≤ 9 over twee schermen ·
+wachtrij bereikbaar in 1 tik · verzonnen eigennamen in de tabbalk 9 → 0. De twee
+resterende maten (tikken tot muziek, speler ↔ bladeren met behoud van context)
+zijn per constructie waar maar niet gemeten, want dat vraagt een toestel.
+
+**DE BLINDE VLEK IS WEG — v1.10.270 / ios-v1.7.236.** Er is nu een UI-harnas:
+`native/scripts/ui-verify.sh` maakt een wegwerp-simulator, bouwt, **zaait een
+demo-bibliotheek** (zonder tracks biedt het verbindscherm geen "Offline
+gebruiken" en kom je nergens), draait `UXSnapshotTests` en pakt de
+schermafdrukken uit in `/tmp/roonsage-ui`. **Geen enkel systeemrecht nodig** —
+XCUITest draait ín de simulator via de testharnas. Dat werkte de hele tijd al;
+ik heb zes batches lang "NIET geverifieerd" geschreven en dat als een
+eigenschap van de machine beschreven terwijl de route openlag.
+
+**De eerste foto toonde meteen twee fouten die zes batches bouwen niet gaven:**
+- In offlinemodus stond er permanent een alarmpil "Fout: geen RoonSage-server
+  gevonden" óver de zoekbalk, vlak onder een banner die hetzelfde al rustig had
+  uitgelegd. `ReconnectingBanner` had geen `offlineMode`-uitzondering en offline
+  is de status blijvend `.failed`. Gefixt.
+- De offline-banner lag óver de navigatiebalk: tandwiel, uitvoerkiezer en
+  sync-knop zaten erachter. Gemeten door de test zelf (tandwiel y 66–102, banner
+  57–98). Gefixt door de banner een `VStack`-broer te maken in plaats van een
+  top-`safeAreaInset` — dezelfde vorm als `nowPlayingBarDocked` onderaan, en om
+  dezelfde reden: een safe-area-inset rond een NavigationStack is een suggestie,
+  een VStack-broer niet.
+- De hoofdtitel bleef Nederlands op een Engelse telefoon:
+  `LS("Bibliotheek (\(count))")` interpoleert het getal ín de sleutel, dus die
+  kan nooit oplossen. Gefixt — **en er zijn er nog 69 van die soort.**
+  `check-localization.sh` telt ze nu apart (nog niet gegate: een poort die vanaf
+  dag één faalt wordt genegeerd; wél zichtbaar in de diff van wie er een toevoegt).
+
+**Nog open, met schermafdruk als bewijs:** dubbele chevrons (`> >`) op de
+kaarten in Stations, en de navigatietitel daar zegt "Radios" terwijl de tab
+"Stations" heet.
+
+**Visueel bevestigd wat wél klopte:** vier tabs die alle vier op inhoud landen ·
+Stations met Radio's · DJ-modi · Journeys · Genereer · de instellingen als twee
+deuren mét hun uitleg · de kaarten Playlists/Bewaard/Lab op het overzicht.
+
+**VOLGENDE:** Geen enkele
+wijziging uit deze zes batches is visueel geverifieerd. `simctl` maakt
+schermafdrukken maar verstuurt geen tikken, en GUI-automatisering is op deze
+machine geblokkeerd, dus voorbij het verbindscherm kom ik niet (zie
+UX_PLAYER_PLAN §7b). `ios-v1.7.235` staat in TestFlight. Casper's oordeel op het
+toestel is nu waardevoller dan nog een batch.
+
+**Bijvangst uit deze serie, elk apart gecommit:** Sonic Radio werkte al lokaal
+maar ontbrak in het menu · het verbindscherm was half Nederlands op een Engelse
+telefoon · de DMG-release had geen retry op Apple's timestamp-dienst · drie
+kopieën van het uitvoermenu die al uit elkaar waren gelopen · de catalogus ging
+van 860 naar 859 sleutels mét 24 nieuwe erbij, omdat 25 duplicaten en wezen
+verdwenen.
+
+**DE MACOS-RELEASE VAN DEZE BATCH FAALDE TWEE KEER OP APPLE, NIET OP DE CODE**
+(v1.10.263). De build was compleet, de `.app` gesigneerd, notarisatie *Accepted*
+en gestapled, de DMG aangemaakt — en dan struikelde de állerlaatste stap:
+`codesign --timestamp` op de DMG zelf, met "The timestamp service is not
+available". Twee keer, vier minuten uit elkaar, terwijl stap 3 de `.app` beide
+keren wél timestampte. Dat is throttling: het is de derde aanroep naar Apple
+binnen een paar minuten. `build-release.sh` heeft nu een backoff-lus (5 pogingen,
+15/30/45/60 s) om die DMG-codesign, naar analogie van de bestaande hdiutil-lus.
+Geshipt als **v1.10.264**. iOS is bewust NIET opnieuw getagd — `ios-v1.7.230`
+slaagde en de app-binary is ongewijzigd, dus een nieuwe tag zou alleen een
+TestFlight-build verbranden voor identieke code.
+
+**Losse waarneming, niet van deze batch:** `native/RoonSage/Package.swift` heeft
+een ongecommitte wijziging (`.process("Resources")` → `.copy("Resources")` in
+het AudioAnalysis-target) die er al stond; met rust gelaten.
+
+NU (2026-08-10): **LOKAAL AFSPELEN IS EEN VOLWAARDIGE UITVOER** (user: "Local play is nu echt een beetje weggezet... we zouden er een meer lokale music player van kunnen maken?" → "begin hier mee, maak een duidelijk plan en voer dat uit"). Vertrekpunt: `playToActiveOutput` bestond al, maar alleen de *primaire* play-verbs gebruikten 'm; de wachtrij-verbs waren Roon-only (`PlayActionsMenu.swift:24` gaf dat zelf toe: "the local engine has no insert-next") en `QueueView` toonde "geen zone gekozen" zodra je lokaal luisterde. Daarnaast stond op 9 plekken een losse `LocalPlayButton` naast een zone-gated knop — het tweede pad dat het "weggezet" liet voelen.
+
+**GEBOUWD (5 stappen, elk apart geverifieerd), NIET GECOMMIT/GETAGD:**
+1. `RoonSageCore/LocalQueue.swift` (nieuw) — pure queue-rekenkunde: insert-next/append, remove, move. Volgt het `LocalPlayability`/`LocalLoudness`-patroon (puur enum + eigen testbestand). `move` speelt SwiftUI's `onMove`-contract na (`toOffset` = index in de ORIGINELE array); de formule `insertAt = destination − (verplaatste indices < destination)` is empirisch afgeleid tegen `Array.move(fromOffsets:toOffset:)` en met 6 gevallen vastgepind in `LocalQueueTests.testMoveMatchesSwiftUISemantics`.
+2. `LocalPlayback.swift` — `enqueue(_:streamBase:token:next:)`, `removeFromQueue(atOffsets:)`, `moveInQueue(fromOffsets:toOffset:)`, `jump(to:)`. `baseQueue` (de shuffle-herstelorde) blijft synchroon: bij shuffle-uit spiegelt hij de queue, bij shuffle-aan sluiten nieuwkomers achteraan aan. Verwijderen haalt **één** base-occurrence per verwijderde track weg, zodat een queue met hetzelfde nummer twee keer alleen de geswipete kopie verliest.
+3. `RoonClient+LocalPlayback.swift` — `resolveLocalPlayback` uitgelicht uit `playLocally` (playability-filter + loudness + Qobuz-fallback), zodat spelen en in-de-wachtrij-zetten identiek filteren. Nieuw: `enqueueLocally(_:next:)` en `queueToActiveOutput(_:next:)`.
+4. `PlayActionsMenu` — "speel hierna" / "achteraan toevoegen" routeren nu via `queueToActiveOutput` en zijn gegate op `hasActiveOutput` i.p.v. `selectedZone`. `QueueView` toont bij lokale uitvoer de eigen wachtrij: hele speelvolgorde met de huidige track gemarkeerd, gespeelde tracks gedimd, tik = jump, swipe = verwijderen, sleep = herordenen (iOS via `EditButton`), plus shuffle/repeat/bewaar-als-playlist. **Lokaal kan hier méér dan Roon** — Roons extensie-API kent geen reorder/remove.
+5. De 9 `LocalPlayButton`-plekken vervangen door één knop die de actieve output volgt (SonicSearch, SongPaths, SongAlchemy, Multitag, Discovery, SonicFingerprint, FilteredTracks, Generate, LibraryDetail).
+
+**BIJVANGST:** `LibraryDetailViews` had een echte bug — `play()` routeerde al naar de actieve output maar de knop was `disabled(client.selectedZone == nil)`, dus op lokale uitvoer onklikbaar. Ook `queue()` was daar nog zone-only. Beide gefixt. En `queue.noZoneDescription` ontbrak in *beide* `.strings`-bestanden (rendert dan als ruwe sleutel) — toegevoegd, samen met 3 nieuwe lokale sleutels in nl + en.
+
+**VERIFIED:** `swift test` 856/0 (baseline was 842 — +14 nieuwe) · `swift build -c release --product RoonSage` exit 0 · iOS `xcodebuild -destination 'generic/platform=iOS Simulator'` BUILD SUCCEEDED · Swift 6-poort (`-Xswiftc -swift-version -Xswiftc 6`) geeft **0** diagnostics in de gewijzigde bestanden (de errors die hij wél geeft zitten in GRDB en zijn pre-existing). swiftlint staat niet op deze machine — lint-poort onverifieerbaar, CI dekt hem.
+
+**OPENSTAAND / BEWUST NIET GEDAAN:**
+- `RoonSageUI/LocalPlayButton.swift` (60 regels) **verwijderd** op Caspers verzoek ("verwijder de localplaybutton") nadat de sweep 0 code-referenties gaf; `native/ROADMAP.md:97` meegewerkt, want dat beschreef nog de oude bedrading. Terug te halen met `git checkout HEAD~1 -- <pad>` als het ooit nodig is.
+- Nog steeds zone-only, buiten de afgesproken reikwijdte: `playShuffledMix` (FilteredTracks + Discovery), `playAlbum(albumKey:zoneID:)` op de Discovery-kaarten, album-/artiest-radio, en de tweede "Speel alles" in `SonicFingerprintView:199`. Die hebben een `…ToActiveOutput`-variant nodig; apart oppakken.
+- NOTED (pre-existing, niet aangeraakt): `playLocally(_:startAt:)` indexeert de *geresolvede* lijst, dus `startAt` wijst naar de verkeerde track als er een geblokkeerde aan voorafgaat.
+- Gapless (AVQueuePlayer) en offline downloads: stap 3 en 4 uit het oorspronkelijke plan, nog niet begonnen.
+- `native/docs/KOEL_AUDIT.md` heeft ongecommitte wijzigingen van een eerdere sessie — **niet van deze batch**, met rust gelaten.
+
+**VERVOLG 2026-08-10 (avond) — geshipt t/m v1.10.229 / ios-v1.7.194, gepusht, alle workflows groen.**
+
+- **Gapless** (v1.10.228): `AVQueuePlayer` met één item vooruit; `LocalQueue.followerIndex` kiest de opvolger (loop_one geeft dezelfde index → herhalen is óók gapless). Elke queue-mutatie roept `invalidateFollower()`, anders speelt de speler een al overhandigd nummer dat niet meer aan de beurt is. **NIET geverifieerd: of het hóórbaar gaploos is — vereist een luistertest op het apparaat, ook met scherm uit (daar valt Finamp om).**
+- **Lokaal is standaarduitvoer** (v1.10.228); audiosessie op `.longFormAudio`.
+- **Afspeel-cache J1** (v1.10.229): `LocalAudioCache`, gekeyd op match key + transcode-profiel, niet op de URL (die draagt een roterend token en wisselt van host tussen LAN en ZeroTier). Vulling is een tweede fetch, overgeslagen op een expensive path. Standaard 2 GB, instelbaar.
+- **`native/docs/JELLYFIN_AUDIT.md`**: 9 gaten, 6 batches. Batch 1 (J1 + J9) hiermee klaar.
+
+**ZONE-VIEW GELIJKGETROKKEN MET DE LOKALE SPELER (2026-08-11, v1.10.260 / ios-v1.7.225).** User: "Zone view heeft nog oude design met veel extra dingen etc… Dat moet natuurlijk gelijk zijn aan local player." Terecht: de kalmeringsronde van 10-08 raakte alleen `LocalNowPlaying`, dus de zone-hero stond nog in de oude indeling — en dat leert twee verschillende spiergeheugens aan voor hetzelfde scherm.
+
+**Wat er mis was, op de screenshot te zien:** `featureRow` propte BPM, toonsoort, twee mood-tags, álle CLAP-attribuutbadges én de knoppen Sonic Radio en Journey in één `HStack` met `lineLimit(1)`. Op een telefoon knipt dat af tot zes onleesbare stompjes: `83…`, `11A`, `romanti…`, `Mela…`, `Dan…`, `((•)) S…`, `🗺 J…`.
+
+**Nu identiek aan lokaal:** badge-rij alleen BPM + toonsoort · shuffle en repeat in de transportrij gevouwen (waren een eigen strip) · `optionsRow` helemaal weg · «…»-menu in de voetrij met Sonic Radio, Journey, sonisch vergelijkbaar, wanddisplay en delen — dezelfde items in dezelfde volgorde als `LocalNowPlaying`.
+
+**C14-sweep leverde echt dood hout op:** `NowPlayingHeroOptions.attributeBadges` verloor zijn laatste aanroeper (de lokale speler was hem al kwijt) — verwijderd, met de git-referentie in een comment. **En de localisatiepoort verdiende zich meteen terug:** hij meldde 10 weessleutels (`nowPlaying.mood*`, `journeyHelp`, `sonicRadioHelp`, `startJourney`, `wallDisplayHelp`) die niemand handmatig zou hebben gevonden. Catalogus 871 → 861.
+
+**Verified: 915 tests 0 failures · release-build exit 0 · iOS simulator BUILD SUCCEEDED · localisatiepoort 0 missend / 0 wees.** **NIET geverifieerd: hoe de zone-view er nu uitziet op het toestel.**
+
+**INSTELLINGEN LUISTERDE NIET NAAR DE TAALKNOP (2026-08-11, v1.10.258 / ios-v1.7.223).** Zelfde screenshots als hieronder: **Language stond op English, de tabbalk ("Now Playing", "Library", "Create") ook — en de hele inhoud van Instellingen bleef Nederlands.** Dus de taalknop wérkt; dit scherm deed er alleen niet aan mee. **OORZAAK:** ~100 kale Nederlandse literals (`Section("Verschijning")`, `LabeledContent("Versie")`), het "bare-literal migration backlog" uit de kop van `Localization.swift`. Gemeten: **182 kale literals in de hele UI, waarvan 100 in `SettingsView` alleen** — vandaar dat juist dit scherm er volledig Nederlands uitzag terwijl de rest (889 gesleutelde teksten) wél omschakelde.
+
+95 sleutels toegevoegd (`settings.*`), catalogus 776 → 871. **Bewust NIET omgezet, 21 stuks:** woorden die in het Engels identiek zijn (Status, Host, Server, Provider, Base URL, Model, Discogs, Last.fm, Qobuz, `app_secret`, Protocol, Platform, Pre-amp, Bitrate, "192 kbps") — een sleutel met twee identieke waarden is alleen ruis.
+
+**Twee dingen die bijna misgingen.** (1) Mijn eerste vervanging maakte van `Text("x")` → `LT("key"))` — één haakje te veel, want het patroon matcht het sluithaakje niet mee. Meteen zichtbaar in de build. (2) Belangrijker: mijn extractie sloeg elke literal met een backslash over, dus drie échte Nederlandse teksten bleven staan (`Token bewaard`, de Discogs-hulptekst met `\"`, en de loudness-hulptekst met `\u{201C}`). Die zijn apart omgezet — **een filter op "geen escapes" is stil, en had hier drie zinnen laten liggen.**
+
+**GEVERIFIEERD DAT HET NEDERLANDS NIET IS VERSCHOVEN:** een script vergelijkt alle 124 literals uit de vorige commit met de nieuwe nl-catalogus. **124/124 letterlijk gelijk.** De eerste ronde gaf 1 afwijking — ik had in de Discogs-tekst rechte aanhalingstekens gekruld — teruggedraaid naar het origineel.
+
+**Verified: 915 tests 0 failures · release-build exit 0 · iOS simulator BUILD SUCCEEDED · localisatiepoort 871 sleutels, 0 missend / 0 wees.** **NIET geverifieerd: hoe de Engelse vertalingen lezen op het toestel** — dat is een taalkundig oordeel, geen build. Restant backlog: ~82 kale literals buiten `SettingsView`.
+
+**DE AFSPEELINSTELLINGEN WAREN ONZICHTBAAR OP DE TELEFOON (2026-08-11, v1.10.257 / ios-v1.7.222).** User stuurde drie screenshots van Instellingen op ios-v1.7.221 met de vraag "Dit is wat ik zie qua instellingen?" — en de sectie "Onderweg streamen" die ik hem een uur eerder had beschreven, stond er niet. **OORZAAK:** `SettingsView` heeft één groot blok `if role == .server { … }` (regel 280–590), en `SettingsView()` gebruikt standaard `.client`. Op de telefoon viel dat blok dus volledig weg — **inclusief `LoudnessSettingsSection`, `TranscodeSettingsSection`, `AudioCacheSettingsSection` en `OfflineDownloadsSection`**. Vier secties die uitsluitend over afspelen op *dit apparaat* gaan, verborgen op het enige apparaat waar ze toe doen. Het HE-AAC-werk van diezelfde dag was daarmee onbereikbaar voor de gebruiker.
+
+Alle vier staan nu buiten de poort, plus **"Qobuz lokaal streamen"** — die schrijft naar `qobuz_local_stream_enabled`, device-lokale UserDefaults, dus op de telefoon kon je hem nooit aanzetten en werden Qobuz-tracks daar stilzwijgend overgeslagen. De analyzer-sectie blijft bewust server-only (die configureert de analyzer-host zelf).
+
+**Gecontroleerd op de voor de hand liggende vervolgfout:** `SyncableSettings` bevat géén van deze sleutels, dus een settings-sync vanaf de Mac overschrijft de keuze op de telefoon niet.
+
+**LES:** een rolpoort van 300 regels is te grof. Het onderscheid dat telt is niet "server of client" maar "configureert dit de server, of hoe het hier klinkt" — en die twee lopen dwars door elkaar heen in dit scherm.
+
+**Verified: 915 tests 0 failures · release-build exit 0 · iOS simulator BUILD SUCCEEDED · localisatiepoort schoon.** **NIET geverifieerd: of de secties nu daadwerkelijk op het toestel verschijnen** — dat vraagt de TestFlight-build.
+
+**CORE PRAAT NU DE TAAL VAN DE APP (2026-08-11, v1.10.256 / ios-v1.7.221).** Punt 2 van de drie openstaande zaken hieronder. Core kan `LS` niet aanroepen — de catalogus is een resource van `RoonSageUI` en Core ligt eronder — dus stonden er hardgecodeerde Nederlandse zinnen in, die een Engelstalige app gewoon in het Nederlands toonde. En de lokalisatiepoort zag er niets van, want het zijn geen sleutels.
+
+**Mechanisme:** `CoreStrings` met een geïnjecteerde vertaler (`register` vanuit `ContentView.init`, vóór de eerste view die een fout kan maken). **Elke aanroep draagt zijn Nederlandse tekst als fallback**, dus een gemiste registratie degradeert naar het huidige gedrag in plaats van naar ruwe sleutels op het scherm — precies de fout die de screenshot van 10-08 liet zien. 22 sleutels, 16 `ActionError`-plekken plus de spelerfouten. **Bewust NIET omgezet:** logregels (`LibraryShareServer`, `QobuzClient`), de deel-teksten ("Op deze dag" gaat naar andere mensen), en de Last.fm-*statusregels* — dat is een statuslabel, geen fouttoast, en er zitten meerdere interpolaties in.
+
+**De poort meegegroeid, mét de val erin.** `check-localization.sh` keek alleen in `RoonSageUI`. Nu leest hij ook `CoreStrings.s/f`-sleutels uit Core — via Python, niet grep, want **de sleutel staat routinematig op de regel ná de aanroep en een regelgeoriënteerde match vond er 15 van de 22**. Een checker met een blinde vlek is erger dan geen checker. Rood-groen: sleutel weghalen → `--strict` exit 1, terugzetten → exit 0.
+
+**WAT IK NIET HEB KUNNEN BEWIJZEN, en waarom dat geen productieprobleem is.** Ik wilde de échte bundle-lookup testen en heb daarvoor even `RoonSageUI` aan het testtarget gehangen. Die test faalde — en de diagnose is leerzaam: **binnen `swift test` ligt de resource-bundle niet naast de executable, dus `uiBundle` valt terug op `.main` (de xctest-runner van Xcode) en zelfs `LS("nav.settings")` mist daar.** Eigenschap van het testproces, niet van de app; in de app werkt `LS` aantoonbaar, anders stond het hele scherm vol sleutels. Testtarget-afhankelijkheid weer teruggedraaid. In plaats daarvan leest `CoreStringsCatalogueTests` de `.strings`-bestanden rechtstreeks van schijf en controleert twee dingen die wél kunnen rotten: (1) elke sleutel die Core opvraagt bestaat in nl én en — de sleutels worden uit de Core-broncode geschraapt, want een handmatige lijst loopt weg; (2) **de format-specifiers komen overeen tussen de talen**. Dat tweede is geen cosmetiek: `String(format: "%@", 3)` leest een Int als pointer. Rood-groen bewezen door in de Engelse tekst één `%1$d` naar `%1$@` te muteren.
+
+**Verified: 915 tests, 0 failures (was 905) · release-build exit 0 · iOS simulator BUILD SUCCEEDED · localisatiepoort 776 sleutels (was 754), 0 missend / 0 wees.**
+
+**P7 — ÉÉN ZOEKINGANG (2026-08-11, v1.10.255 / ios-v1.7.220).** Het laatste openstaande punt uit `LOCAL_PLAYER_READINESS.md`, en door drie audits los van elkaar aangewezen (`KOEL_AUDIT` K3, `JELLYFIN_AUDIT` J6, readiness P7). Typen in het bibliotheekoverzicht gooide je naar de trackslijst; een *album* zoeken betekende dus eerst weten dat je naar het albumtabblad moest en het daar opnieuw intikken.
+
+**MAAR DE ECHTE BUG ZAT IN DE SQL, NIET IN DE UI.** `searchAlbums` en `searchArtists` sorteren `ORDER BY artist, year, album` — **alfabetisch, niet op relevantie**. Dat is onschuldig zolang het scherm alle 100 treffers toont en je scrolt, en fout zodra een gecombineerde weergave de beste vijf per soort laat zien: op "Dire Straits" staat "Alchemy: Dire Straits Live" vóór "Dire Straits", dus een naïeve `prefix(5)` kan de exacte treffer wegsnijden. Nieuw `UnifiedSearch` (puur, `nonisolated`) haalt daarom **120 kandidaten** op en herordent client-side in vier lagen: exact > prefix > woord-prefix > bevat, diakriet- en hoofdletterongevoelig ("motorhead" vindt Motörhead). **Stabiel gesorteerd** — binnen één laag blijft de bronvolgorde staan, anders schudt de lijst bij élke toetsaanslag en leest dat als geflikker in plaats van als ranking. Kandidaten die nergens op matchen worden weggelaten in plaats van de sectie op te vullen.
+
+`RoonClient.searchEverything` bevraagt de drie bronnen met `async let` (drie onafhankelijke reads op een WAL-pool; serieel zou alleen de latenties optellen). Werkt **offline**, want het is de lokale GRDB.
+
+**Tweede deur dichtgedaan:** `SonicSearchView` kreeg `init(initialQuery:)` en draait bij verschijnen. Onderaan de resultaten — en prominent bij nul treffers, want dán is het pas echt nuttig — staat "Zoek sonisch naar …". Je typt dus één keer.
+
+**BUG DIE IK ZELF INTRODUCEERDE EN GEVONDEN HEB VÓÓR HET COMMITTEN:** de spinner in de toolbar bleef eeuwig draaien als je de zoekbalk in het overzicht leegde. `loadOverview()` keert vroeg terug (`guard !overviewLoaded`) en zette `isSearching` dus nooit uit. Kón vroeger niet gebeuren, omdat zoeken je naar de trackslijst verplaatste en díe reload hem altijd wiste — een gedragsverandering die een bestaande aanname stilletjes ongeldig maakte. Nu expliciet gewist in de niet-zoekende tak.
+
+**Verified: 905 tests, 0 failures (was 895) · release-build exit 0 · iOS simulator BUILD SUCCEEDED · `check-localization.sh --strict` 754 sleutels, 0 missend / 0 wees.** **NIET geverifieerd: hoe de gecombineerde lijst voelt op het toestel** — of vijf per sectie de juiste hoeveelheid is, weet je pas als je ermee zoekt.
+
+**MOBIELE DATA — HE-AAC EN DE DODE TAK (2026-08-11, v1.10.254 / ios-v1.7.219).** User: "Ik ga nu heel snel door mobiele data heen" en daarna "Aac vs opus?". **Antwoord op die vraag: Opus wint onder ~128 kbps, maar `AVPlayer` kan het niet decoderen** — overstappen betekent de hele AVQueuePlayer-engine opgeven (gapless, AirPlay, lockscreen, route-picker). De codec ligt dus vast; de enige echte hefboom binnen deze engine is de AAC-*smaak*. `AudioTranscoder.aacFormat(forKbps:)` kiest nu HE-AAC onder 112 kbps, met terugval op LC als `AVAssetWriter` weigert (die is kieskeurig over samplerate/kanalen).
+
+**EMPIRISCH GEMETEN, niet aangenomen:** een 6 s 44,1 kHz stereo bron door beide takken en daarna `ffprobe` erop — `profile=HE-AAC`, 16K tegen 24K voor dezelfde 64 kbps in LC. De terugval trad hier dus *niet* op; op deze toolchain werkt HE echt.
+
+**DE EIGENLIJKE VONDST: de HE-tak was onbereikbaar.** `LocalTranscode.bitrateKbps` stond standaard op **256** en de laagste optie in de bitrate-picker was **128** — allebei boven de drempel van 112, dus de nieuwe tak was dood hout op het moment dat ik hem schreef. Standaard nu 96 kbps (~43 MB/uur, tegen ~115 op 256 en ~400 voor FLAC); picker uitgebreid met 64 en 96. **128 bewust blijven staan** als optie: wie die ooit expliciet koos, houdt anders een selectie zonder tag en ziet een lege picker.
+
+**EN EEN LIEGEND INSTELLINGENSCHERM, ook van mij.** `TranscodeSettingsSection` bond `@AppStorage` met default `.off` terwijl `LocalTranscode.mode` al `.cellular` teruggaf — het scherm toonde "Nooit" terwijl de app op mobiele data wél transcodeerde. Ontstaan doordat ik de engine-default veranderde en de UI-literal liet staan. Nu komen beide uit `LocalTranscode.defaultMode` / `.defaultBitrateKbps`, dus **drift is per constructie onmogelijk** in plaats van door een test bewaakt.
+
+**De les die groter is dan deze fix:** een unittest die alleen de *eenheid* toetst (`aacFormat(forKbps: 64)` → HE) blijft groen terwijl de feature in de app nooit aan gaat, omdat niets 64 aanvraagt. De test die telt is die op de *bedrading*: `defaultBitrateKbps < heAACCeiling`. Rood-groen bewezen door de default even op 256 te zetten.
+
+**Verified: 895 tests, 0 failures (was 893) · `swift build -c release --product RoonSage` exit 0 · iOS simulator BUILD SUCCEEDED · `check-localization.sh --strict` 0 missing / 0 orphans.** **NIET geverifieerd: hoe 96 kbps HE-AAC daadwerkelijk klinkt op de iPhone** — dat is een luistertest, geen build.
+
+**DRIE OPENSTAANDE ZAKEN, in volgorde van belang:**
+1. ~~**109 ontbrekende tekstsleutels.**~~ **AF.** Gevonden via een user-screenshot waarin letterlijk `localNowPlaying.nothingPlaying` stond; een ontbrekende sleutel is géén compileerfout, SwiftUI rendert dan de sleutel zelf. `native/scripts/check-localization.sh` meldt nu **0 missend van 776 sleutels, 0 wezen**, en `--strict` hangt als poort in `native-tests.yml`.
+2. ~~**Hardgecodeerde Nederlandse literals in Core.**~~ **AF** (v1.10.256, zie hierboven): `CoreStrings` met geïnjecteerde vertaler, 22 sleutels, en de poort leest Core nu mee. Restant bewust laten staan: logregels, deel-teksten, en de Last.fm-statusregels.
+3. **Loudness-gain hangt aan `player.volume`** (per speler, niet per item), dus hij verschuift pas ná de gapless-overgang — het mechanisme achter de "klik tussen nummers" die Finamp-gebruikers melden. Fix = per-item `AVAudioMix`, vereist async laden van de asset-track.
+
+**CI-les:** v1.10.228's DMG-job faalde op `hdiutil: create failed - Resource busy` in stap 5 (build, signing en notarisatie wél geslaagd). Re-run van dezelfde commit slaagde → timing, geen inhoud. `build-release.sh` probeert nu 3× met backoff + detach van een blijven hangen volume. **Let op het onderscheid:** de eerdere DMG-mislukkingen (v1.10.223/.224/.201/.202) waren compileerfouten omdat CI strenger is dan een lokale debug-build — daarvoor is `swift build -c release -Xswiftc -swift-version -Xswiftc 6` de poort, en die is deze keer wél gedraaid.
+
+**CI-LES 2026-08-11 (twee keer op deze rake gelopen).** Een SwiftUI-view die client-state leest BUITEN `body` — een gewone computed property, niet `body` zelf — krijgt geen main-actor-isolatie van het View-protocol. Lokaal (Swift 6.3.2) wordt dat geaccepteerd, de CI-runner heeft een oudere toolchain en weigert het: *"main actor-isolated property … can not be referenced from a non-isolated context"*.
+
+**Belangrijk: `swift build -c release -Xswiftc -swift-version -Xswiftc 6` vangt dit NIET.** Gemeten: noch de gewone release-build, noch de Swift 6-poort geeft lokaal een fout op code die op CI breekt. Die poort is nuttig voor andere concurrency-klassen, maar niet voor deze. Lokaal reproduceren lukt hier dus niet.
+
+**Regel in plaats van poort:** zet expliciet `@MainActor` op elke nieuwe view die client-state buiten `body` aanraakt. Views die `client.…` alleen in `body` lezen zijn wél veilig — daar geeft het protocol de isolatie. Van de negen views in RoonSageUI zonder annotatie was er precies één stuk (`LibraryTrackRow`, na het toevoegen van een `isDownloaded`-property); de rest lezen alleen in `body` en compileren al maanden.
+
+**LOCAL-FIRST-PROGRAMMA AFGEROND 2026-08-11 (user: "Doe alles") — t/m v1.10.234 / ios-v1.7.199, gepusht, alle workflows groen.**
+
+Aanleiding: twee user-meldingen met screenshots (mini-speler prees een zone aan; een stopknop zette de uitvoer weg) bleken hetzelfde patroon. `native/docs/LOCAL_FIRST_AUDIT.md` maakte er 6 gaten en 4 batches van; alle vier geshipt.
+
+- **Batch 1 (L2)** v1.10.232 — zes verbs kregen `zoneID: String? = nil` en lopen door één router (`deliver` / `deliverToQueue`). Optioneel i.p.v. geschrapt, want `RoonSageMCP/main.swift:508` adresseert terecht een zone bij naam. `Cover`/`HeroItem` hun aparte `playLocal`-closure kwijt; `playAlbumLocally`/`playArtistLocally` verwijderd.
+- **Batch 2 (L3)** v1.10.232 — resterende play/queue-gates op `hasActiveOutput`.
+- **Batch 3 (L1)** v1.10.233 — **de stations spelen nu ook op dit apparaat.** `RadioStatus`/`RadioRunState` dragen een optionele zoneID (nil = dit apparaat); `topUpRadioIfNeeded` leest de wachtrij die het station daadwerkelijk voedt. Let op het verschil: een zone-queue krimpt terwijl hij speelt (count = resterende diepte), de lokale houdt alles vast en verschuift een index (count − index − 1). Die off-by-one zit in `LocalQueue.upcomingCount` met 3 randgeval-tests.
+- **Batch 4 (L4–L6)** v1.10.234 — `localOutputName` van Core naar de UI (`localOutputLabel` + `output.thisDevice/thisMac`); Core hield hardgecodeerd Nederlands dat aan de localisatie-poort ontsnapte omdat het geen sleutel is. Plus zone-veronderstellende teksten en de "(lokaal afspelen)"-haakjes in Instellingen.
+
+**Zone-gates: 62 → 15.** De rest is bewust: QueueView's Roon-tak, de zone-hero, de zonekiezers, `maybeAutoplayGuestDJ`, en de transport-verbs.
+
+**NIET GEVERIFIEERD — dit wacht op Casper:** (1) of gapless hóórbaar gaploos is, ook met scherm uit; (2) of een station op dit apparaat werkelijk blijft doorspelen als de wachtrij leegloopt; (3) de klik op de overgang (loudness-gain hangt aan `player.volume`, verschuift pas ná de wissel — fix = per-item `AVAudioMix`).
+
+**Ook open:** `LocalPlayback.swift` produceert nog twee Nederlandse foutteksten in Core (error-plumbing moet dan mee). JELLYFIN_AUDIT batch 2+ (AirPlay-kiezer, fades, één zoekingang, downloads) is nog niet begonnen.
+
+EERDER (2026-08-08, ochtend): **BENCHMARK-PROGRAMMA LIDARR + DROPPEDNEEDLE — user: "Doe alles"**. Vraag was een plan hoe Lidarr (GPL-3.0) en DroppedNeedle (AGPL-3.0) RoonSage kunnen verbeteren op snelheid/functionaliteit/design/theme/veiligheid; plan staat in `docs/BENCHMARK-LIDARR-DROPPEDNEEDLE.md` (25 items, 4 fasen, 8 batches). **LICENTIE-HEK: geen regel code overgenomen — beide bronnen zijn copyleft, deze repo MIT; alleen mechanismen zelfstandig herbouwd** (zelfde regel als bij de discovery-batch hieronder). User gaf expliciet push+tag-toestemming per batch ("Ja, push + tag per batch") en koos reikwijdte "Alles, batch voor batch".
+
+**GESHIPT: batch 1/8** (beveiliging V1–V4+V6) = v1.10.217 / ios-v1.7.182 / analyzer-v1.1.187 · **batch 2/8** (S4 TaskScheduler) = v1.10.218 / ios-v1.7.183 / analyzer-v1.1.188 · **batch 3/8** (S2 ETag+gzip) = v1.10.219 / ios-v1.7.184 / analyzer-v1.1.189 · **batch 4/8** (S1 SSE-push + S3 keep-alive) = v1.10.220 / ios-v1.7.185 / analyzer-v1.1.190 · **batch 5/8** (V5 inkomende rate-limiting) = v1.10.221 / ios-v1.7.186 / analyzer-v1.1.191. Zie ## Done per batch.
+
+**NOG TE DOEN, in deze volgorde:**
+- batch 6 = F1 HealthCheckService (leunt op batch 2) → F2 backup (`VACUUM INTO`, retentie) → F3 housekeeping. Neem `ProviderStatus` hierin mee: consecutive failures per provider → `disabled_until` → als gedegradeerde modus melden i.p.v. stil falen.
+- **S5-uitgaand (uit batch 5 gelicht):** de zes per-client-throttles vervangen door één `ProviderGate`. Per client doen, mét live verificatie — niet in één sweep; zie de reden in ## Done bij batch 5.
+- **batch 8 = design + theme (T1–T3, D1–D3). VERDIENT EEN EIGEN SESSIE MET DE SIMULATOR:** `ThemePalette` raakt de kleuren in ~69 UI-bestanden, en of dat er goed uitziet is niet uit een build af te leiden — je moet ernaar kijken. Op de mini kan dat niet (GUI-automatisering geblokkeerd, en de client-app mag daar niet heen), dus dit hoort op de iPhone-simulator zoals de UI-sweep van 2026-07-23.
+- **F7 route-tabel + `/api/v1` (uit batch 7 gelicht):** ~400 regels herstructurering van `route()`, alleen echt te verifiëren met live probing per route. Eigen sessie, route voor route.
+- **F5 import lists · F6 slimme lijsten · F8 providerregister:** nog niet begonnen.
+- Los: S6 FTS5, V7 SECURITY.md + secret-scan in CI.
+
+**LIVE 2026-08-08 22:30: analyzer-v1.1.197 draait op de mini** — bevat de artwork-fix (coreHost) én de scheduler-fix; taken draaien aantoonbaar. Eerder: v1.1.195 (14:05). `/system/tasks` geeft **10 taken**, met `library-sync` (168 u) erbij. Die job heeft een startgrace van 30 min, dus de eerste automatische bibliotheekwalk begint rond 14:35 — die haalt de 39 dagen achterstand in. Eerdere stap: 11:18 analyzer-v1.1.194. `/system/tasks` geeft **9 geregistreerde taken** (incl. `database-backup`, `housekeeping`, `health-watch`), `/health/detail` geeft zeven checks, `GET /system/notifications` 200. `POST /system/notifications/test` geeft **401 op loopback — dat is correct**, POST is een mutatie en dus sinds V3 ook daar token-gated. `lastfm-scrobble-sync` stond na de herstart meteen op `completed`: de gepersisteerde cadans uit batch 2 overleeft een herstart, precies waarvoor hij gebouwd is. Eerdere stap: analyzer-v1.1.193 (PID 99200). `/health/detail` geeft zeven checks en vond meteen een echte bug — zie ## Open items (bibliotheeksync 39 dagen stil). `database-backup` (24 u) en `housekeeping` (168 u) staan geregistreerd op `/system/tasks`. Eerdere stap: analyzer-v1.1.192 (PID 95155, was v1.1.186). :5767 76.571 tracks, :5766 59.116 tracks, migratie v46 aantoonbaar gedraaid op `library.db` mét gepersisteerde taakrij. Alle vijf batches loopback-bewezen — zie het deploy-item in ## Done. Client-app NIET gedeployd (constraint). Nog altijd onbewezen: de **positieve** kant van de `/settings`-versleuteling (vereist een goedgekeurd apparaat-token; de negatieve kant — 401 zonder token — is wél bewezen). Bevestig die bij de eerstvolgende koppeling van een client.
+
+EERDER (2026-08-08, nacht): Vier discovery-verbeteringen geshipt en gedeployd (v1.10.216 / ios-v1.7.181 / analyzer-v1.1.186 — zie ## Done). Geen actief spoor. Twee losse eindjes: `swiftlint` staat NIET op deze machine (`command not found`), dus de lint-poort is lokaal onverifieerbaar — CI dekt hem wel; en `native/docs/KOEL_AUDIT.md` heeft ongecommitte wijzigingen van een eerdere sessie die niet van deze batch zijn. Volgende stap is B3 (mood-backfill) of user-richting.
+
+EERDER (2026-08-07): Twee losse werktree-sporen (sonic-radio-audit van 26 juli + een halve C7-localisatiesweep) lagen 12 dagen ongecommit. Beide alsnog afgemaakt, geverifieerd en geshipt; analyzer daarna geredeployd + de dangling genre-selectie gesaneerd (A4/B4) — zie ## Done. Geen actief "Now"-spoor; volgende stap is B3 (mood-backfill) of user-richting.
+
+NU (2026-07-24, avond): 7-FEATURE BACKLOG-PROGRAMMA (user gaf uitgebreide specs; koos "plan hele programma eerst"). Grounding via 3 Explore-agents → belangrijke correcties op de specs:
+  **KERNCORRECTIE: er is GEEN `album_id` in de DB.** Alles is `tracks.album_key` (TEXT, Roon-derived) / `listening_history` joint op `LOWER(album)`-string (geen track/album-id). Elke spec die "album_id: Int64" zegt (F1/F2/F4) → `albumKey: String`.
+  **VEEL BESTAAT AL:** #1 (forgottenFavorites/dormantAlbums/undiscoveredAlbums in DatabaseManager+Discovery.swift, gerenderd in Ontdek-hub); #3-artiestbio (RoonClient.artistBio → Last.fm getArtistBio → `artist_bio`-cache 30d TTL); #2-label-kolom (`track_audio_features.label`, dataset-import, niet uit file-tags); #4-backend (tracksForAlbum+queueTracks, RemoteCommand.tracks draagt al willekeurige tracklijsten → GEEN nieuwe proxy-verb); #5-primitieven (ImageRenderer+ShareLink+ImageCache.dominantColor, template SonicFingerprintView); #6 (FullArtworkView+AmbientTheme); #7 = niets (geen StreamingProvider-abstractie).
+  **GEKOZEN VOLGORDE (kortste-pad-naar-geshipt + dependency-orde, wijkt af van doc-volgorde 1→7):** 1.#1 Vergeten muziek → 2.#4 Multi-select → 3.#5 Share cards → 4.#3 Editorial (bouwt EditorialClient-blok dat #6 hergebruikt) → 5.#6 Wall Display → 6.#2 Label Explorer → 7.#7 TIDAL (spike-gated, feature-flag).
+  **3 USER-BESLISSINGEN:** #1 = REWORK naar echte `ForgottenMusicService` (niet alleen gaten vullen), bestaande shelves erdoorheen re-backen. #2 = VOLLEDIGE bronketen meteen (file-tags PUBLISHER/LABEL → MusicBrainz → Discogs + FanArt.tv/Discogs-logo's; nieuwe label/album_label/label_merge-tabellen). #7 = ALLEEN SPIKE (StreamingProvider-refactor + wegwerp-spike die TIDAL-auth + Roon-catalog-mapping bewijst, dan STOP voor go/no-go).
+  **PATRONEN OM TE KLONEN:** third-party client = MusicBrainzDiscoveryClient/DiscogsClient actor-skelet (awaitSlot-gate + retry-once + per-run-cache + DiscoveryHTTPCache cross-run); nieuwe API-keys = KeychainStore + SettingsView.swift SecureField-sectie (Discogs-sectie = template); migratie = Schema.swift `migrator.registerMigration("vNN_…")` (laatste = v42_tags_provenance → volgende v43). Elke feature: eigen branch → swift build -c release + swift test groen → juiste tag-namespace.
+  **FEATURE #1 GESHIPT (commit c3615ac · v1.10.197 / ios-v1.7.162, client-only → geen analyzer-tag; op main + gepusht, release-macos+ios workflows getriggerd):** nieuwe `ForgottenScore` (pure recency-decay: nil=1.0-plafond, verzadigende recency [0,0.9) + playCount-bonus [0,0.1), cap 0.99 zodat never-played strikt bovenaan) + `ForgottenMusicService` (forgottenAlbums/neverPlayedAlbums/albumOfTheDay) in RoonSageCore/Discovery/. DB: `playedAlbumAggregates` (per-album last_play+plays, LOWER(album)-join, geen album_id). RoonClient-wrappers forgottenAlbums/neverPlayedAlbums/albumOfTheDay. Ontdek-hub: nieuwe "Album van de dag"-hero (deterministisch per UTC-dag via ForgottenScore.pickIndex) + "Onontdekte albums"→"Nog niet gehoord" (neverPlayed) + "Weer opzetten" re-backed op forgottenAlbums. 7 nieuwe tests. **Verified: swift test = 672/0 failures (was 665), swift build -c release --product RoonSage exit 0.** `dormantAlbums`-wrapper + DB-methode + z'n test ongemoeid gelaten (undiscoveredAlbums óók door LibraryView gebruikt → gedeeld gehouden). CLAPModel.swift + KOEL_AUDIT.md = pre-existing user-WIP, bewust buiten scope.
+  **FEATURE #4 GESHIPT (commit b3a4d5f · v1.10.198 / ios-v1.7.163, client-only):** album-grid "Selecteer"-modus (toolbar-toggle + long-press-contextmenu), geordende selectie (tap-volgorde → queue-volgorde), onderbalk "Speel alle"/"In wachtrij". RoonClient.playAlbums/queueAlbums assembleren per-album tracks via filterTracks(album_key) → één curate/queueTracks; RemoteCommand.tracks draagt de lijst al → geen nieuwe proxy-verb. Zone-based (gate op selectedZone), zoals single-album playAlbum. Geen nieuwe tests (UI+thin wrappers op geteste primitieven). 672/0.
+  **CADENCE-BESLISSING (user):** "Ship each as I finish" = staande push-autorisatie voor de rest van het programma → elke geverifieerde feature commit/push/tag + door naar de volgende.
+  **FEATURE #5 GESHIPT (commit 0c81237 · v1.10.199 / ios-v1.7.164, client-only):** deelbare vierkante now-playing-kaart (grote hoes + titel/artiest + dominant-kleur-tint) via ImageRenderer off-screen → ShareLink in de Now Playing-hero-optionsRow. `ShareCardView.swift` (NowPlayingShareCard + ShareCardButton); hoes+tint vóór de snapshot geladen (ImageRenderer kan geen async-art awaiten). macOS 672/0 + iOS xcodebuild BUILD SUCCEEDED + release exit 0. **LES/INCIDENT: `cd native/RoonSage` (voor de release-build) liet de cwd daar staan; de daaropvolgende `git add` met repo-root-paden faalde stil, maar het script tagde tóch → v1.10.199/ios-v1.7.164 wezen even naar het #4-commit e8add6b. Gecorrigeerd: #5 alsnog gecommit (0c81237), tags met `git tag -f` + `git push --force` verplaatst naar 0c81237. VUISTREGEL: draai git vanuit repo-root en verifieer `git status --porcelain | grep '^[AM]'` vóór commit/tag.**
+  **FEATURE #3 GESHIPT (commit 14bf0af · v1.10.200 / ios-v1.7.165, client-only):** editorial_cache-tabel (v43, gegeneraliseerd uit artist_bio; PK entity_type+entity_key+kind, 30d TTL, negatieve cache). `WikipediaClient` (REST summary NL→EN, no-auth) + RoonClient.artistEditorial (Wikipedia primair → Last.fm fallback) + albumReview (Wikipedia, "<Album> (<Artist> album)"-disambiguatie). Artiestdetail-bio nu via editorial-pad; albumdetail nieuwe "Over dit album"-review-sectie mét bronvermelding. **Qobuz-album-editorial BEWUST UITGESTELD (follow-up)** — Wikipedia geeft betrouwbare no-auth-dekking; Qobuz album/get vereist onverifieerbare unofficial-API-auth. EditorialClient = RoonClient-extensiemethodes (matcht bestaand artistBio-patroon) i.p.v. losse EditorialClient.swift-class. 5 cache-tests; 677/0 + release exit 0 + iOS BUILD SUCCEEDED. Oud artistBio+artist_bio-tabel ongemoeid (harmless, niet meer aangeroepen door de view). **EditorialClient-blok is nu klaar voor hergebruik door #6 Wall Display.**
+  **FEATURE #6 GESHIPT (commit e60c4f0 · v1.10.201 / ios-v1.7.166, client-only):** `WallDisplayView` — volledig-scherm wanddisplay vanuit de Now Playing-hero (play.tv-knop): grote hoes op dominant-kleur-wash + auto-roterend infopaneel (track → artiestbio → albumreview, hergebruikt #3's editorial-cache). Chrome (sluit + interval-stepper 4–60s, @AppStorage) verborgen tot tik. Adaptief landscape/portrait via ViewThatFits; macOS min-size geguard. **Related-artists + YouTube-paneel BEWUST als future genoteerd** (YouTube = geen key-infra + onverifieerbare videoplayback). 677/0 + release exit 0 + iOS BUILD SUCCEEDED.
+  **FEATURE #2 CORE GESHIPT (commit 85912e6 · v1.10.202 / ios-v1.7.167, client-only; user koos "Core now, enrichment next"):** schema v44 (label/album_label[album_key]/label_merge mét restored_keys+added_keys JSON voor EXACTE undo). LabelStore + DatabaseManager-label-queries: backfill uit dataset-`track_audio_features.label` (idempotent, stabiele ids, merge-aware), sorteerbare lijst, per-label albums, exacte merge+undo, deterministische ISO-week label-van-de-week. LabelExplorerView (label-vd-week + lijst + release-grid + merge-picker + undo) via Ontdek-hub "Platenlabels". 4 tests; 681/0 + release + iOS BUILD SUCCEEDED.
+  **#2 ENRICHMENT = OPEN FOLLOW-UP (user wil "full chain"):** file-tag PUBLISHER/LABEL-read in MetadataReader (analyzer-side → analyzer-release+deploy nodig) + MusicBrainz + Discogs (client bestaat) + FanArt.tv/Discogs-logo's. album_label.source-kolom is er al ('filetag'/'musicbrainz'/'discogs'). Dekking nu = alleen dataset-gematchte tracks (sparse); enrichment vult 'm. LabelMetadataClient nog te bouwen.
+  **CI-FOUTEN GEVONDEN + GEFIXT (user meldde "meerdere workflows fouten"):** (1) **WallDisplayView miste `@MainActor`** → `artURL`-computed-prop riep de @MainActor `client.imageURL` uit nonisolated context. De GitHub-runner-SwiftUI-SDK dwingt View-@MainActor-inferentie STRENGER af dan mijn lokale toolchain → CI `swift build -c release` faalde (brak de v1.10.201 + v1.10.202 macOS-DMG's) terwijl lokaal groen. GEFIXT: `@MainActor` op de struct (zoals de zusters). **LES: lokaal `swift build -c release` (Swift 5.9-mode, tools-version) reproduceert deze klasse NIET; `swift build -c release -Xswiftc -swift-version -Xswiftc 6` is een strengere superset die 'm WEL vangt → gebruik dat als actor-isolatie-gate voor nieuwe SwiftUI-views.** (2) **Tag-mishap-collateral:** v1.10.199 werd eerst op het #4-commit gepusht → GitHub-Release v1.10.199 gebouwd uit #4-code (share-cards ONTBREKEN in die gepubliceerde DMG); het force-move-re-run faalde met "release already exists". **HERSTEL: v1.10.203 / ios-v1.7.168 (commit 9114487) = voorwaartse fix die ALLES bevat (#1-#6+#2-core + de @MainActor-fix) en supersede't de kapotte .199/.201/.202.** Kapotte tussenreleases op GitHub: v1.10.199 (verkeerde code), v1.10.201 + v1.10.202 (geen DMG). Optioneel op te ruimen door user.
+  **NEXT: #7 TIDAL — ALLEEN SPIKE (user-beslissing).** SPIKE AL GEBOUWD op branch `spike/tidal-streaming-provider` (commit met StreamingProvider.swift + QobuzProvider-adapter + TidalProvider-stub + native/docs/TIDAL_SPIKE.md) — NIET gemerged/getagd, wacht op go/no-go. Bevinding: architectuur solide (Qobuz past onder app-shaped protocol, ongewijzigd; TIDAL zou net als Qobuz een provider-playlist schrijven die Roon toont mits TIDAL in Roon aanstaat). Open: TIDAL developer-API-toegang + OAuth live niet verifieerbaar hier. Aanbeveling = conditional-go. StreamingProvider-protocol introduceren + QobuzClient eronder schuiven ZONDER gedragswijziging (dat is het echte werk, eigen geverifieerde stap), dan een feature-flagged wegwerp-TidalProvider-spike die auth + Roon-catalog-mapping bewijst → RAPPORTEER + STOP voor go/no-go. Geen volledige integratie. (generaliseer artist_bio→editorial_cache, album-reviews via Qobuz description + Wikipedia; bouwt EditorialClient-blok voor #6) → #6 Wall Display → #2 Label Explorer (volledige bronketen) → #7 TIDAL (alleen spike).
+
+DEPLOYED-UNCOMMITTED (2026-07-25, nacht): analyzer-**v1.1.173 LIVE op mini** (PID 20970, was 2772/v1.1.172) — RAM verder verlaagd (vervolg op v1.1.172; user: "kijk of je het nog meer kan verlagen"). ONDERZOEK (vmmap/footprint op live proces): de "drievoudige" embedding-opslag bleek grotendeels COW-gedeeld (cached[] ↔ VectorIndex.tracks[] delen dezelfde buffers; alleen VectorIndex.matrix is een echte 2e kopie) → embeddings ≈216MB, niet 324MB; strippen zou NIETS vrijmaken (COW). Echte reduceerbare post: `MALLOC_SMALL (empty)` ~183MB = door libmalloc vastgehouden vrijgegeven pagina's na de analyse-piek (2.6GB), niet teruggegeven aan OS. FIX (user koos optie A): `malloc_zone_pressure_relief(nil, 0)` aan het eind van `LibraryWalker.run()` (na elke walk, C5-signatuur geverifieerd tegen SDK-header + Swift-test). Verified: swift build + 13 tests groen (walker+streaming). METING live: idle-RSS **395–545MB** (v1.1.173) vs **1114MB** (v1.1.172) = ~50% lager; stap-omlaag 545→395 bij CPU 0 = teruggegeven geheugen. KANTTEKENING: relief-NSLog niet log-bevestigbaar (NSLog onderdrukt voor de signed app in os_log/launchd-stderr) → exacte attributie (relief vs verse start vs OS-reclaim) niet 100% isoleerbaar, maar richting duidelijk goed + change veilig. NIET gekozen (user): B (ArtistSimilarity via index → cached embeddings strippen, ~108MB) / C (SonicLibraryCache loslaten bij idle, ~324MB). **CODE NOG NIET GECOMMIT/GETAGD** (working tree, bovenop de v1.1.172-diff die óók nog los staat).
+
+DEPLOYED-UNCOMMITTED (2026-07-24, nacht): analyzer-**v1.1.172 LIVE op mini** (PID 2772, was 98814/v1.1.171) — RAM-piekfix (user: "analyzer verbruikt veel te veel RAM, Mac loopt telkens vast"). ROOT CAUSE: (1) NUL `autoreleasepool` in de analyse-pijplijn → CoreML/MPSGraph + AVFoundation-temporaries stapelden op de TaskGroup-worker-threads (geen run-loop = geen drain-punt) over ~360 vensters/track; (2) `CLAPModel.embed(url:)` decodeerde de héle 48kHz-track in RAM (`maxEmbedSeconds=1800` → ~345MB × concurrency 3). FIX: (A) `autoreleasepool` in `CLAPModel.embed(samples:)`+`textEmbedding`+`LibraryWalker.process`; (B) nieuwe `AudioDecoder.decodeWindows` streamt de vensters met begrensd schuifbuffer → piek/track van ~345MB → één venster. **Embeddings byte-identiek (modelVersion "v3" ongewijzigd), bewezen door 4 nieuwe equivalentie-tests (exacte float-gelijkheid streaming vs striden) + golden-cosine 1.0000006.** Verified: swift build debug+`-c release` exit 0; 18 tests groen (CLAP+streaming+walker-decision); loopback /health OK (53821+76571). METING (2u-watch bevestigd, /tmp/rs_ram_longwatch.log): tijdens actieve analyse piek ~1524MB → **losgelaten** → vlak plateau 1114MB (laatste ~50 min kaarsrecht), CPU 0% idle, GEEN monotone klim. Swap 1903MB (LAGER dan 2098MB bij sessiestart = hersteld); systeem 85% geheugen vrij, geen druk. Transiente analyse-geheugen wordt nu vrijgegeven = freeze-oorzaak weg. RESTPUNT (apart, optioneel): idle-baseline ~1.1GB = legitieme server-working-set (76k-lib-index + 53k×512 VectorIndex + caches), geen lek — evt. later te verlagen. **CODE NOG NIET GECOMMIT/GETAGD** — user koos "deploy + meten"; wijzigingen in working tree (CLAPModel.swift/AudioDecoder.swift/LibraryWalker.swift + AudioDecoderWindowsTests.swift). CLAPModel.swift bevat ook pre-existing compile-cache-WIP. Client-app NIET gedeployd (constraint). FOLLOW-UP: commit+tag analyzer-v1.1.172 als de lange watch vlak blijft.
+
+GESHIPT (2026-07-24, deel 3): v1.10.196 / ios-v1.7.161 — "Ontdek-inzichten + Ontdek-op-stemming doen niets op de Mac" (user-report; op iOS compact wél werkend, live geverifieerd op iPhone-sim: inzichten-sheet + stemmingsmenu vuren). ROOT CAUSE: in de KALE `NavigationSplitView`-detailkolom (macOS + iPad) wordt de per-scherm `.toolbar` van DiscoverFeedView overschaduwd door de split-view's eigen `navToolbar` → knoppen renderen (de `Menu` klapt zelfs open) maar de acties (`showInsights=true`, `refresh(mood:)`) bereiken de losgekoppelde view niet. iOS compact werkt omdat elke tab z'n scherm in een `NavigationStack` host. FIX: detailkolom in een eigen `NavigationStack` gezet (matcht het iOS-pad) + `.id(selection)` behouden (vervangt de losse `.id` uit v1.10.195; lost óók de nav-push-freeze op). **VERIFICATIE: swift build debug+release + iOS xcodebuild groen; app start crashvrij. Split-view RUNTIME niet headless te driven op de mini** (geen Mac-GUI/TCC; iPad-sim zit achter apparaat-goedkeuring + SecurityAgent-keychainprompt) — structureel identiek aan het iPhone-pad dat ik wél live werkend zag. **Wacht op user-bevestiging op de Mac.** Client-only, geen analyzer-tag.
+
+GESHIPT (2026-07-24, deel 2): v1.10.195 / ios-v1.7.160 — "Ontdek Wekelijks blokkeert andere views" (user-report, Mac mini). CAUSE: `RootView.swift` detail-kolom (`NavigationSplitView`, macOS + iPad) leunt op de impliciete navigatiestack; zodra Herontdek → "Ontdek Wekelijks" gepusht is via `NavigationLink`, wisselt `selection` bij een ander sidebar-item wél maar de gepushte view blijft bovenop staan → detail lijkt bevroren, andere views "doen niets". Fix: `.id(selection)` op de detail-content forceert een verse identiteit per sidebar-item, breekt de gepushte stack af bij een wissel. `swift build` groen; GUI-klikgedrag NIET live geverifieerd (user zat op de Air, ik op de mini — geen gedeeld scherm). Client-only, geen analyzer-tag. iPhone-tabflow (`tabView`) ongemoeid — gebruikt een andere navigatiestructuur, niet getroffen door deze bug.
+
+GESHIPT (2026-07-24): v1.10.194 / ios-v1.7.159 — "Nieuw voor jou"-toolbarknoppen leken dood: filter/insights/mood/refresh WERKEN (server-runs vuren, batch 49/50 opgeslagen) maar refresh+mood gaven geen zichtbare feedback tijdens de ~2 min-pipeline. Fix: spinner op de ververs-knop + banner "Nieuwe ontdekkingen worden gebouwd — dit kan ~2 min duren…" → "Klaar — N ontdekkingen". LIVE op sim geverifieerd. Client-only. 665 tests groen.
+
+GESHIPT (2026-07-23, avond-2): v1.10.193 / ios-v1.7.158 — cosmetische restjes uit de sim-review: (1) Ontdek-Wekelijks-rijen tonen nu albumthumbnails — de imageKey-code zat al in analyzer-v1.1.171, de gecachte weekly was oud; opgelost door een geforceerde regen (`POST /discover-weekly/refresh` op loopback → verse weekly met 33/36 per-track imageKeys). (2) `String.displayTitle` (Theme.swift) voegt de ontbrekende spatie vóór "(" in ("On Every Street(Album Version)" → "… (Album Version)"), toegepast op Now Playing-hero + mini-bar + Wekelijks-rijen; Wekelijks-titel nu lineLimit(2) i.p.v. mid-woord afkappen. LIVE geverifieerd op de sim (screenshots /tmp/rs_final). Client-only → geen analyzer-tag. 665 tests groen.
+
+GESHIPT (2026-07-23, avond): v1.10.192 / ios-v1.7.157 / analyzer-v1.1.171 — discovery-playback-fix + UI-verbetersweep + headless-.task-bug (analyzer draait nu volledig headless: Roon-connect 7s, 5766 up, alle schedules). 665 tests groen, debug+release+iOS-build groen. Discovery-playback LIVE E2E geverifieerd op de sim: "Speel nu"/"Speel" starten écht audio op zone "Mac mini" (Dire Straits / Sam Smith). analyzer-v1.1.171 LIVE op de mini (Roon `roonConnected:true`, 5766 `{"status":"ok","tracks":53821}`). CLAPModel.swift + KOEL_AUDIT.md bewust BUITEN de commit gehouden (pre-existing WIP). NOG OPEN: dedup-migrate + KOEL-werk = ander spoor.
+
+NU (2026-07-23, deel 2): UI-VERBETERSWEEP (audit "let specifiek op hoe je de UI kan verbeteren" → user koos "Alles uit de review"). Sim-UI-review (8 schermen, screenshots /tmp/rs_ui_review/) → ~15 concrete verbeteringen, allemaal gebouwd, **665 tests 0 failures, swift build+test exit 0**. Client-only (RoonSageUI + 1 model-veld in RoonSageCore); NIET gedeployd/getagd. **LES: `swift build` (incrementeel) maskeerde 3 compile-fouten in nieuwe SonicRadioView-chipcode die `swift test` (verse compile) wél ving → swift test is de echte gate, niet swift build.**
+  1. **RootView** — 5 tabbalk-labels hardcoded NL ("Nu speelt/Bibliotheek/Maak/Ontdek/Instellingen"; LT() gaf Engels want sim-locale=en, terwijl nl.lproj de vertalingen wél heeft — hardcoded matcht de rest van de app). ReconnectingBanner verborgen zodra `hasLiveSession` (overlapte de scherm­titel + bleef stale "Verbinden met IP" tonen).
+  2. **Dubbele chevron weg** — DiscoveryView.weeklyInstap + LibraryView.navCard zetten een handmatige `chevron.right` bínnen een List-NavigationLink die er zelf al één tekent.
+  3. **DiscoveryView** — decennium-as compact ("1950s"→"’50s", was "195…"); heroknop-label al gefixt in deel 1.
+  4. **AlbumArtView** — placeholder = gold-gradient + gouden noot i.p.v. vlak grijs (app-breed).
+  5. **DiscoverWeeklyView** — 44pt albumthumbnail per tracklijstrij (nieuw veld `DiscoverWeeklyTrack.imageKey`, optional → oude gecachte weekly decodeert nog; gevuld op 3 generatie-sites; bestaande weekly toont placeholder tot verse refresh).
+  6. **DiscoverFeedView** — titel "Nieuwe Ontdekkingen"→"Nieuw voor jou" (matcht menu; + loading/desc-strings). Pills zijn al blauw(bron)/grijs(jaar) getint = niet aangepast. Thumbs-up NIET toegevoegd (redundant met prominente "Volg/Bewaar"-accept) — NOTED.
+  7. **LibraryView** — stats-chips in `FlowLayout` (wrappen i.p.v. "3.536 uur m…"/"79% geanal…" afkappen).
+  8. **SonicRadioView** — categorie-picker (Artiest/Genre/Sfeer/Activiteit/Decennium) van `.segmented` (klipte "Activi…/Dece…") naar scrollbare capsule-chips.
+  9. **GenerateView** — "Snelle sjablonen"-chips tonen nu een monochrome SF-Symbol per categorie (`PlaylistTemplate.categorySymbol`) i.p.v. kleur-emoji (emoji blijven in het volledige TemplatePicker-sheet, waar kleur helpt bij scannen).
+  10. **NowPlayingView** — lege "Er speelt niets"-hero krijgt CTA's ("Ontdek muziek"→.discovery, "Maak een playlist"→.generate via `\.navigateTo`), geen dead-end meer.
+  **DEPLOY (user gaf groen licht):** analyzer-v1.1.167 gebouwd (Developer-ID signed, com.roonsage.analyzer) + geïnstalleerd + gestart via LaunchAgent (bootout oude → bootstrap nieuwe; **LET OP: er IS nu een LaunchAgent `nl.roonsage.analyzer` — bootout eerst, anders relaunched KeepAlive de oude binary**). PID 91041 (was 19001). **5767 share server GEZOND** (/on-this-day echte data). Server-side discovery-fix (resolveImportKeys, RoonSageCore) zit erin; UI-fixes NIET (client-only, terecht niet op de mini).
+  **ROOT CAUSE analyzer↔Roon reconnect GEVONDEN + GEFIXT (v1.1.170):** de analyzer verbond niet meer met Roon ná ~14:11 (laatste `connect → ws` in het log). Instrumentatie (DIAG-markers, v1.1.169) bewees: `connectRoon()` werd NOOIT aangeroepen. **CAUSE: alle 19 `.task`-modifiers hangen aan de `Window`-scene in RoonSageAnalyzerApp.swift; op de headless mini (scherm slaapt → venster wordt nooit actief) vuren die `.task`'s NIET.** De "Qobuz sync" die wél liep is een rode haring — die start vanuit `RoonClient.init()` (`startListenBrainzPlaylistSync`, RoonClient.swift:391), niet vanuit een `.task`. Dus álles wat aan een window-`.task` hing was dood op een headless (her)start: `connectRoon` (→ geen Roon, geen playback), `startServingIfNeeded` (→ **5766 down**), `loadCLAPIfNeeded`, lastfm, en de discovery/weekly/lyrics/feature-sync/artist-radio-schedules. Alleen `RoonClient.init()`-getriggerd werk (share-server 5767, LB-playlist-sync) overleefde. Werkte vóór 14:11 wél omdat het toen mét actief scherm gestart was. **FIX (v1.1.170): Roon-connect- + Last.fm-loops verplaatst naar `RoonClient.init()` via `startServerConnectLoops()`, gegate op `extensionIDOverride == "com.roonsage.server"` (analyzer-only; thin Mac-client praat met de share-server, niet Roon). Draait nu ongeacht de SwiftUI-scene.** 665 tests groen. **NOTED (zelfde root cause, NIET meegefixt):** 5766-serving + CLAP-load + discovery/weekly/lyrics/feature-sync/artist-radio-schedules hangen nog aan window-`.task`'s → nog steeds dood op headless herstart; zouden ook naar init/headless-safe trigger moeten. Op de mini is 5766 daardoor nog down.
+
+**ROON CORE-HERSTART (user gaf toestemming) — DEELS GELUKT + BELANGRIJKE LES:**
+  - `open -a Roon` / de Roon.app-GUI **crasht direct** met `CVDisplayLink returned: InvalidArgument` in `BrooOpenGLView._PrepareOpenGL()` (Roon_log.txt) — de desktop-UI kan geen OpenGL-context maken omdat het scherm van de mini slaapt/geen display heeft. **LES: herstart Roon Core op de mini NOOIT via de GUI-app; start de headless Core direct: `open "/Applications/Roon.app/Contents/RoonServer.app"`.** Dat bracht de Core in 6s terug (RoonServer PID 1151, 9330+9200 luisteren, SOOD-advertising op UDP 1900). Blokkade opgeruimd met `killall ReportCrash UserNotificationCenter` (er stond een crash-"opnieuw openen?"-dialoog).
+  - **MAAR: de analyzer re-pairt niet met de herstelde Core.** `/playback` → `roonConnected:false, zones:[]` na 2× analyzer-restart (PID 91041→1962). In de verse 22:09-sessie staat **GEEN enkele [roon]/connect→ws/pair-logregel** — de analyzer probeert Roon niet eens te bereiken, terwijl de Core discoverbaar is. Onbekend waarom (mogelijk: extensie moet opnieuw ingeschakeld in Roon → Instellingen → Extensies = GUI, geblokkeerd; óf een reconnect-bug in de analyzer-startup — vereist code-onderzoek). Opstart-sync (Qobuz/LB) duurde ~9 min (22:10→22:19) en blokkeerde de log; daarna hervatte de flood.
+  - **5766 blijft down** (HTTP 000 over alle restarts). **Flood** (`queue tracks=18` zone 160193 elke ~3s) hervat na elke restart → externe vastgelopen client.
+  - **NETTO:** Roon Core draait weer, maar de analyzer↔Roon-pairing + 5766 + live-verificatie blijven open. Vereist óf GUI-toegang op de mini (Extensies inschakelen / scherm wekken) óf code-onderzoek naar de Roon-reconnect in de analyzer-startup. Code + deploy staan; alleen live-e2e is niet te bevestigen.
+
+**⚠️ LIVE-VERIFICATIE GEBLOKKEERD (mini-infra, NIET mijn code):** (1) de analyzer-Roon-extensie staat op **transport=false, browse=false** terwijl Roon Core wél draait (RoonServer PID 45091, poorten 9330/9200) — de extensie is z'n transport/browse-services kwijt (sinds ~12:54 vandaag, dus vóór mijn deploy). Curate/afspelen kan daardoor server-side niet → mijn resolveImportKeys-pad is NIET live te verifiëren tot Roon herverbindt. Vermoedelijk moet RoonSage in **Roon → Instellingen → Extensies** opnieuw ingeschakeld worden (GUI op de mini — kan ik headless niet). (2) **5766 bindt niet** (HTTP 000, ook bij de oude binary → pre-existing). (3) een **vastzittende client floodt `queue tracks=18` naar zone 160193 elke ~3s** (overleefde de restart even, kwam 20:54 terug; bron onbekend, waarschijnlijk een remote device/Mac-app met vastgelopen Guest-DJ-autoplay bij browse=false). Screenshot-verificatie van de UI op de sim lukt óók niet (sim blijft op "Verbinden" want de sessie is onvolledig). **665 tests / build / iOS-build blijven groen — code is verified; alleen de LIVE end-to-end op de mini is geblokkeerd door bovenstaande infra.** NIET gepusht/getagd (wacht op verzoek).
+
+NU (2026-07-23): DISCOVERY-PLAYBACK + UI-FIXES (audit "Nieuw voor jou/Ontdek Wekelijks/Herontdek"). User: "Fix alles". Sim-audit vond dat álle 3 Speel-knoppen niks doen. **ROOT CAUSE uit de live mini-log** (`~/Library/Application Support/RoonSage/logs/roonsage.log`, sessie draait ÓP de mini = Caspers-Mac-mini): curate wérkte gister nog (34/34, 495/500 t/m 00:12) maar brak naar 0/N vanaf 12:29 vandaag, direct na een Roon-reconnect om 12:28 (`ws://192.168.178.59:9330`). Transport (playPause) werkt nog; alleen Browse/**zoeken** time-out't (`requestTimeout`). Discovery-tracks dragen `import::artist::title`-keys (client importeert de library als JSON → synthetische keys) die in `BrowseService.playByBrowse:135` de trage/wankele live-Roon-zoek forceren → alle 26 faalden. De server bezit nota bene de ECHTE key (`2606:5`) in z'n eigen library.db. **AANPAK (user koos "code eerst, dan redeploy"):**
+  **CODE (build+test-geverifieerd, NOG NIET gedeployd):**
+  1. **Server-hardening** — `resolveImportKeys()` (RoonClient+Transport.swift) swapt `import::`-keys naar de echte item_key via `DatabaseManager.libraryTrackID(matchKey:)` (nieuw, matcht op `match_key`) vóór playback, in zowel `curateTracks` als `queueTracks`. Owned discovery-tracks nemen nu het snelle directe-browse-pad i.p.v. de zoek. Niet-library keys (`qobuz_search::`, onvindbare imports) vallen ongewijzigd terug op zoek. Bijvangst: `primaryArtist` strip't "/ Unknown Artist" → matcht toch.
+  2. **`/discovery/play` feedback** — `playRecommendation` returnt nu Bool (@discardableResult) + poll't playback bij succes; DiscoverFeedView.play toont in-flight ProgressView + "Afspelen gestart/mislukt"-banner (was: stille 15,7s no-op).
+  3. **DiscoveryView** — afgebroken "Sp..."-heroknop gefixt (lineLimit(1)+fixedSize) + optimistische "Afspelen gestart op ‘zone’"-banner in de play-helper.
+  4. **DiscoverWeeklyView** — `cleanArtist()` strip't "Unknown Artist"-fragmenten uit de weergave (+ a11y) + "Speel nu"-bevestigingsbanner.
+  **NOG TE DOEN:** build+test bevestigen → analyzer redeployen naar de mini (herstelt de gedegradeerde Roon-sessie ÉN shipt de hardening) → live verifiëren dat de log het directe-key-pad toont (geen `playViaSearch`) + `curateTracks done N/N ok`. Client-app NIET op de mini (constraint). Push/tag pas op expliciet verzoek.
+  **NOTED (niet gedaan):** de curate/queue-fout bereikt de client nog steeds niet (server ackt 200 direct via `Task{}`); overweeg later de eerste track synchroon te spelen en het resultaat in de HTTP-respons te zetten zodat `lastActionError` echte fouten toont i.p.v. de optimistische banner.
+
+NU (2026-07-19): V3-DOORWERKINGSAUDIT — alle analysedata bereikt eindelijk élke consument, niet alleen de radiotitel-generatie. Aanleiding: user "worden die nu ook gebruikt bij alle andere functies?" → nee. **665 tests 0 failures, release exit 0. NIET gecommit/getagd/gedeployd.**
+  **METING VOORAF (op de mini, analyzer.db):** 53.821 rijen — v3-embeddings 41.739 (77,6%), `tags_model` 53.682 (99,7% CLAP), Ollama-only 139, arousal 53.682 (99,7%), LUFS 48.749 (90,6%). Twee aannames weerlegd: (a) de Ollama-tagvervuiling was 139 rijen, niet ~14k — de retag is klaar; (b) de "v2→v3 schaalverschuiving" uit de vorige sessie ging over de ACOUSTICNESS-as, niet over cosine-similarity. Gemeten: willekeurige v3-paren mediaan 0,331 / p99 0,885; near-dup-drempel 0,95 geeft 0,17% vals-positief → **niet kapot, drempel-herkalibratie vervalt** (17 duplicaatgroepen = te weinig om op te kalibreren).
+  **1. AROUSAL (grootste impact).** `SonicTrack.energy` (rauwe RMS) hernoemd naar `rmsEnergy` + computed `energySignal` (arousal-preferred). Bewust een HERNOEMING zodat de compiler de reference sweep afdwingt i.p.v. een stille betekeniswijziging. Volgden mee: SonicSimilarity, SonicEngine, SongPaths, SonicDNA, RadioSequencer, MusicMapView, RoonClient+Features. Nieuwe `SonicSimilarity.Feature.init(_ track:)` = de ENIGE plek die beslist welk energiesignaal en welke tags betrouwbaar zijn (6 call-sites erop). Ook `sonicSeed()` haalde `attributes` niet op → de seed van élke radio viel terug op RMS; gefixt.
+  **2. TAG-HERKOMST.** `tags_model` was analyzer-only → clients konden CLAP-tags niet van Ollama-goktags onderscheiden. Nu: analyzer-export → `/features` → schema v42 → `SonicTrack.tagsAreCLAP` + `scorableTags` (leeg voor legacy-rijen). Provenance NIET ge-COALESCEd in de upsert: een stale stempel mag nooit voor vervangen tags instaan. Rauwe `tags` blijven voor WEERGAVE, alleen SCORING is gated.
+  **3. MOOD-DREMPELS.** Twee onverenigbare regimes naast elkaar: `MoodCalibration` (z-score) op 2 plekken vs. hardgecodeerde `>= 0.3` op 5. Nieuwe `MoodCalibration.matches(_:in:)` + static overload voor optionele kalibratie (nil → exact oud gedrag, trekt nooit een station leeg). Toegepast op CustomRadio, Generate (gate + LLM-hint), RadioCategories, DJMode (óók de seed-argmax), SonicClusters (compute + label).
+  **4. LOUDNESS.** LUFS zat in de DB maar viel uit `SonicTrack` → geen radio-/sequencer-pad kon niveau-matchen. Veld nu doorgetrokken. **LET OP: alleen beschikbaar gemaakt, actieve niveau-matching is NIET bedraad** — dat is een productbeslissing, geen bug.
+  **5. RADIOENGINE-SCALARS (user koos dit expliciet, grootste blast radius).** De engine woog alleen embedding+populariteit+genres; BPM/toonsoort/energie kwamen pas bij het sequencen terug. Nieuw: `Options.scalarCoherence` (default 0.12, = popularityBias) × `(1 − 0.5·adv)` × `(similarity − 0.5)`. Gecentreerd op 0,5 omdat SonicSimilarity dát teruggeeft bij ontbrekende data → een ongeanalyseerde kandidaat onthoudt zich i.p.v. gestraft te worden. `scalarCoherence: 0` = exact het oude gedrag.
+  **LES (een test vond een echte bug in mijn eigen nieuwe code):** `scalarCentroid` gebruikte `max(1, seeds.count / 2)` voor de tag-drempel — integerdeling maakt dat 1 voor zowel 2 als 3 seeds, dus "gedeeld door de helft" betekende in de praktijk "elke tag". De doc-comment beloofde iets anders dan de code deed. Gefixt naar strikte meerderheid (`> count / 2`); de test is NIET aan de code aangepast.
+  **NIET GEDAAN, bewust:** Ontdek-producers blijven catalogus-fetchers (analyse komt daar binnen via tasteVector/SonicFit/MoodSeeding); near-dup-drempel ongemoeid (meting hierboven); swiftlint-gate NIET gedraaid — **swiftlint is niet geïnstalleerd op de mini** (exit 127).
+  **GESHIPT + LIVE (2026-07-19):** commit aa0546b · v1.10.190 / ios-v1.7.155 / analyzer-v1.1.166, gepusht naar origin/main met alle 3 de tags. **analyzer-v1.1.166 LIVE op de mini** (PID 48704, was 1201; geen LaunchAgent aanwezig, dus PID-kill volstond). Loopback geverifieerd: `/health` 5766 `{"status":"ok","tracks":53821}`, 5767 ok/76571. **V11-eindbewijs: `curl localhost:5766/features` → HTTP 200, 53.821 rijen, 53.682 mét `tags_model: clap-zs-v1`, 139 zonder** — exact gelijk aan de DB-meting, dus de export-wijziging én de `cachedFeatures`-cache zijn vernieuwd. Client-app NIET gedeployd (constraint).
+  **LET OP bij de volgende client-release:** `/features` levert `tags_model` nu, maar een client die nog op de OUDE build draait negeert het veld → `tagsAreCLAP` blijft daar false → tag-scoring valt stil (embedding/genres dragen dan). Geen kapotte staat, wel tijdelijk zwakkere tag-signalen tot de client-release mee is.
+  **NIET meegecommit:** `native/docs/KOEL_AUDIT.md` stond al gewijzigd vóór deze sessie (lopend Koel-audit-werk van de user) — bewust buiten deze commit gehouden.
+
+LAATST (2026-07-19): AUDIT ANALYSE+RADIO'S → PROFIEL-INPUT + CLAP-TAGS GEFIXT (user: "playlists nog niet zo sterk, titels vaag" → volledige audit → "Doe alles"). Kernbevinding: de titelgenerator was al streng, maar het "gemeten profiel" was voor elk station identiek — (a) Ollama-tagger raadde tags uit metadata ("driving" op 61,7% van de bibliotheek, "deep house" op Golden Earring/White Lies, 7.566 wilde spellingen), (b) moods rauw-cosinus i.p.v. z-score ("danceable" op opera; MoodCalibration bestond maar sonicProfileSummary gebruikte 'm niet), (c) BPM 62,6% betrouwbaar (vs Deezer, n=21.079) maar onvoorwaardelijk gerapporteerd, (d) gate-relaxatie vulde playlists tot minKeep=60 met niet-passende tracks. Extra vondsten: techno-EP's verkeerd onder Mark Knopfler-map (zitten in z'n radio-seeds!), 4.270 dubbele artist|title-groepen, "Beethoven Sínfonía No.93" is eigenlijk Haydn (kNN cos 0,999 met LPO-Haydn), jaartal 4018 → spookradio decade:4010.
+  **BATCH 1 (bec8b2a):** SonicTrack + echte genres (MB ∪ Deezer, GROUP_CONCAT-join) + gesaneerd jaar; sonicProfileSummary → echte genres (15%-vloer, tags alleen fallback), MoodCalibration-tally via TitleGrounding.Calibration.moods, confidence-gated mediaan-BPM + spreiding ("tempo wisselt"), toongeslacht (Camelot A/B ≥65%), periode (p10–p90); prompts eisen onderscheidend kenmerk + verbieden DJ-jargon/vulwoorden; batch-voorbeelden 5→8; gate-relaxatie minKeep 60→20; cache-keys v2→v3 (alle 46 titels regenereren); profileSignature + g:-term.
+  **BATCH 2+3 (0e8eddf):** ClapTagger (47-terms gecontroleerd vocabulaire, z-score per term over eigen bibliotheek, zFloor 2,0/relaxed 1,0/max 5) vervangt Ollama-tagger overal (app startTag + autoTagIfNeeded na analyse + CLI `tag`); tags_model-kolom (resumable, versie-bump = retag); contentSignature +tm-term (in-place retag bereikt anders nooit clients); MetadataReader.saneYear (1900–2035) + yearByMatchKey begrensd. Gevalideerd op kopie live DB: 53.683 geretagd, Kobosil→techno/dark/hypnotic, Miles→jazz, Marley→reggae; restruis (Queen→"punk") acceptabel want tags zijn nu fallback achter echte genres.
+  **BATCH 4 (data):** analyzer.db 19 jaartal-outliers → NULL (18× Snow Patrol 4018, Hendrix 1773, Les Hommes 0); library.db 17 idem. dedup-migrate NIET gedraaid (heranalyse nog bezig: 41.739 v3 / 11.944 v2).
+  **RESULT:** 654 tests 0 failures · release-builds exit 0 · lint schoon. NIET gepusht/getagd/gedeployd (wacht op user). Na deploy: eerste radiobuild hergenereert alle titels uit de nieuwe profielen; tags op de mini worden automatisch geretagd (autoTagIfNeeded).
+  **BATCH 5 (deploy + hertag, 2026-07-19 11:00-12:00):** gepusht (main + v1.10.188/ios-v1.7.153/analyzer-v1.1.164); analyzer live op de mini. Twee builds: 11:12 (nog oude tags) en 11:33 (mét CLAP-tags — profielen dragen nu `t:hard rock,live,punk` (workout), `t:deep house,house,r&b` (danceable), `t:acoustic,folk,singer-songwriter` (sad) i.p.v. overal `driving,energetic,peak-time`). library.db-tagverdeling: "driving" 61,7% → kop is nu live 9,9%/orchestral 9,6%, niets domineert.
+  **KNOPFLER-VERVUILING OPGELOST:** root cause = er bestaat een TECHNO-artiest die letterlijk "Knopfler" heet (Deezer id 4640434); de downloader matchte die op "Mark Knopfler" en schreef `ARTIST=Mark Knopfler` ÍN de bestanden (genre Techno). Niet 2 maar 5 albums: Edicta Ep, Five Stars Ep, Microcosmo Ep, Pattern of The Soul Ep, The Way I Do EP (18 FLAC). Gefixt: `brew install flac` → metaflac in-place ARTIST/ALBUMARTIST → "Knopfler"; mappen → /Volumes/4tbdrive/Muziek/Knopfler/; 18 verouderde analyzer.db-rijen + 18 track_audio_features-rijen (library.db) verwijderd; heranalyse + retag → alle 18 nu `['techno','trance','hypnotic',…]` onder artiest Knopfler (Mark Knopfler 895→877 rijen). VAL: filter `album LIKE '%Ep%'` matcht óók "One D**ee**p River" — altijd op exacte albumnamen filteren. library.db `tracks`-rijen NIET met de hand aangeraakt (Roon-afgeleid, FK-risico) — Roon herstelt die bij rescan; radio was al schoon omdat de feature-join wegviel.
+  **BATCH 6 (v1.10.189 / ios-v1.7.154 / analyzer-v1.1.165, live 12:24):** twee resterende titelfouten uit de 11:57-build. (a) `periodPhrase()` — het profiel gaf een kaal bereik en het model knipte erin ("1976–2019"→"jaren '76", "2015–2024"→"jaren 15-24", Underworld op 45 tekens afgekapt tot "…uit de jaren"); nu kant-en-klare frases "de jaren 80"/"begin jaren 2000"/"van 1976 tot 2019". (b) TWEE bugs in de correctie-retry: het label luidt "melancholisch (gemeten: eerder vrolijk)" dus "ZONDER deze woorden" verbood óók *vrolijk* → nieuwe `TitleGrounding.violationWords` levert alleen de verboden spellingen; en in het BATCH-pad stuurde de retry de IDENTIEKE prompt opnieuw (`buildUser`'s `note`-parameter werd nergens doorgegeven) → kon per constructie nooit herstellen, nu met per-station ban-lijst. RESULT: 661 tests 0 failures, release exit 0; builds van 12:25 én 12:37 hebben **0 warnings / 0 grounding-afkeuringen** (was: Mark Knopfler + Emmanuel Lagumbay faalden élke build).
+  **CACHE-VAL (belangrijk voor de volgende keer):** `profileSignature` bevat de periode NIET, dus een wijziging van het profiel-FORMAAT maakt gecachete titels niet stale. Twee titels ("…jaren 15-24", "…uit de jaren") overleefden de fix daardoor; handmatig opgelost met `defaults delete artistradio.title.v3.<id>` + titlesig → hergenereerd als "Dansbare pop-electro" / "Stevige instrumentale techno". REGEL: bij elke wijziging van het profiel-formaat de sleutelversie meebumpen (v3→v4).
+  **EINDSTAND 12:40:** 24/24 radio's gesynct; Mark Knopfler = "Akoestische rock van de jaren negentig" (techno weg, 0 techno-tracks in de pool, 1.260 echte kandidaten).
+  **OPEN:** (1) restje 9B-taalkwaliteit: "uit de jaren 95" (mood:aggressive), "uit de jaren 2003-2022" (genre:electronic), "Melancholische filmscores en akoestisch" — modelcapaciteit, geen grounding-fout; overweeg groter titelmodel; (2) Haydn-als-Beethoven metadata ("Sínfonía No.93" = Haydn Hob.I:93); (3) 4 dode decade:4010-cachekeys in defaults (onschadelijk); (4) Roon-rescan van /Muziek/Knopfler nog niet bevestigd; (5) heranalyse loopt (41.323 v3), dedup-migratie wacht daarop.
+
+VORIGE (2026-07-18, avond): RADIO-GROUNDING GEFIXT — aanleiding: user "ik vind ze momenteel helemaal niet goed en de titels kloppen al helemaal niet. Op heel veel staat dat het akoestisch is terwijl dit helemaal niet zo is". Audit van de 46 gecachete radio-titels/-beschrijvingen (`defaults read com.roonsage.analyzer`, dát is de bron van de Qobuz-namen) + `analyzer.db` gaf VIER onafhankelijke oorzaken:
+  1. **Beschrijvingen werden NOOIT gevalideerd** — `TitleGrounding.violations()` kreeg alleen de titel; de desc ging ongefilterd naar cache+Qobuz. 3 van de 5 "akoestisch"-claims zaten daar (decade:1990 "Level 42/RHCP akoestisch", sonic:715320, sonic:984798 "John Williams/Hans Zimmer akoestisch") = pure LLM-fantasie.
+  2. **Dode zone 0,45–0,55** — `band()` beweert "akoestisch" pas ≥0,55 + percentiel ≥0,60, maar `violations()` keurde pas af ónder 0,45. Daartussen vrij spel. Gemeten: 7.161/41.699 v3-tracks (17,2%) in die zone, bibliotheekmediaan 0,46 = ligt erin.
+  3. **-v3 verschoof de schaal, drempels niet** — v2 avg 0,545 (54% ≥0,55) vs v3 avg 0,427 (30%); drempels waren absoluut en pre-v3.
+  4. **clampTitle liet NL-voegwoorden hangen** — vier titels stonden letterlijk zo op Qobuz: "Klassiek Instrumentaal: Melancholisch en", "Elektronische Party: Dansbare beats en", "Film & Theater: Akoestisch en", "R&B Sfeer: Vrolijke zangnummers met". Ook gezien: spookbak `decade:4010` uit een kapot jaartal.
+  **FIX (items 1-4, user koos die scope):** `band()` gesplitst in `bandWords()` + `bandDirection()`; attribuutclaims in `violations()` gaan nu door diezelfde `bandDirection` — een titel/desc mag alleen claimen wát het systeem zelf zou beweren, waarmee de dode zone per constructie dicht is (de `contradiction`-constanten zijn nu energie-only, gedocumenteerd). Nieuwe `violations(title:description:...)` met dedupe, bedraad op alle 3 meta-generatiesites (ArtistRadio, CustomRadio, Generate — die laatste heeft desc optioneel → `?? ""`). `clampTitle` peelt nu herhaald NL-voegwoorden (en/of/met/van/voor/…) mét herbeoordeling van blootgelegde interpunctie. SonicClusters:297 blijft de titel-only overload gebruiken (geen desc) maar profiteert van de strengere regel — dat was juist de plek waar de oude "RoonSage · Acoustic"-bug kon terugkomen.
+  **RESULT:** commit 36c2790 · v1.10.184 / ios-v1.7.149 / analyzer-v1.1.160 · 630 tests 0 failures · release exit 0.
+  **ITEM 5 ALSNOG GEDAAN (user: "Ja doe 5")** — v1.10.185 / ios-v1.7.150 / analyzer-v1.1.161, 630 tests 0 failures, release exit 0: `titlesig.v1` → `v2` gebumpt (RoonClient+ArtistRadio.swift:605). Elke lookup mist nu → `titleFresh=false` (:651) → alle 46 titels worden bij de eerstvolgende radiobuild hergenereerd onder de nieuwe grounding- én clamp-regels. Meevaller: de `needsTitle`-gate (:166-172) wordt hier óók door getriggerd (signature ontbreekt), dus de Ollama-warm-up vuurt vóór de batch en de eerste titel eet geen koude-start-timeout. Beschrijvingen self-healden al vanzelf (descsig hangt aan de track-set, die dagelijks roteert). **RESTBEPERKING ALSNOG GEFIXT** in v1.10.186 (user: "ik wil eerst die failbak-clamp erin") — zie hieronder.
+
+  **FALLBACK-CLAMP (v1.10.186 / ios-v1.7.151 / analyzer-v1.1.162, 633 tests 0 failures, release exit 0)**: faalde de generatie voor een station, dan viste `resolveTitle` de OUDE gecachete titel op — een afgekapte naam kon dus overleven zolang de LLM voor dat station faalde. **MIJN EERSTE VOORSTEL WAS FOUT en dat is de les**: ik noteerde "één regel, pas `clampTitle` toe op de gecachete titel". Dat was een no-op geweest — `clampTitle` begint met `guard title.count > max`, en de vier kapotte titels zijn 29-40 tekens, dus rúim onder de cap van 45. Hij zou groen getest hebben (geen test dekte dat pad) en niets gerepareerd hebben. ECHTE FIX: het afpel-gedeelte losgetrokken als `trimDangling(_:)` (:1070), onafhankelijk van elke lengtecap; `clampTitle` roept 'm nu aan ná de cut, en `resolveTitle` past 'm toe op de gecachete titel op de uitweg. Randgeval dichtgezet: trim EERST, oordeel DAARNA over bruikbaarheid — een titel die tot niets wegtrimt (pure interpunctie zoals `"&"`) mag niet als lege naam geserveerd worden. Getest: `testTrimDanglingRepairsAlreadyShortCachedTitles` is zelf-bewijzend (asserteert eerst dát `clampTitle` 'm ongemoeid laat, dan dat `trimDangling` 'm repareert). NIET unit-getest: de bedrading in `resolveTitle` zelf — dat is een instance-method op `RoonClient` die `UserDefaults.standard` aanraakt, en geen enkele test in deze suite construeert een RoonClient (conventie van het bestand: "Network + LLM paths are exercised in the app"). Peel-detail: de lus vereist een voorafgaande spatie, dus het laatste woord wordt nooit opgegeten — een titel peelt nooit tot leeg.
+
+EERDER (2026-07-18): BUG 2 (match_key-collision) GEFIXT in code — walker skipt nu op match_key i.p.v. (file_path, mtime); 625 tests 0 failures, release exit 0. NOG TE DOEN: deploy naar de mini (daar draait v1.1.158 = alleen de mtime-fix, dus de heranalyse staat er nog steeds stil) + live verifiëren dat v3 boven 39.233 uitkomt, daarna commit/push/tag. Zie ## Done en ## Open items.
+
+EERDER (2026-07-17): MINI-CRISIS + HERANALYSE-DUPLICAATBUG — GEEN CODE GESHIPT, alles operationeel/DB-werk op de mini (sessie draaide óp de mini). Aanleiding: user vroeg "gaat de heranalyse nog door?". Diagnose-keten (elke hypothese met meting weerlegd vóór de volgende):
+  1. **Analyzer HING** — poort 5766 LISTEN maar /health timeout, 0% CPU, proces leefde. `sample` (2×, byte-identieke stack) → main + GRDB.DatabaseQueue (SERIEEL) vast in `FeatureStore.contentSignature()` (de 30s `startRevisionRefresh`-timer, AnalyzerModel.swift:705) → `sqlite3_step → readDbPage` = major page-fault. ROOT CAUSE = **resource-uithongering**: analyzer RSS 6MB vs 2,2GB footprint (bijna volledig geswapt); Docker-VM had `MemoryMiB:9216` (9 van 16GB, settings-store.json), swap 5→13GB, boot-schijf 97% vol. Contra-intuïtief: contentSignature-query zelf duurt maar 1,9s (92k rijen, `COUNT(embedding)`+`LIKE '%arousal%'`) — geen livelock, puur swap-thrashing.
+  2. **Ingrepen** (infra, geen repo-code): Docker `MemoryMiB` 9216→6144 + `docker desktop restart` (containers kwamen niet auto-terug → handmatig `docker start` in dep-volgorde: zilean-db→zilean→nzbdav→cli_debrid→soulsync-webui; digarr-app-1 lag al 29u plat, met rust gelaten); **zilean gepauzeerd** (`docker unpause zilean` om terug te draaien — draaide zware IMDb-fuzzy-import, 193% CPU); analyzer op PID gekilld (SIGTERM genegeerd→SIGKILL, bevestigt de hang) + herstart (nieuwe PID, CLAP laadde <7s, walk draait weer 84-237% CPU). **Schijf 97%→84% (~26GB vrij)**: verwijderd Xcode/DerivedData 14G, Logs/CoreSimulator 6,9G, Caches (Dia/Homebrew/ShipIt) 4,4G. BEWUST GELATEN: CoreSimulator/Devices 5,5G (user bouwt nog iOS). NIET verplaatst: `.ollama` 15G — user stelde Elements voor maar dat is exFAT/USB-HDD → Ollama-modellen daarvandaan laden = trager (Ollama haalt nu al timeouts); geadviseerd op SSD te houden, Plex-metadata 14G is betere HDD-kandidaat.
+  3. **HERANALYSE-DUPLICAATBUG (kern)** — `markAllForReanalysis()` zette `file_mtime=-1`; de heranalyse schrijft met de ECHTE mtime en de index `idx_tf_path(file_path,file_mtime)` is NIET-uniek + geen unique-constraint op file_path → er ontstaat een NIEUWE v3-rij naast de oude v2-rij i.p.v. een update. Gevolg: 37.005 v3-rijen MISTEN hun LLM-tags (die stonden op de v2-duplicaat). STATE-claim van 2026-07-13 ("tags/mb_genres/populariteit overleven want upsert's ON CONFLICT raakt ze niet") is dus ONWAAR — er is geen ON CONFLICT die op file_path matcht. DB was 92.467 rijen / 55.431 unieke paden (37.036 duplicaten). ECHTE voortgang op UNIEKE bestanden = 39.233 v3 / 16.032 alleen-v2 / 166 NULL = **71% klaar, niet 42%** (de "53k v2-achterstand" was grotendeels spook).
+  4. **DATA-FIX (user koos: tags migreren + spook opruimen)**: script `~/Library/Application Support/RoonSageAnalyzer/dedup-migrate.sql` (HERHAALBAAR, idempotent) — pass 1 v2→v3 COALESCE-migratie van 19 enrichment-kolommen (v3 wint, vult gaten) + DELETE v2-spook waar v3 bestaat; pass 2 idem voor NULL-model spook (wipe-incident 13-07). Getest op VACUUM-kopie (integrity ok), toen LIVE gedraaid (BEGIN IMMEDIATE + busy_timeout 60s, walker draaide door, 1,8s, geen lock-fout). RESULTAAT live: 92.467→55.463 rijen, v3 zonder tags 39.233→2.229 (rest had nooit tags), achterstand 16.063 intact, integrity ok. Backup: `analyzer-backup-pre-dedup-20260717.db` (384M).
+  **⚠️ ONOPGELOST — zie Open items**: (a) de duplicaatbug KOMT TERUG (na cleanup groeiden dup-paden weer 1→112 in ~15min) want de CODE is niet gefixt — data-fix is dweilen; user koos bewust data-fix boven code-fix, dus periodiek dedup-migrate.sql herdraaien tot de walker-code wél update i.p.v. dupliceert. (b) **v3-count staat al sinds de 1e meting vandaag (15:31) EXACT op 39.233 — 2u stil** terwijl 96 rijen een verse analyzed_at ná de cleanup hebben en totaal/​v3 beide constant blijven: intern tegenstrijdig, ik doorgrond de walker niet volledig. Onduidelijk of de heranalyse NETTO voortgang maakt op de 16k achterstand → vereist walker-code-analyse (LibraryWalker.swift mode-logica :110-118 + upsertBatch-key), geen losse queries meer. **Release notes (Jul 12-13 push) staan nog open** — user wil die, na dit.
+
+EERDER (2026-07-13, nacht): GAPS B+C+D+G GESHIPT — AudioMuse-audit afgerond op E/F na (bewust overgeslagen: HNSW pas >100k tracks nuttig; geen onderhouden Swift-UMAP). Drie batches: **B+D** v1.10.180/ios-v1.7.145/analyzer-v1.1.155 — SongPaths embedding-modus = waypoint-interpolatie op de lijn from→to (gelijkmatige gradiënt, monotonie-getest; scalar-fallback blijft greedy) + alchemy SUBTRACT-gate (kandidaat dichter bij subtract- dan add-centroid → drop, parametervrij relatief) + Gumbel-top-k `temperature`/`variationSeed` (deterministisch per seed, T=0=oud gedrag) + Remix-knop in SongAlchemyView (seed++ per druk, T=0.35). **C** v1.10.181/ios-v1.7.146/analyzer-v1.1.156 — lyrics-search: schema v41 `lyrics_fts` (external-content FTS5 + trigger-trio + backfill over track_lyrics.plain, veilig want upsertLyrics = ON CONFLICT DO UPDATE), `DatabaseManager.searchLyrics` (snippet + match_key-dedupe + found=1-filter), remote-aware `RoonClient.searchLyrics`, endpoint `/lyrics/search` (LET OP: route MOET vóór de `hasPrefix("/lyrics")`-check), UI = "In songteksten"-sectie in SonicSearchView (sonisch+lyrisch parallel). **G** v1.10.182/ios-v1.7.147/analyzer-v1.1.157 — `MoodCalibration` (z-score per mood-label t.o.v. bibliotheekverdeling; CLAP-tekst-prior-bias weggekalibreerd; vlak profiel → geen station; <8 waarnemingen → rauwe-argmax-fallback) toegepast in moodBuckets; RadioCategoryTests-verwachting bewust aangepast (absolute 0.3-floor-semantiek → bibliotheek-relatief, test werd strikter: eist nu 3e bucket). 613 tests 0 failures, release groen. **Server-kant van C draait pas remote na analyzer-redeploy — bewust NIET gedaan: de heranalyse-walk loopt op de mini; redeploy na afronding** (dan meteen v1.1.157 pakken). NOTED: andere argmax-mood-sites (SonicClusters.label, MoodSeeding, facet-filter RadioCategories:343) kunnen MoodCalibration later adopteren.
+
+EERDER (2026-07-13, avond): GAP A — CLUSTERING-KWALITEITSSCORING GESHIPT — v1.10.179/ios-v1.7.144/analyzer-v1.1.154. `SonicClusters.compute` kiest de beste k via deterministische k-sweep (kandidaten 6→20 stap 2, prefix-stabiele farthest-first seeds, laagste k wint bij gelijke score) i.p.v. vaste k≈√(n/2). Composietscore `clusteringScore` (internal, getest): 0.5·centroid-silhouette + 0.3·mood-purity + 0.2·mood-diversiteit − 0.1·kleine-cluster-penalty (≈ AudioMuse's fitness zonder de evolutionaire loop — bewust: k≤20 maakt uitputtend zoeken goedkoper dan muteren). k-means-kern uitgelicht naar `runKMeans`/`farthestFirstSeeds` (gedrag identiek); homogene-library-fallback ([seedRows.count] kandidaat) houdt de bestaande regressietests (identiek→leeg, 3 richtingen→≤3) exact in stand. Tests in de BESTAANDE SonicClustersTests-class in RadioEngineTests.swift (twin-les: class zat niet in een eigen file). 604 tests 0 failures, release groen. Kost ~5-6× oude k-means-cachebouw (achtergrond, acceptabel). LET OP client-side: buurten hervormen zich bij de eerstvolgende cache-rebuild (ids zijn medoid-gestabiliseerd maar een andere k hertekent de indeling — verwacht gedrag).
+
+EERDER (2026-07-13, avond): AUDIOMUSE-HERANALYSE LIVE OP DE MINI + EMBEDDING-WIPE-INCIDENT GEFIXT — analyzer-v1.1.153 gedeployd (PID 7880), volledige heranalyse van 58.915 tracks LOOPT (dagen; user-akkoord in Constraints). Sequence: v1.1.152 gedeployd → sentinel `file_mtime=-1` op alle rows (backup analyzer-backup-pre-full-reanalysis-20260713.db) → walker startte scalar-only en WISTE 166 embeddings. CAUSE: `startAnalyze` bouwde LibraryWalker ZONDER clap (AnalyzerModel.swift:176) — in-app hoofdwalk was altijd al scalar-only (embeddings kwamen via aparte backfill-walkers); `.full`-upsert schrijft embedding=NULL → pas destructief met reanalyze-all. FIX (7ea66e3, v1.10.178/ios-v1.7.143/analyzer-v1.1.153): nieuw `awaitCLAP()` — startAnalyze wacht op de CLAP-load vóór de walker start; load-faal → expliciet gelogd scalar-only. LIVE GEVERIFIEERD: V3_COUNT=30 en groeiend, TOTAL_EMB 57.553→57.583 (niets gewist meer); de 166 beschadigde rows self-healen (model NULL ≠ v3 → embeddingOnly). Verifieer over ~2 dagen: `SELECT COUNT(*) FROM track_features WHERE embedding_model LIKE '%-v3'` → moet naar ~58.9k lopen; loudness/bpm dan full-track. Client-app NIET gedeployd (constraint).
+
+EERDER (2026-07-13, avond): AUDIOMUSE-PARITEIT ANALYZER GESHIPT+GETAGD — v1.10.177/ios-v1.7.142/analyzer-v1.1.152. Aanleiding: AudioMuse-AI-audit (user: analyse moet "helemaal kloppen zoals bij audiomuse", duur irrelevant → Constraints). Vergelijking hun echte code (tasks/analysis.py + clap_analyzer.py) vs onze analyzer: hun CLAP dekt de HELE track (10s-segmenten/5s-hop) vs onze 3×10s; scalars full-track vs onze eerste-120s. 4 ingrepen: (1) `CLAPModel.embed(url:)` nu full-track windowed (10s/5s-hop + slot-segment, mean→L2, cap 30 min, fallback = oud 3-venster-pad als `embedSampledWindows`), modelversie `-v2`→`-v3` → walker her-embedt ALLES automatisch (embedding+moods+attributes, scalars behouden); (2) `AudioDecoder` chunked read/convert-loop (API gelijk) — full-track hi-res kost geen GB-inputbuffer meer; (3) scalar-default full-track: `AudioAnalyzer.analyze` excerptSeconds 120→0 + one-shot UserDefaults-migratie `full_track_analysis_migrated` (bestaande 120s-instelling wordt éénmalig geflipt; bewust terugkiezen blijft) + picker-label; (4) NIEUW "Heranalyseer alles…"-knop (AnalyzerView, confirmationDialog) → `FeatureStore.markAllForReanalysis()` (sentinel file_mtime=-1 → walker-mode .full voor álles; tags/mb_genres/populariteit overleven want upsert's ON CONFLICT raakt ze niet — unit-getest). 602 tests 0 failures, release groen. BEWUST NIET overgenomen van AudioMuse: MusiCNN+supervised-mood-head (CLAP-zero-shot volstaat), Whisper-lyrics (LRCLIB-lookup is slimmer). Deploy naar mini + heranalyse-trigger + gap A (clustering-kwaliteitsscoring) = volgende stappen deze sessie. Engine-gaps A-G uit de audit open: A clustering-kwaliteit, B centroid-geïnterpoleerde SongPaths, C lyrics-search, D alchemy-softmax, E HNSW, F UMAP, G mood-centroïden.
+
+EERDER (2026-07-13): CLAP TEKST→AUDIO VIBE-QUERY (LONG-TAIL FASE 2) GESHIPT+GETAGD+LIVE — v1.10.176/ios-v1.7.141/analyzer-v1.1.151 (commit 154e425, 600 tests 0 failures). 5e ontdek-batch. `/discovery/run` krijgt optionele `textQuery`: CLAP-text-embed (`CLAPModel.textEmbedding`, gate `canEmbedText`) → kNN tegen BEZETEN library (`VectorIndex.nearest`) → artiesten achter de dichtstbijzijnde owned tracks worden de producer-seed (vrije-tekst-generalisatie van F12a's 6 mood-buckets; nieuw puur `DiscoveryTextSeeding.topArtists`, 5 tests). Diezelfde text-vector = sonic-fit re-rank-doel; op tekst-run wordt de HÉLE batch gererankt met sterker gewicht (`sonicFitTextWeight 0.30`, `applySonicFitRerank` kreeg topK/weight-params). Trigger "text:<q>", bypass skip-guard. `DiscoveryRunRequest.textQuery` + endpoint-parse. **User koos "eerst live verifiëren, dan pas shippen" én daarna "eerst re-rank versterken, dan shippen"** — beide gedaan. LIVE bevindingen op de mini: (1) mechanisch OK — textQuery geparsed, tokenizer laadt, seeding+re-rank vuren, juiste trigger. (2) EERSTE test "dark ambient drone" (top-15, zwak gewicht) → nauwelijks sturing (batch 31 ≈ batch 30); oorzaak = seed-onafhankelijke dataset-producer domineert + re-rank kan alleen HERORDENEN wat producers voorstellen. (3) na versterking "dark ambient drone" (hele batch, 0.30) → Kesha/rap bovenaan = CLAP-RUIS (geen echte ambient-matches in de pool voor een rock/pop-library). (4) EERLIJKE test "energetic upbeat electronic dance" (library-nabij) → kop batch 34 = Steve Aoki/Cassius/Dimitri Vegas/Alok/Clean Bandit (dance/electronic ZICHTBAAR naar boven, 45/49 gererankt) = WERKT. CONCLUSIE: fase 2 stuurt goed voor haalbare/library-nabije vibes; vibes ver van de collectie blijven ruizig want text→audio-re-rank kan geen kandidaten INJECTEREN die producers nooit voorstellen → dat is fase 3. Draaiende binary = analyzer-v1.1.151 (PID 82984, was 59792), matcht de tag → geen re-deploy. Client-app NIET gedeployd (constraint). Follow-ups: **UI** (feed-tekstveld voor de vibe-query — nu alleen server/curl); **fase 3** pre-embedded Qobuz-catalogus-index voor volwaardige tekst→audio kNN (injecteert écht nieuwe kandidaten, lost het off-library-plafond op); transparantie-follow-up (score genudged maar ScoreComponents niet).
+
+EERDER (2026-07-13): CLAP SONISCHE-FIT RE-RANK (LONG-TAIL FASE 1) GESHIPT+GETAGD+LIVE — v1.10.175/ios-v1.7.140/analyzer-v1.1.150 (commit 368c2ab, 595 tests 0 failures). 4e ontdek-batch (na LB-vol + MMR + Deezer). Kandidaten die je niet bezit zijn nooit geanalyseerd → score leunde alleen op collaboratief/metadata; nu wordt de **top-15 van elke batch op ECHTE klank herrankt**. Keten: nieuw `RelatedArtistsClient.topTrackPreview(forArtist:)` (Deezer /search/track top-track preview, name-confirmed op rank) → `DiscoverySonicFit.cosineToTaste` (download preview naar temp .mp3 → `CLAPModel.embed(url:)` → dot tegen de L2-genormaliseerde smaak-centroid; beide genormaliseerd dus dot=cosine) → `DiscoverySonicFit.nudge` (bounded ±0.12, neutraal bij cosine 0.3, puur/4 tests) → `applySonicFitRerank` (tussen pipeline.run en opslaan, per-run memo op artiest, throttled via de client-rate-gate). `SonicFitClap` actor lazy-laadt ÉÉN CLAPModel in de .direct-pipeline (RoonSageCore had er nooit een; best-effort, nil=stil uit — CLAPModel.dot bleek internal → dot inline berekend). Config-flag `discoverySonicFit` (default aan, UserDefaults, server-side zoals de andere knoppen). **User koos expliciet "eerst live verifiëren, dan pas shippen"** → lokale analyzer-v1.1.150-build gedeployd op de mini (PID 59792, was 49157) VÓÓR de tag; verse run → log "sonische-fit re-rank toegepast op 14/15 topkandidaten" + batch 30 (47 items) opgeslagen; kop scores 0.881→0.621 sonisch gererankt, álle bronnen intact (dataset 28/similar 7/lb-exploration 5/deezer 5/lb-radio 3/qobuz 2/gap 2, geen regressie); 1/15 geen vindbare preview = verwacht bij strict matching. PAS DAARNA getagd (draaiende binary ís de geshipte code → geen re-deploy nodig). Client-app NIET gedeployd (constraint). BEKENDE beperking (transparantie-follow-up): score wordt genudged maar `ScoreComponents` niet → de UI-equalizer ("Score-opbouw") somt niet exact op de nieuwe score (kosmetisch; sonic-fit als eigen component = aparte model+UI-batch). Vervolg: **fase 2** tekst→audio-query als candidate-generator (CLAP text-encoder + /text-embed bestaan al), **fase 3** pre-embedded Qobuz-catalogus-index voor volwaardige kNN-long-tail.
+
+EERDER (2026-07-13): ONTDEK-BATCH 2+3 (MMR-DIVERSITEIT + DEEZER-BRON) GESHIPT+GETAGD — batch 2 v1.10.173/ios-v1.7.138/analyzer-v1.1.148 (commit 08d6f40), batch 3 v1.10.174/ios-v1.7.139/analyzer-v1.1.149 (commit 830c7db), 591 tests 0 failures. Vervolg op ontdek-batch 1 (LB), zelfde aanleiding (user wil écht-nieuwe muziek + minder "dezelfde picks"). **Batch 2 — MMR-diversiteit:** de eindselectie was `scored.sort{score}` → `prefix(maxItems)` = puur greedy top-N (DiscoveryPipeline.swift:264), waardoor één artiest/genre-buurt een batch domineerde. Nieuw `DiscoveryRerank.mmr` (Maximal Marginal Relevance, puur/6 tests): kiest iteratief max `λ·relevantie − (1−λ)·max-sim-met-al-gekozen`; sim = zelfde artiest (1.0) of genre-Jaccard; λ=0.75 houdt relevantie dominant (breekt alleen clusters). GEVONDEN onderweg: de populariteits-penalty-op-de-dial die ik als apart werk had genoemd BESTOND AL (`DiscoveryScoring.popularityNudge`, toegepast op :253) → uit scope gehaald, geen dubbel werk. **Batch 3 — Deezer "fans ook":** nieuwe producer `deezer-related` hergebruikt de bestaande keyless `RelatedArtistsClient` (Sonic/RelatedArtists.swift, name→id→related, name-confirmed) — tot nu toe alleen radio-sequencing — om niet-bezeten verwante artiesten te vinden = tweede onafhankelijke collaboratieve graaf naast Last.fm/LB. Keyless → altijd aan (uitschakelbaar via tuning-toggle), badge "Deezer", geen nieuwe HTTP-code, geen aparte test (network-glue conform DiscogsLabelsProducer/F7a). Deezer-shapes live geverifieerd (/search/artist→data[0].id, /artist/{id}/related→data[].name). **GEDEPLOYD + LIVE GEVERIFIEERD op de mini**: analyzer-v1.1.149 signed release, /Applications vervangen + herstart (PID 49157, was 41836), geen crash, 5766=58915 + 5767=76571 gezond. Forceerde verse run → batch 29 (48 items): **`deezer-related` leverde 5 nieuwe artiesten** (Loreena McKennitt/Cassius/Secret Garden/Gregorian/Étienne de Crécy, door MB-resolve+filter). **MMR-effect zichtbaar**: top-10 in feed-volgorde = 10 verschillende genres op rij (prog rock/celtic/dream pop/rap/pop/industrial/electronic/alt rock/rock/rock-'n-roll), geen genre-cluster aan de kop (batch 28 was dataset-34-dominant; batch 29 dataset 26 + bronnen gelijkmatiger). Spreiding: dataset 26, similar-artist-web 7, listenbrainz-radio 5, listenbrainz-exploration 5, deezer-related 5, qobuz-catalog 2, gap-fill 2. Client-app NIET gedeployd (constraint). Openstaande ontdek-vervolgen: **CLAP long-tail-motor** (candidates embedden via preview-audio + kNN tegen Qobuz-catalogus + tekst→audio-query — grootste bron écht-nieuwe muziek, meerdelig); **Steck genre-kalibratie** (vereist genre-PROPORTIES uit de DB die nu niet in de pipeline zitten → aparte plumbing-batch). Dood spoor blijft: Spotify (nov-2024 uit), AcousticBrainz (2022 stil).
+
+EERDER (2026-07-13): LISTENBRAINZ VOLLEDIG BENUT (ONTDEK-BATCH 1) GESHIPT+GETAGD — v1.10.172 / ios-v1.7.137 / analyzer-v1.1.147 (commit e2e9eba, 585 tests 0 failures, build groen). Aanleiding (user): "ik wil écht nieuwe muziek ontdekken die ik nog niet heb, op basis van wat ik al heb — volgens mij gebruik ik alleen ListenBrainz". 2 parallelle agents (codebase-audit + web-research 2026): **bevinding = user onderschat eigen app** — de Ontdekkingen-motor (Track F) draait al 10 producers (Last.fm/MB/Discogs/Qobuz/AI/charts/release-radar/gap-fill/relationships/dataset), library-first afgedwongen in DiscoveryFilter. LB werd echter maar half benut. **Batch 1 (van meerdere)**: nieuwe producer `listenbrainz-exploration` (ListenBrainzExplorationProducer.swift) maakt LB's eigen gepersonaliseerde aanraders voor het eerst outward-discovery: (a) **Weekly Exploration** (createdfor-playlist, hergebruikt bestaande `userPlaylists`/`playlistTracks`) → nieuwe-voor-jou artiesten; "Jams" (her-luisteren van bezeten muziek) bewust overgeslagen; (b) **fresh_releases** (nieuwe client-methode, shape live geverifieerd tegen de API = payload.releases[]) → nieuwe Album/EP van artiesten die je draait, breder dan de watchlist-only Release-Radar; toekomstige/niet-Album/bezeten releases voorgefilterd. Plus: **avontuurlijkheids-dial bereikt nu LB Radio** — `artistRadio` stond hardcoded op .medium, mapt nu via nieuwe `ProducerContext.adventurousness` op easy/medium/hard (veilig=dichtbij+populair, avontuurlijk=dieper de similarity-graaf in); grens-mapping (0.34/0.67) unit-geborgd (ListenBrainzProducerTests), 0.35-default blijft medium (ongewijzigd gedrag). Nieuwe bron verschijnt auto in tuning-toggles + inzichten-badge ("LB Ontdekking"). **GEDEPLOYD + LIVE GEVERIFIEERD op de mini** (sessie draaide óp de mini): analyzer-v1.1.147 signed release-build, /Applications vervangen + herstart (PID 41836, was 31598), geen launch-crash, 5766=58915 + 5767=76571 gezond. Forceerde een verse run (POST /discovery/run, laatste batch was 06:02Z buiten skip-guard) → batch 28 (manual, 07:39Z, 49 items): **`listenbrainz-exploration` leverde 6 items** die door MB-resolve + Qobuz-resolve + score + library-filter kwamen — 2 albums via fresh_releases (Pink Floyd "8-Tracks", Alan Parsons Project "Pyramid (Sessions)") + 4 artiesten via Weekly Exploration (Pat Benatar/Rockwell/Kim Carnes/Laura Branigan). Netto batch-verdeling: dataset 34, similar-artist-web 6, listenbrainz-exploration 6, qobuz-catalog 2, gap-fill 2, listenbrainz-radio 1. Client-app NIET gedeployd (constraint). Gotcha genoteerd: `sqlite3 ?mode=ro&immutable=1` ziet concurrent writes van de levende server NIET (snapshot) → gebruik `?mode=ro` (zonder immutable) om verse batches te lezen. Roadmap-of-record voor vervolg (uit web-research, gewogen op waarde): **(2) CLAP long-tail-motor** = candidates embedden via preview-audio (Deezer/Qobuz) + kNN tegen de Qobuz-catalogus op de smaak-centroid + tekst→audio-query — de meeste écht-nieuwe muziek zónder collaboratief signaal; **(3) slimmere herweging** = MMR-diversiteit + Steck-genre-kalibratie + populariteits-penalty gekoppeld aan de dial + Deezer `/artist/{id}/related` als extra gratis producer. **DOOD SPOOR (niet bouwen):** Spotify recs/related/audio-features (sinds nov-2024 uit voor nieuwe apps, 404), AcousticBrainz (sinds 2022 stil) → F7c "Spotify Saved Albums" op de roadmap kan geschrapt. Architecturale peer om te bestuderen: AudioMuse-AI (lokale embeddings + ANN, zelfde library-first-filosofie).
+
+EERDER (2026-07-13): ONTDEK-DIFFERENTIATIE GESHIPT+GETAGD — v1.10.171 / ios-v1.7.136 / analyzer-v1.1.146 (commit 7424839, 584 tests 0 failures, release groen). Aanleiding (user): "veel ontdek-features tonen dezelfde nieuwe ontdekkingen terwijl ik oude muziek wil herontdekken of écht nieuwe wil vinden". 2 Explore-agents → kernoorzaak: alle Ontdek-surfaces convergeren op één `personalTasteVector` + dezelfde play-count-top, ZONDER cross-feature-dedup; beide (pipeline + weekly) trekken bovendien nieuwe tracks van hetzelfde LB-account. 4 ingrepen (P0-P3, allemaal getest): **P2** `DatabaseManager.dormantAlbums(days:)` = owned albums ooit-veel-gespeeld-maar-lang-niet, gerankt op play-diepte NIET taste-cosine → shelf "Weer opzetten" + dormant in Herontdek-hero (echte "herontdek oude muziek"). **P3** weekly LB-staart sluit artiesten uit de laatste "Nieuw voor jou"-batch uit (`latestRecommendationItems`). **P1** `TasteSeeds.diversifiedSeeds` = ~20% pipeline-seeds uit smaak-PERIFERIE (owned/embedded, verder van centroid), roterend per dag via salt, core-first → producers expanderen niet meer uit dezelfde buurt. **P0** `DiscoverWeeklyPlaylist.albumKeysSurfaced/trackKeysSurfaced`; Herontdek filtert wat de weekly al toont (incl. shuffle-refetch). Bevat ook de al-lopende weekly-selectSeeds-rotatie-WIP (dezelfde as). **P1/P3 draaien server-of-record → analyzer-redeploy nodig voor remote**; P2/P0 client-side. UI (nieuwe shelf/hero/filters in DiscoveryView) headless niet verifieerbaar → op toestel checken. KOEL_AUDIT.md-WIP bewust NIET mee-gecommit. Roadmap-of-record voor evt. vervolg: mogelijke uitbreiding = digest ook ontdubbelen tegen weekly, en Herontdek-shelves onderling (undiscovered↔dormant↔forgotten) hard dedupen.
+
+EERDER (2026-07-12, nacht): FEATURE-AUDIT + IA-CONSOLIDATIE + SLIMMER — 10 batches GESHIPT+GETAGD, v1.10.161→v1.10.170 / ios-v1.7.126→135 / analyzer-v1.1.136→145, alle CI groen (macOS-DMG + iOS-TestFlight + analyzer + Native Tests). ALLES client-side, NIETS op de mini. Zie native/docs/FEATURE_AUDIT.md (roadmap-of-record). Aanleiding: "veel features, weinig assen" — 3 code-verkenners → onder ~23 sidebar-items draaien 4 motoren. **IA-reorg (B1-5): sidebar ~23 → 15 items** in 6 intentie-groepen (Play/Create/Stations/Explore/You/System, `SidebarSection` in RootView.swift). Naamomkering weg ("Nieuw voor jou"=unowned / "Herontdek"=owned). 2 wezen (DJ Modes, Sonic Journeys) zichtbaar in Stations. macOS↔iOS uit dezelfde groepen. Merges = dunne container-views met segmented modus-picker die bestaande views embedden (engines ongewijzigd): SonicLabView, TasteHubView, StationsHubView+DJView, CreateHubView (`.generate`→hub, geen nieuw enum-case). **Slimmer (B6a-e), allemaal client-side:** smaak-gestuurde Herontdek (`undiscoveredAlbums` op cosine(album-centroid, personalTasteVector) i.p.v. RANDOM; nieuwe DB-query `undiscoveredAlbumCandidates`, fallback), Ask→Generate-doorgeef (`GenerateView(initialPrompt:)` + "Verfijn tot playlist →"), auto-persona (pure geteste `DJMode.forTimeOfDay` + pref `djAutoplayAutoPersona`), Music Map-generator ("Start station hier"=startTrackRadio), feedback-bus (herbruikbaar TrackFeedbackButtons op Genereer/Vraag het, schrijft via bestaande setFeedback → #2 bleek géén serverwijziging). 579 tests 0 failures. CI-flake gezien: analyzer-release codesign "A timestamp was expected but was not found" (Apple timestamp-server) → `gh run rerun --failed` → groen (geen codefout). LOSSE WIP (DiscoverWeekly + KOEL_AUDIT) bewust ONGEMOEID en NIET mee-gecommit. Openstaande verfijningen (niet gedaan): hubs écht 1 pipeline delen i.p.v. embedden; Sonic Lab-feedbackrijen; Music Map lasso-regio.
+
+EERDER (2026-07-12, avond): Qobuz-klassiek-matching GESHIPT+GETAGD — v1.10.160 / ios-v1.7.125 / analyzer-v1.1.135 (ac095fa, 577 tests 0 failures, release groen). Opera-radio synct dagen stabiel 16-19/30; oorzaak: Roon "Werk: Componist: scene...aria"-titels raken Qobuz' catalogusvorm nooit als één string + misses waren onzichtbaar. Fix: (1) klassieke query-tiers in candidateQueries (laatste segment + primaire artiest / los); (2) segment-bewuste titel-score 2 in scoreCandidate (paar moet iemands LAATSTE segment bevatten, ≥12 genorm. tekens, artiest-bevestiging blijft vereist, recovery blijft exact-only); (3) resolveAll-helper logt per sync welke tracks niet resolven (cap 20). 6 nieuwe QobuzClientTests met echte fixtures. DEPLOY: analyzer-v1.1.135 live op de mini (sessie draaide óp de mini; PID 56825, was 25283); loopback geverifieerd: 5767/health 76571 tracks + 5766/health 58884 + /on-this-day echte data; /artist-radios direct na herstart leeg = verwacht (in-memory, vult bij eerste sync). Client-app NIET gedeployd (constraint). GEVERIFIEERD LIVE (19:58): opera-radio (hertiteld 'Drijvende opera', zelfde Qobuz-id 66655348) 22/30, wás 18/30; miss-log benoemt de 8 resterende. Restklassen voor evt. vervolg: (a) Romeins vs Arabisch deelnummer ('1. Allegro' ↔ 'I. Allegro' — exact-match faalt op één teken), (b) performer ≠ primaire artiest (dirigent/orkest vs solist op Qobuz; track-confirm kent geen credited-any-member zoals scoreAlbumCandidate wél), (c) opnames die echt niet op Qobuz staan. Ook zichtbaar: eerste-segment-rijen (Qobuz zet hele scena als één track 'Ah! perfido, Op. 65') worden niet gequeried — alleen laatste-segment-tiers. Geen regressies op de andere radio's (28-30/30 gelijk).
+
+EERDER (2026-07-12): AI-generatie σ-vloer-fix GESHIPT+GETAGD — v1.10.159 / ios-v1.7.124 / analyzer-v1.1.134. Log-diagnose "Zachte Steden" (18:34): Dire Straits-seed + ambient-jazz-prompt → seed-gekalibreerde σ-vloer 0.817 gate-te ALLE 95 kandidaten weg → stille pool.shuffle()-fallback gepresenteerd als "AI-gecureerd". Fix (1) sonicRank herrankt éénmalig ZONDER vloer als de vloer < min(doel, geanalyseerde pool) ranked oplevert (relaxpatroon van genre/mood-gates; trace "σ-vloer verzacht"); (2) resterende shuffle-fallback nu zichtbaar: `GenerationResult.fallbackNote` (optioneel+defaulted, wire-compat + legacy-payload-test) + waarschuwing in GenerateView (waveform.slash, droppedNote-patroon); buildCandidatePool → expliciete `sonicRanked`-tupelvlag. RESULT: a5a7d22, 571 tests 0 failures, release-build groen. NIET op de mini gedeployd (generate draait server-side → deploy nodig voor remote clients). Open: E2E-scenario (seed+botsende prompt → geen shuffle) alleen build/test-gedekt, live her-run in app nog te doen; NOTED: 'Melancholische Opera-Partij' synct 18/30 naar Qobuz (aparte kwestie, wordt nu opgepakt).
+
+EERDER (2026-07-12): Sonic Journeys GESHIPT+GETAGD (Plexamp station-types, hernoemd) — v1.10.158 / ios-v1.7.123 / analyzer-v1.1.133. Vervolg op DJ-modi. Drie station-types + Qobuz-mirror voor de types met een vaste tracklijst. **Album Radio**: eindeloos station geseed op een album — `startAlbumRadio()` haalt de geanalyseerde albumtracks (`tracksForAlbum`) en hergebruikt `startRadio` 100% (id "album:", valt door candidateGate → nil); ingang = radio-knop in de album-header (AlbumDetailView). **Time Machine**: eindige chronologische reis oud→nieuw — `buildTimeMachine()` + pure/geteste `timeMachineOrder()` (spreidt over decennia, sorteert op jaar; tracks zonder plausibel jaartal vallen af — jaartal komt uit bestandstags, niet Roon); speelt via `curateTracks`. **The Bridge**: A→B — hergebruikt de bestaande SongPaths-engine, hernoemd van "Song Paths" + Qobuz-sync-knop. **Qobuz-mirror**: `syncJourneyToQobuz()` = user-initiated save in de gedeelde "RoonSage · "-namespace (`qobuzPlaylistName` public gemaakt); knoppen op Time Machine + The Bridge. UI: nieuwe `SonicJourneysView`-hub + sidebar-item `journeys` + strings + link in SonicRadioView. GEEN RadioCategory/DB/server/protocol-wijziging. RESULT: 860969e, 570 tests 0 failures, debug + release-build groen, iOS xcodebuild BUILD SUCCEEDED. swiftlint NIET lokaal draaibaar (niet geïnstalleerd → CI-gate open). Client-only, niet op de mini gedeployd.
+
+EERDER (2026-07-12): DJ-modi GESHIPT+GETAGD (Plexamp Guest-DJ, hernoemd) — v1.10.157 / ios-v1.7.122 / analyzer-v1.1.132. Zes Engelse persona's als thin preset over de bestaande RadioEngine: The Purist / The Wanderer / The Vibe / The Superfan / The Timekeeper / The Daredevil (avontuurlijkheid + arc + seed-gate: mood/artiest/decennium). Nieuw `Sonic/DJMode.swift` (+ DJModeTests, 11 tests). Runtime: `startRadio`/`startTrackRadio`/`buildRadioCandidates` krijgen `djMode:`/`arc:` (additief, default nil/.smooth); persona bewaard in RadioRunState → top-ups blijven persona-vormig; `composeGates` AND't base-gate ∧ mode-gate. Guest-DJ AUTOPLAY: `Zone.queueItemsRemaining` geparsed, `maybeAutoplayGuestDJ` in applyZoneUpdate seedt een persona-station op de now-playing track als de wachtrij bijna leeg is (toggle `djAutoplayEnabled`, default uit; idempotent per track). Prefs `selectedDJMode`+`djAutoplayEnabled` stored+observable op RoonClient (UserDefaults). UI: `DJModesView` (persona-grid + autoplay-sectie), sidebar-item `djModes`+strings, link in SonicRadioView, "Start als DJ…"-submenu in PlayActionsMenu. RESULT: 3db9fe2, 565 tests 0 failures, debug + release-build groen, iOS xcodebuild BUILD SUCCEEDED. swiftlint NIET gedraaid (niet geïnstalleerd op deze machine → CI-lintgate open). Alleen client-UI/-runtime; geen DB/server/protocol-wijziging, niet gedeployd op de mini. Follow-ups (niet gedaan): Plexamp station-types (Sonic Adventure / Time Travel / Album Radio); Qobuz-mirror per persona.
+
+EERDER (2026-07-09): NowPlayingBar écht gedockt (v1.10.156 / ios-v1.7.121 / analyzer-v1.1.131) — vervolg op v1.10.155. Styling-fix alleen was niet genoeg: `.safeAreaInset(edge:.bottom)` op de NavigationStack insette de scroll-content van een large-title `List` NIET, dus in de Ontdek-hub schoven de laatste rijen (bv. Jaaroverzicht) tóch onder de balk, zelfs onderaan de lijst (Library leek oké door eigen onderchrome-inset). Fix: nieuwe helper `nowPlayingBarDocked()` plaatst de balk als VStack-sibling ONDER de NavigationStack → neemt echte hoogte in (rijen kunnen er niet onder), blijft buiten de stack dus persistent bij pushes. Alle 4 iOS-tabs omgezet; macOS split-detail houdt `nowPlayingBarInset`. RESULT: 558aa5e v1.10.156/ios-v1.7.121/analyzer-v1.1.131, 552 tests 0 failures. Visueel niet headless verifieerbaar (vereist toestel). Niet gedeployd (alleen client-UI).
+
+EERDER (2026-07-09): NowPlayingBar-styling gedockt (v1.10.155) — mini-player van zwevende afgeronde kaart (schaduw+marge+translucent) → volledige-breedte balk (.bar + top-hairline). RESULT: 4908b9c, 552 tests 0 failures.
+
+EERDER (2026-07-09): Mac-client vastloper-fix geshipt+getagd (v1.10.154 / ios-v1.7.119 / analyzer-v1.1.129) — alle synchrone GRDB-reads van de MainActor gehaald (per-seconde NowPlaying-read was de hoofdoorzaak). Zie ## Done. Niet gedeployd (alleen client-code; analyzer ongewijzigd). Open vervolg: launch-DB-open async (grote refactor), sonicSeed-pad al gedekt.
+
+B1-B6a + B7a + B8-features + consumers + share KLAAR. loudness-normalisatie bleek AL GESHIPT (LocalLoudness.swift off/track/album + LocalLoudnessTests). Live op mini = analyzer-v1.1.108. Resterende backlog is grotendeels NIET-headless-verifieerbaar (audio/OS/GUI).
+
+ZIJSPOOR 2026-07-08 ("doe alles" MusicMoveArr-datasets, external drive) — extern dataset-programma in 4 fasen: fase 0 destillatie (torrent CSV.7z → DuckDB → compacte SQLite-sidecar op /Volumes/Elements/roonsage-datasets), fase 1 ISRC/MBID-identiteit (track_features + library v37), fase 2 DatasetProducer (discovery), fase 3 sonische opname (preview-embeddings) + BPM-kruischeck. Download loopt op de achtergrond.
+
+VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadmap-memory) — het VOLLEDIGE programma is nu AFGEROND EN LIVE: quick-win metadata (v1.10.149), curatie-fix (v1.10.150), deel-mechanisme (v1.10.151), échte import tegen de mini's analyzer.db, redeploy analyzer-v1.1.126, en de dataset-v1 GitHub Release. Zie ## Done voor het volledige verificatietrail.
+
+ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
+
+## Next
+- Fase 2 werkt pas op de mini ná een analyzer-uitrol (bootout → installeren →
+  bootstrap): `/lyrics` op 5766 en de `LyricsBackfill` zitten in de analyzer.
+- Fase 4: Opus is alleen op macOS 26.5 gemeten. Vóór je het op de iPhone aanzet:
+  kijk of de kiezer daar überhaupt verschijnt — de runtime-probe verbergt hem als
+  AVFoundation Ogg/Opus niet kan decoderen.
+- Fase 3: de achtergrondsessie is niet op een echt toestel gemeten, alleen de
+  unit-tests en de build. Eén album downloaden met de app in de achtergrond is
+  de test die telt.
+- **Beoordelen op de Mac.** De rasters zijn alleen op de iPhone-simulator gemeten. macOS houdt bewust de 150 pt-tegel (`coverGridColumns(compact:)` krijgt daar `false`), dus er zou niets moeten veranderen — maar dat is niet gezien, alleen gebouwd. De Mac-client draaien op de mini is geen optie (Roon-extensie).
+- **Analyzer-v1.1.209 uitrollen op de mini** als je die versie live wilt: tag = DMG, geen uitrol. Route staat in `## Open items` (CI-DMG downloaden → `bootout` → installeren → `bootstrap`). Deze batch is puur UI, dus voor de bibliotheek- en artiestpagina hoeft dat niet — die zit in de Mac- en iOS-clients.
+- **Fase 3, herzien** (`native/docs/STANDALONE_LIBRARY_PLAN.md` §5d): sleutel op de identiteit die er nu ís — `release_track_mbid` → `recording_mbid`/`isrc` → een deterministische terugval, met het schema in de sleutel (`isrc::`, `mb::`, `k::`) zoals `local::` en `import::` dat al doen. Twee dingen niet vergeten: Roon's Browse-API geeft géén identifiers, dus dit repareert alleen de bestandskant; en de dekking wordt ~80% ISRC / ~24% MB-id, dus de terugval blijft nodig.
+- **De identiteits-backfill één keer laten lopen op de mini** — ~48 ms per bestand, dus ~1 uur voor 66.378 rijen. Hervatbaar, geen audio-decode. Hij start vanzelf bij de volgende analyzer-launch (`autoIdentityIfEnabled`), dus dit gebeurt bij de uitrol.
+- **Fase 1+2+identiteit pushen + taggen** (`v1.10.275` / `ios-v1.7.241` / `analyzer-v1.1.205`) en de analyzer via de CI-DMG uitrollen. Allebei de fasen zitten ín de analyzer (de ingest draait alleen in `.direct`-modus, `/artwork` is een analyzer-endpoint), dus op de mini gebeurt er niets tot die uitrol. Bewust niet gedaan zonder opdracht.
+- **Op het toestel beoordelen.** Twee dingen wil je zíen: of de 15.053 nieuwe albums er in de bibliotheek uitzien zoals de Roon-albums (hoes, groepering, jaartal), en of een lokale rij op een Roon-zone speelt — dat gaat via een verse Roon-zoekopdracht, en of Roon die klassieke boxsets op artiest+titel terugvindt is niet headless te toetsen.
+- **Fase 3 (stabiele track-identiteit)** uit `native/docs/STANDALONE_LIBRARY_PLAN.md`: `tracks.id` los van Roon's `item_key`. Let op de meting die er al staat — `match_key` alléén kan niet, hij is niet uniek in `tracks` (67.262 unieke sleutels op 89.752 rijen).
+- **4.484 verweesde rijen in `track_audio_features`** — sleutels die de huidige `/features`-export niet meer produceert (oude normaliser, of `bpm IS NULL`). Geen analyse meer achter; kandidaat voor een onderhoudsronde.
+- **Op het toestel beoordelen.** Alles is code-only geverifieerd; vier wijzigingen wíl je zien: de optimistic play/pause (moet direct reageren), het live volume tijdens slepen, de `zonesAreStale`-pil als je de Core even wegtrekt, en ⌘F op de Mac.
+- **Optioneel: `swiftlint --fix`** voor de resterende 464 opmaakwaarschuwingen — één commando, maar een diff van honderden regels over 306 bestanden. Bewust apart gehouden zodat hij de inhoudelijke wijzigingen niet onleesbaar maakt.
+- **Batch B/C-restanten die er bewust niet in zitten:** de laatste 2 `empty_count` (Codable wire-veld `DiscoveryDigestStatus.count`; hernoemen breekt het server/client-contract voor een false positive) en de spatiebalk als play/pause op macOS (mag niet vuren met focus in een tekstveld — apart uit te zoeken).
+- **Batch B (functionele verfijning) uit `docs/NATIVE_APP_AUDIT.md`:** B1 optimistic UI op play/pause + shuffle + repeat + mute, plus live volume tijdens het slepen (de Slider commit nu pas bij loslaten, dus de knop beweegt en het geluid niet); B2 de **61 geïnterpoleerde `LS()`-sleutels** naar `String(format:)` — die vallen allemaal terug op het Nederlands ongeacht de taalinstelling, verspreid over 24 bestanden; B3 het macOS-menu (`RoonSage/RoonSageApp.swift:38-57,110-115`) door de stringcatalogus, want dat is hard Nederlands en `check-localization.sh` ziet het niet (het grept alleen op `LS("…")`); B4 ⌘1…9 op de werkelijke zijbalkvolgorde i.p.v. `SidebarItem.allCases.prefix(9)`; B5 "wis wat komt" voor een Roon-zone (`PlayerScreen.swift:741` belooft het, alleen de lokale wachtrij heeft het); B6 dedup-teller in de bibliotheek (`sortAndDedupe` verbergt live-versies zonder dat te zeggen).
+- **Batch C (polish & a11y):** C1 zeven icon-only knoppen zonder VoiceOver-label (`SonicRadioView:87`, `SonicFingerprintView:49`, `CustomRadioView:256,266`, `SongAlchemyView:132,157`, `SonicSearchView:83`) + twee harde Engelse labels (`PlayerScreen:511` "Shuffle", `:587` "Volume"); C2 `PlayerScreen` hertekent de héle hero op 1 Hz — ook gepauzeerd — en maakt bij elke body-pass een nieuwe `Timer.publish`: scrubber naar een eigen subview; C3 ⌘F naar het zoekveld (er is nu geen enkele ⌘F- of spatiebalk-binding); C4 `enumerated()` uit de wachtrij-`ForEach`; C5 de vijf `empty_count`-violations.
+- **UX-speler-plan (2026-08-22):** `native/docs/UX_PLAYER_PLAN.md`. **Alle zes batches af en getagd** (U1 t/m U12 behalve de backlog-U12). Volgende stap is geen batch maar een oordeel op het toestel. Zie §6 voor de volgorde.
+- **B3 (mood-backfill, GROTER dan gedacht):** er is GEEN mood-backfill — bouwen naar analogie van `refreshAttributes`/`autoArousalRefreshIfNeeded` (FeatureStore `moodRefreshRows`+`setMoodsBatch`, LibraryWalker `refreshMoods(missingKey:)`, AnalyzerModel `autoMoodRefreshIfNeeded()` + launch-wiring). **TRAP: `FeatureStore.contentSignature()` heeft GEEN moods-term** → zonder toevoeging pullen clients de nieuwe moods nooit (mirror ar/tm-patroon).
+- Resterend maar NIET headless verifieerbaar (vereist toestel/GUI): crossfade + gapless (AVPlayer→AVAudioEngine, groot/risico), Siri-intents, Control Center, CarPlay (OS-integratie), chat-agent (LLM), share-CARDS als afbeelding (ImageRenderer — kan niet getest: testtarget importeert RoonSageUI niet)
+- B7b Architectuur (groot/risico): RoonClient god-object-split, alleen build-verifieerbaar
+- Al gedaan/afgevinkt: loudness-normalisatie (LocalLoudness), share-TEKST (ShareSummary)
+- vervolg op-deze-dag + taste-timemachine: client-fetch (RoonClient) + UI-views (hub-secties) — nu alleen query + endpoints
+- B7b Architectuur (groot/risico): RoonClient (900r god-object) opsplitsen in sub-coördinatoren — hoge blast radius op de live-connectieflow, niet headless verifieerbaar zonder Roon Core. Incrementeel + build-gated
+- B6b (optioneel, per-verb, hoger risico): MusicMap/Ask/CustomRadio/DiscoverWeekly play-knoppen → lokale output
+- B3 rest (uitgesteld, migratie-bewust): MED-2/3 matchKey-normaliser (unicode-translit + and/with/x/vs joiners) — raakt gepersisteerde keys; MED-4 dedup-key stabiliteit
+- B2 rest: SEC-M2 cleartext secrets (TLS/ZeroTier-only — architectuurbeslissing), SEC-L9 DuckDNS-token roteren (user-actie) + .env verwijderen (Docker weg)
+- B5 Perf client: Music Map spatial index (H7/M9), taste/embedding alloc (M1-4)
+- B6 UX: Live Activity contrast, iOS deep-nav, gedeelde ZoneGate, tool-error-states, localisatie
+- B7 Architectuur: RoonClient sub-coördinatoren + mock-transport testharnas
+- B8+ Features (13): skip re-steer (beste ratio), Siri-intents, Control Center, NL steering, share-cards, "op deze dag", gapless, taste-timemachine, scenes, CarPlay, crossfade, loudness, chat-agent
+- B3 Correctheid MED-1..8 + LOW: fuzzy version-qualifier, unicode-translit, primaryArtist joiners, dedup-key, digest re-include, bpm_confidence, LB submit
+- B4 Perf serverside: analyzer hot paths H1-3 (current_match_key index, signature memoize, embeddings ETag), discovery H4-6 (MB pre-seed, studioAlbums TTL, Qobuz session cache)
+- B5 Perf client: Music Map spatial index (H7/M9), taste/embedding alloc (M1-4)
+- B6 UX: Live Activity contrast, iOS deep-nav, gedeelde ZoneGate, tool-error-states, localisatie
+- B7 Architectuur: RoonClient sub-coördinatoren + mock-transport testharnas
+- B8+ Features: skip re-steer, Siri-intents, Control Center, NL steering, share-cards, "op deze dag", gapless, taste-timemachine, scenes, CarPlay, crossfade, loudness, chat-agent
+
+## Constraints
+- "Geen Apple TV / tvOS (scope is strikt macOS 14+ en iOS 17+)" — geen tvOS-target, geen tvOS-code (user, 2026-08-23)
+- "Alle UI-teksten/labels zijn in het Nederlands, code/symbolen/commentaren/APIs in het Engels" (user, 2026-08-23)
+- "Geen AppKit in gedeelde modules (RoonSageCore, RoonSageUI, AudioAnalysis, AnalyzerCore). Houd RoonProtocol en RoonSageCore platform-onafhankelijk" (user, 2026-08-23)
+- "Ja bak 2 moet dus de belangrijkste bak zijn. De Roon bak is enkel voor als ik via zone wat wil afspelen. Maar RoonSage moet dus een zelfstandige speler worden die zijn eigen muziek indentificatie heeft en zelfstandig is. Zelfs als Roon wegvalt moet alles gewoon werken. Roon control is dan iets ernaast" — de analyzer (eigen scan + eigen identiteit) is de PRIMAIRE bibliotheekbron; de Roon-walk levert alleen nog wat de analyzer niet kan hebben (de Qobuz/streaming-laag). Roon is uitvoer, geen catalogus. Niets in de app mag een werkende Roon-verbinding vereisen om de bibliotheek te tonen (user, 2026-08-23)
+- "Behalve lord of the rings trilogie, die moeten in hdr etc blijven" — FileFlows-transcode op /Volumes/8tbDrive: de LOTR-trilogie NOOIT aanraken (4K DV/HDR10 REMUX blijft byte-identiek); de `FileNameMatches`-node met literal `Lord of the Rings` is bewezen werkend en mag niet naar regex (user, 2026-07-29)
+- "Test alle functies in RoonSage iOS, gebruik enkel max mini als zone" — bij de iOS-functietest ALLEEN de Roon-zone "Mac mini" gebruiken voor playback; nooit op andere zones spelen (user, 2026-07-22)
+- "Ik vind het niet erg als het dagen duurt, ik wil gewoon dat de analyse helemaal klopt zoals bij audiomuse" — analysekwaliteit (full-track-dekking) gaat vóór analyseduur (user, 2026-07-13)
+- "maak gebruik van een external drive" — al het zware dataset-werk (torrent/uitpakken/destillatie/sidecar) op /Volumes/Elements/roonsage-datasets, niet op de boot-disk (user, 2026-07-08)
+- Commit + push + tag per geverifieerde batch (user, 2026-07-06)
+- "iOS moet je ook taggen he" — tag ook ios-vX.Y.Z per batch, naast vX.Y.Z + analyzer-vX.Y.Z (user, 2026-07-06)
+- NIET tests verzwakken om ze groen te krijgen (hard stop)
+- Nooit client-app op de mini deployen (alleen analyzer-server); zie memory
+- "Fix alles niet alleen 2" — de v3-doorwerkingsaudit wordt in z'n geheel uitgevoerd (tag-herkomst, arousal, mood-drempels, loudness, RadioEngine-scalars), niet alleen bevinding 2; overschrijft bewust de "doe één batch"-vuistregel (user, 2026-07-19)
+- Heranalyse-walk: hervat NIET na een analyzer-herstart tenzij autoStart+musicPath gezet (staan goed); de mini is resource-krap (16GB, Docker+Roon+Plex+rclone+analyzer) → analyzer swapt weg bij geheugendruk. Docker MemoryMiB nu 6144 (was 9216). zilean staat gepauzeerd sinds 2026-07-17 (`docker unpause zilean` om terug) (2026-07-17)
+
+## Decisions
+- B6 ZoneGate grondig (user-keuze 2026-07-07): oudere play-acties die een lokaal equivalent hebben routeren via playToActiveOutput + gate hasActiveOutput; Roon-only acties (sonic radio, DJ-set, album/artist-bulk mét eigen lokale knop) blijven selectedZone-gated. Waarom: veel play-knoppen negeerden lokale output (selectedZone==nil disablede ze terwijl "dit apparaat" gekozen was). playToActiveOutput==curateTracks(zoneID) als zone geselecteerd → Roon-pad bewijsbaar ongewijzigd
+- getJSON: één status-bewuste GET-helper in QobuzClient, retry 429/5xx met backoff, nil=echte fout — waarom: root-cause van terugkerende stille Qobuz-storingen is fout==leeg conflatie
+- findPlaylist → enum PlaylistLookup {found/absent/failed} — waarom: read-fout mag geen duplicaat-playlist maken
+
+## Facts
+- **GUI-verificatie op de iOS-simulator, volledige route (2026-08-23).** Alles zit in `~/bin/rs-sim` (`setup` / `build` / `tap` / `swipe` / `text` / `shot` / `log`). Die linker-sectie is niet optioneel: zonder entitlements geeft de simulator-Keychain `-34018` en munt de client een nieuw device-token per request, waardoor hij nooit goedgekeurd raakt en "Apparaten" volloopt. `codesign --force --sign - --entitlements` is géén alternatief — de app start dan niet (EBADEXEC/POSIX 163). Aansturen met `idb` (`pip3 install --user fb-idb`, CLI op `~/Library/Python/3.9/bin/idb`, companion: `idb_companion --udid <udid> --grpc-port 10882` + `idb connect localhost 10882`); punten = schermafdruk-pixels ÷ 3. Schermafdruk: `xcrun simctl io <udid> screenshot`.
+- **De analyzer-app op de mini aansturen vanuit de shell:** `~/bin/macui` (Swift, CGEvent — bron `~/bin/macui.swift`, herbouwen met `swiftc -O ~/bin/macui.swift -o ~/bin/macui`). `macui click X Y` / `scroll X Y REGELS` / `type` / `key` / `activate <naam>`. **`osascript … click at {x,y}` doet een AXPress op het element eronder en werkt NIET op SwiftUI-knoppen** — het meldt succes en er gebeurt niets. Zijbalkrijen wél selecteerbaar met `select row N of outline 1 of scroll area 1 of group 1 of splitter group 1 of group 1 of window "<titel>"`. Vensterhoek opvragen met `System Events … get {position, size} of window 1`, uitsnede met `screencapture -x -Rx,y,w,h`.
+- Test: cd native/RoonSage && swift test ; build: swift build ; release: swift build -c release --product RoonSage
+- Tag-namespaces: app vX.Y.Z · iOS ios-vX.Y.Z · analyzer analyzer-vX.Y.Z
+- Baseline build (2026-07-06): PASS (exit 0). Test-baseline vóór B1: 463 tests, 0 failures (prior task Done).
+- Kern-audit files: QobuzClient.swift, LibraryShareServer.swift (:91 enforceToken), RoonClient+DiscoverWeekly.swift (:355 searchQobuz-gate), AnalyzerCore/HTTPServer.swift (5766)
+
+## Done
+- **NAVIDROME + SHELV, VIJF FASES (2026-08-23) — RESULTAAT: `6e252b1` · `v1.10.281` / `ios-v1.7.247` / `analyzer-v1.1.211` · 1074 tests, 3 skipped, 0 failures (baseline 1032).** Fase 1 t/m 4 bleken grotendeels al te bestaan, dus dit was gaten vullen: drie ontbrekende bibliotheekplanken (`randomAlbums`, `sonicallyRecommendedAlbums`, `dormantAlbums(days: 180)`) · songteksten aan de analyzer-kant (`LRCParser`/`SYLTParser` in AudioAnalysis, `MetadataReader.lyrics()`, `LyricsProvider`, hervatbare `LyricsBackfill`, **`GET /lyrics?matchKey=` op 5766**) · `OfflineDownloadManager` op een achtergrond-`URLSession` + `AppDelegate` + schema v50 `offline_tracks.local_path` + "Houd favorieten offline" + rijstatus · Opus naast AAC via ffmpeg met runtime-probe op de client · en helemaal nieuw `SmartPlaylistEngine` + `RecapService` + de "Regels"-tab in `CreateHubView`. **Verified: `swift build` exit 0 · `swift test` "Executed 1074 tests, with 3 tests skipped and 0 failures (0 unexpected)" · `swift build -c release --product RoonSage` exit 0 · `xcodegen generate` exit 0 · RoonProtocol `swift test` exit 0 · swiftlint 474 violations / 2 serious, beide pre-existing (baseline 469).** **Alle vier de CI-workflows groen** (Native Tests 3m49s, Release macOS DMG 3m32s, Release iOS TestFlight 3m56s, Release Analyzer App 3m18s). `Package.swift` bewust buiten de commit gehouden. **NIET geverifieerd tegen een draaiende server:** `/lyrics` en `/audio?format=opus` zijn alleen door unit-tests gedekt — dat vergt de analyzer-uitrol.
+- **BIBLIOTHEEKOVERZICHT ALS FEED (2026-08-23) — RESULTAAT: één sectiegrammatica (kleinkapitaal + haarlijn + chevron) over Bibliotheek én Ontdek, afwisselend plank/lijst, en drie secties erbij uit bestaande data.** Gewijzigd: `Shelves.swift` (`sectionHeader` zonder icoon, `sectionChevron`, `compactRows`, zachtere speelbadge), `LibraryView.swift` (feed-volgorde, `todaySection`, `labelSection`, `trackRows`, `seeAllButton`, `topOfMonthRows`, `loadLabelSpotlight`), `DiscoveryView.swift` (sweep: 6 aanroepen), beide `Localizable.strings` (5 sleutels). **Verified: `swift build` exit 0 · `swift test` "Executed 1032 tests, with 3 tests skipped and 0 failures (0 unexpected)" · `swift build -c release --product RoonSage` exit 0 · swiftlint 466 violations / 2 serious (= baseline) · `native/scripts/check-localization.sh --strict` exit 0, 1140 sleutels, 0 missend / 0 wees · visueel op iPhone 17-simulator tegen de live analyzer (`/tmp/rs_ui/51.png`, `56.png`, `58.png`).** **GESHIPT: commit `a08970a`, getagd `v1.10.280` / `ios-v1.7.246` / `analyzer-v1.1.210`, alle vier de workflows groen (Native Tests, Release macOS DMG, Release iOS TestFlight, Release Analyzer App).**
+- **BIBLIOTHEEK + ARTIESTPAGINA HERZIEN (2026-08-23) — RESULTAAT: drie hoezen per iPhone-rij i.p.v. twee, en de Queen-pagina eindigt na ~4 schermen i.p.v. ~30.** Gewijzigd: `Shelves.swift` (`coverGridColumns(compact:)`), `AlbumArtView.swift` (vierkante `fillingWidth`-variant), `LibraryView.swift` (raster + `LibraryTrackRow(showsArtist:)` + `AlbumGridCell(showsArtist:)` + twee niet-bestaande SF Symbols), `LibraryDetailViews.swift` (artiestkop, begrensde discografie + `ArtistAlbumsGridView`, albumkop), beide `Localizable.strings` (`libraryDetail.showAllReleases`). **Verified: `swift build` exit 0 · `swift test` "Executed 1032 tests, with 3 tests skipped and 0 failures (0 unexpected)" (gelijk aan baseline) · `swift build -c release --product RoonSage` exit 0 · swiftlint 466 violations / 2 serious (gelijk aan baseline) · visueel op iPhone 17-simulator (iOS 26.5) tegen de live analyzer op 192.168.178.59:5767, schermafdrukken in `/tmp/rs_ui/`.** **GESHIPT 2026-08-23 12:43: commit `005db57`, gepusht naar `main`, getagd `v1.10.279` / `ios-v1.7.245` / `analyzer-v1.1.209`, alle vier de workflows groen (Native Tests 3m52s, Release macOS DMG 3m56s, Release iOS TestFlight 3m53s, Release Analyzer App 3m07s)** (user: "Commit push en tag"). `native/RoonSage/Package.swift` bewust buiten de commit gehouden.
+- **AUDIT VOLLEDIG UITGEVOERD: BATCH A + B + C (2026-08-23) — RESULTAAT: 973 → 984 tests 0 fouten, 61 → 0 geïnterpoleerde sleutels, 5 → 2 serious lint, release + iOS-typecheck groen.** 21 bevindingen (5 🔴 / 8 🟠 / 4 🟡 / 4 🟢) uit `docs/NATIVE_APP_AUDIT.md`, alle uitgevoerd behalve drie expliciet gemotiveerde uitzonderingen (zie het statusblok in dat rapport). Twee dingen bleken groter dan de audit inschatte: het macOS-app-target had **nul** `LS()`-aanroepen, en `check-localization.sh` keek daar nooit — beide opgelost, en de gate is nu strenger in plaats van zwakker. Niet gecommit.
+- **360°-AUDIT + BATCH A (2026-08-22, laat) — RESULTAAT: 5 🔴 / 8 🟠 / 4 🟡 / 4 🟢 bevindingen, Batch A af en geverifieerd.** Rapport: `docs/NATIVE_APP_AUDIT.md`. Baseline vóór de fixes: RoonProtocol 12 tests / RoonSage 973 tests, beide 0 fouten; release build exit 0; 1033 sleutels, 0 missend, 61 geïnterpoleerd; swiftlint 469 violations / 5 serious. Na Batch A: 975 tests 0 fouten, 1034 sleutels, swiftlint ongewijzigd (dus geen nieuwe violations). Gewijzigd: `RoonClient.swift`, `LibraryView.swift`, `RootView.swift`, beide `Localizable.strings`, plus `QueueOwnershipTests.swift` (nieuw). Niet gecommit.
+- **GESHIPT + ANALYZER LIVE (2026-08-22 17:08) — `v1.10.271` / `ios-v1.7.237` / `analyzer-v1.1.201`.** Vijf commits: de offline-afspeelbug (kale SHA-namen zonder extensie), het UI-harnas dat nu ook tikt, de tabtitels + offlineglijbaan + ~120 vertaalde sleutels, Stations opnieuw ingedeeld (`native/docs/STATIONS_AUDIT.md`), en STATE.md. **Alle vier de workflows groen** (Native Tests, Analyzer DMG, macOS DMG, iOS TestFlight — "App Store Connect publish succeeded"). **Deploy via de CI-DMG-route**, zoals bij v1.1.200: `gh release download analyzer-v1.1.201`, handtekening + team gecontroleerd (`Developer ID Application: Casper Jansen (5W3QDZ94FH)`, identifier `com.roonsage.analyzer`), oude app bewaard als `/Applications/RoonSage Analyzer.app.bak-1.1.200`, `bootout` → installeren → `bootstrap` (nooit `open -a`). **Verified: 956 tests 0 failures · `swift build -c release` exit 0 · check-localization 985 sleutels, 0 missend / 0 wees · alle drie de UI-tests groen · mini draait analyzer-v1.1.201 als één pid (6558, was 72731), :5767 87.820 tracks, :5766 66.378 tracks, Roon verbonden, 5 zones, `/on-this-day` echte data, 0 ws-sluitingen sinds de herstart.** Client-app NIET gedeployd (constraint).
+- **`native/RoonSage/Package.swift` IS BEWUST NIET GECOMMIT — en nu weten we waarom.** De ongecommitte wijziging `.process("Resources")` → `.copy("Resources")` in het AudioAnalysis-target stond hier al maanden als "losse waarneming, met rust gelaten". Bij het committen bleek het geen rommel maar een **noodzakelijke lokale werkomgeving-fix**: `Sources/AudioAnalysis/Resources/CLAP/` is gitignored en wordt lokaal gevuld door `setup_clap_models.sh`, en de twee `.mlpackage`-mappen daarin delen bestandsnamen (`Manifest.json`, `weight.bin`, `model.mlmodel`). Met `.process` weigert SwiftPM dan te bouwen ("multiple resources named …"); met `.copy` blijft de mapstructuur intact. **Op CI staat die map er niet, dus daar bouwt `.process` prima** — en dat is precies waarom hij niet mee mag: `.copy` verandert de bundle-indeling van de analyzer op CI. Bewezen door de wijziging te stashen: build faalt lokaal, en te unstashen: build groen. **Laat hem ongecommit staan.**
+- **ZONE-VERBINDING WAS ONSTABIEL: TWEE ANALYZER-INSTANTIES SCHOPTEN ELKAAR VAN DE CORE (2026-08-22)** — user: "de verbinding met een zone is niet stabiel" + "als ik op dit apparaat druk switcht hij direct terug naar een zone". **OORZAAK, met bewijs uit `~/Library/Application Support/RoonSage/logs/roonsage.log`:** op de mini draaiden **twee** kopieën van `RoonSage Analyzer.app` (pid 487 via LaunchServices/login-item om 15:50:21, pid 868 via de LaunchAgent om 15:50:38). Beide registreren als Roon-extensie `com.roonsage.server`, en een Core houdt **één verbinding per extensie-id** — dus schopte elke registratie de ander eruit: open → registered → gesloten na ~2 s, eindeloos. Telling per uur: 397 (07u), **1.046 (08u)**, 891 (09u); vóór 19-08 waren het er enkele per dág. **BEWEZEN:** na `launchctl bootout` van de agent → **0 sluitingen in 45 s**, en na het opruimen van de dubbele en een schone `bootstrap` → 0 sluitingen in 60 min, 6 zones live. **WAAROM DAT ELKE CLIENT RAAKTE:** `handleClose` zette `zones = []`, en die lijst is precies wat de server via `/playback` en `/events` aan Mac en iPhone doorgeeft — dus elke twee seconden verdween de gekozen zone app-breed. **WAAROM "dit apparaat" terugsprong:** `RootView` had twee `.onChange(of: client.zones)`-hooks die `selectZone(lastZoneID)` deden zodra `selectedZone == nil`, **zonder naar `localOutputSelected` te kijken** — en `selectZone` zet lokale uitvoer uit. Bij een flapperende zonelijst (of gewoon bij de volgende trackwissel) pakte die hook de zone binnen seconden terug. **GEFIXT, vier lagen:** (1) `SingleInstance.enforce()` in `RoonSageAnalyzerApp.init()` — een tweede kopie start niet meer: launchd's exemplaar wint (het is het gesuperviseerde; zelf afsluiten geeft een KeepAlive-respawnlus), elke andere activeert de draaiende en sluit zichzelf. `reconcileAutostart()` zet het `SMAppService`-login-item uit zolang de LaunchAgent-plist bestaat, en de toggle in Instellingen weigert nu aan te gaan met uitleg. (2) `ReconnectPolicy` (nieuw, puur + getest): de backoff-ladder reset **niet** meer op elke open maar pas als een verbinding ≥ 60 s heeft gehouden — een geschopte verbinding gaat nu 2 → 4 → 8 → 16 → 30 s i.p.v. eeuwig elke 2 s — plus flap-detectie die de oorzaak bij naam noemt in het log. (3) **Zone-genade:** een korte drop houdt de laatst bekende zones nog 45 s vast i.p.v. ze meteen te wissen (server: `startZoneGrace`/`clearZones`; client: `zonesAfterSnapshot`, dezelfde "downgrade niet naar niets bij een blip"-regel als `resolvedCoreHost`). Een verse subscriptie snoeit alsnog wat Roon niet meer meldt (`expectingFullZoneList`), dus een écht verdwenen zone blijft niet hangen. (4) `restoreLastZoneOnce()` — herstel van de laatste zone is weer wat het hoorde te zijn: eenmalig bij het opstarten, nooit over lokale uitvoer heen. **Ook gedaan:** `.claude/skills/deploy-mini` stap 4 gebruikt nu `launchctl bootstrap` i.p.v. `open -a` — juist dat `open -a` liet een niet-gesuperviseerde instantie achter en is hoe de dubbele ontstond. **GESHIPT + LIVE (2026-08-22 10:31):** `v1.10.262` / `ios-v1.7.229` / `analyzer-v1.1.200` gepusht, alle vier workflows groen (Native Tests, Analyzer DMG, macOS DMG, iOS TestFlight). **Deploy liep via CI, niet lokaal** — de Developer ID-sleutel zit in een vergrendelde sleutelhanger (zie ## Open items), dus `codesign` gaf `errSecInternalComponent`. In plaats daarvan de door CI **Developer ID-gesigneerde** DMG van de release gehaald (`gh release download analyzer-v1.1.200`), handtekening + team gecontroleerd (`5W3QDZ94FH`, dus Keychain-items blijven geldig), oude app bewaard als `/Applications/RoonSage Analyzer.app.bak-1.1.199`, en herstart via `launchctl bootstrap` — **niet** `open -a`. **Dat is de route die werkt zonder lokale sleutel; gebruik hem als de sleutelhanger dicht is.** **Verified: 929 tests, 0 failures · `swift build` exit 0 · iOS-simulatorbuild BUILD SUCCEEDED · mini draait analyzer-v1.1.200 als één pid (72731) onder `nl.roonsage.analyzer`, :5767 87.820 tracks, :5766 66.378 tracks, Roon verbonden, 6 zones, 0 ws-sluitingen. De guard is LIVE bewezen: de binary een tweede keer direct gestart (zoals launchd dat doet) → `er draait al een RoonSage Analyzer (pid [72731]) — deze kopie sluit zichzelf af`, één pid over.**
+- **iOS TESTFLIGHT CI & APP STORE CONNECT FIX (`ios-v1.7.228`) (2026-08-16)** — (1) **Issuer ID Secret Update:** De `ASC_KEY_ISSUER_ID` repository secret bijgewerkt naar het actieve Issuer ID (`e336b055-a8e8-4d50-9dcf-c7ab792934be`), wat de 401 Unauthorized fout van Apple oplost. (2) **SPM Resource Declaratie:** `AudioAnalysis` resources in `Package.swift` expliciet geregistreerd met `resources: [.process("Resources")]`. (3) **Archive Code-Signing:** `CODE_SIGNING_ALLOWED=NO` tijdens het archiveren en `SKIP_INSTALL: NO` op het iOS target gezet, zodat `xcodebuild -exportArchive` de signing met de App Store Connect API keys direct en foutloos afhandelt. **Verified: TestFlight upload succesvol (`App Store Connect publish succeeded`, workflow run exit 0).**
+- **SWIFT CONCURRENCY & ASYNC-LOCK BUGFIXES (2026-08-16)** — (1) **`LibraryShareServer`:** `libCacheLock` (`NSLock`) binnen een `async` context vervangen door een veilige `LibraryCacheStore` actor om potentiële thread deadlocks en Swift 6 fouten te voorkomen. (2) **`MetadataReader`:** Gemigreerd naar moderne `AVAsset.metadata` i.p.v. de gedeprecieerde `metadata(forFormat:)` loop. (3) **Warnings & Unused results:** Opgelost in `Log.swift` (unhandled seekToEnd) en `RoonClient+Features.swift`. **Verified: 920 tests, 0 failures · release-build exit 0.**
+- **FEATURE-CONSOLIDATIE & NAVIGATIE-STROOMLIJNING (2026-08-16)** — Overlappingen in navigatie en functionaliteit opgeruimd: (1) **Nieuwe `DiscoverHubView`:** Brengt de 3 voorheen versnipperde ontdekschermen (`DiscoveryView` [eigen bibliotheek/Luister Nu], `DiscoverWeeklyView` [wekelijkse 30-track mix] en `DiscoverFeedView` [nieuwe streaming muziek]) samen in één geünificeerde hub met tabbladen. (2) **Hub-architectuur:** Focus gelegd op de kernfuncties: Luisteren (`nowPlaying`, `queue`, `library`, `bookmarks`), Maken (`CreateHub` + `playlists`), Stations & DJ (`StationsHub` + `DJView`), Ontdekken (`DiscoverHub` + `SonicLab` + `MusicMap` + `Multitag`), en Jouw Smaak (`TasteHub`). (3) **Command Palette (⌘K) opschoning:** Navigatieresultaten gestroomlijnd naar de primaire hubs zonder duplicate zoekresultaten. **Verified: 920 tests, 0 failures · release-build exit 0.**
+- **iOS PERFORMANCE, SMOOTHNESS & STABILITEIT OPTIMALISATIES (2026-08-16)** — (1) **ImageCache & GPU/Geheugen:** Hergebruik van één statische `CIContext` (`sharedContext`) in `dominantColor` i.p.v. context-allocatie per album-tint; `UIApplication.didReceiveMemoryWarningNotification` listener toegevoegd voor automatische `clearMemoryCache()` flush bij geheugendruk op iOS. (2) **Instant SSE-herverbinding:** `reconnectOnForeground()` herstart de SSE-stream met `forceReconnectStream: true` zodat de UI binnen milliseconden na app-ontwaken live is. (3) **SwiftUI Lijst Diffing:** `ForEach(Array(tracks.enumerated()), id: \.element.id)` in `FilteredTracksView` en `List(recent, id: \.playedAt)` in `RecentView` vervangen index-offset diffing door stabiele identiteiten voor soepel oneindig scrollen. (4) **Systeemoppervlakken Deduplicatie:** `SharedNowPlaying` is nu `Equatable` en `syncSystemSurfaces()` in `RoonSageiOSApp` slaat alleen op en triggert `WidgetCenter.reloadTimelines` bij daadwerkelijke track-/statewijzigingen. **Verified: 920 tests, 0 failures · release-build exit 0.**
+- **S5 PROVIDERGATE + GAPLESS LOUDNESS VERIFICATIE + ANALYZER DEPLOY (2026-08-16)** — **S5:** Nieuwe `ProviderGate` actor in `AudioAnalysis` centraliseert uitgaande rate-limiting (token bucket per provider) en foutafhandeling (consecutive failures, exponentiële backoff / disabled_until) voor MusicBrainz, Deezer, etc. `MusicBrainzClient` en `DeezerClient` omgezet naar `ProviderGate.shared`. 3 nieuwe tests in `ProviderGateTests.swift`. **Gapless Loudness:** Per-item `AVAudioMix` verificatie en drempeltests in `LocalLoudnessTests.swift` (`testLoudnessMixTriggerThreshold`). **Deploy:** `analyzer-v1.1.199` signed release gebouwd, geïnstalleerd in `/Applications`, loopback geverifieerd (`:5767` 87.820 tracks, `:5766` 65.515 tracks, Roon `verbonden met Caspers-Mac-mini`). **Verified: 920 tests, 0 failures · release-build exit 0.**
+- **SQLITE VACUUM TRANSACTIE-FIX IN DATABASE ONDERHOUD (2026-08-16)** — `database-backup` (7/7 mislukt) en `housekeeping` (2/2 mislukt) faalden in de scheduler met `SQLite error 1: cannot VACUUM from within a transaction`. **OORZAAK:** In `DatabaseManager+Maintenance.swift` werd `pool.write { ... }` gebruikt. In GRDB start dit standaard een expliciete transactie (`BEGIN` ... `COMMIT`), waarin SQLite `VACUUM` en `VACUUM INTO` weigert. **FIX:** `backup(to:)` en `runHousekeeping` omgezet naar `pool.writeWithoutTransaction`. Integratietests toegevoegd in `MaintenanceTests.swift` (`testRunBackupCreatesValidDatabase`, `testRunHousekeepingExecutesVacuumSuccessfully`). **Verified: 917 tests, 0 failures · release-build exit 0.**
+- **REGRESSIE: GEPLANDE TAKEN DRAAIDEN NOOIT (2026-08-08, avond) — mijn fout uit batch 2, ~13 u stil** — user vroeg "hoe staat het ervoor?"; `/system/tasks` gaf na 5 uur draaien voor élke taak `never`, op `lastfm-scrobble-sync` na (en díe status kwam uit de DB van een eerdere run). **OORZAAK:** `nextDue` gaf voor een nog niet gedraaide taak `Date() + initialDelay` terug, **elke controle opnieuw berekend**. De driver sliep de grace uit, werd wakker, vroeg opnieuw, kreeg weer "nu + grace" en sliep weer — `stillDue <= Date()` werd dus nooit waar. Alleen taken met een al opgeslagen `lastExecution` draaiden ooit. **IMPACT: `artist-radio-sync`, `discovery-run`, `discovery-digest`, `discover-weekly` en `feature-sync` lagen stil vanaf analyzer-v1.1.188 (09:20) — dat waren wérkende `while true`-lussen vóór mijn conversie.** `database-backup`, `housekeeping`, `health-watch` en `library-sync` hebben nooit gedraaid. En `/system/tasks` meldde al die tijd rustig "never", niet te onderscheiden van "moet nog". **FIX:** de grace hangt nu aan `Job.registeredAt` i.p.v. aan nu; `nextExecution` meldt voor een nooit-gedraaide taak die verankerde eerste keer, zodat "nog niet" en "nooit meer" uit elkaar te houden zijn. **WAAROM MIJN TESTS DIT MISTEN, de eigenlijke les:** `testInitialDelayIsRespectedForANeverRunJob` toetste alleen dat een taak niet TE VROEG draait — dat slaagt net zo vrolijk als hij helemaal nooit draait. Een halve eigenschap toetsen is geen dekking. De ontbrekende helft staat er nu, en is bewezen: met de bug teruggezet wordt `testJobRunsOnceTheInitialDelayHasElapsed` rood. **LIVE BEWIJS na deploy van analyzer-v1.1.197: binnen 3 minuten `discovery-run` completed in 117,1 s, `feature-sync` 105,4 s, weekly + digest completed, artist-radio-sync draaiend.** Verified: 842 tests, 0 failures (was 840) · release-build exit 0.
+- **CI HERSTELD + PERIODIEKE BIBLIOTHEEKSYNC + iOS-PLATFORM (2026-08-08, 11:30-12:00)** — user meldde "meerdere workflows fouten" en "geen nieuwe iOS TestFlight versie". **DRIE ONAFHANKELIJKE OORZAKEN, niet één.** **(1) MIJN FOUT:** `runHousekeeping` muteerde een gevangen `var report` binnen de `pool.write`-closure. Dat compileert op de mini (Swift 6.3.2 / macOS 26) en is een **harde fout** op de `macos-14`-runner ("mutation of captured var in concurrently-executing code"), dus Native Tests + Release macOS DMG + Release Analyzer App faalden vanaf v1.10.223 terwijl mijn lokale poort groen was. Tellingen komen nu uit het write-blok terug. **LES, belangrijker dan de fix: lokaal groen bewijst hier niets** — de toolchains verschillen wezenlijk en CI is de poort. Na de push: Native Tests `success` in 4m3s. **(2) RUNNER STUK sinds 25-07:** de self-hosted runner (`[self-hosted, macOS, xcode-26]`, vereist door release-ios.yml) startte niet — `externals/node20/bin/node` én `node24/bin/node` ontbraken allebei na een halverwege afgebroken 2.336.0-upgrade, dus `runsvc.sh` gaf exit 127. Daardoor stonden **19 iOS-tags sinds ios-v1.7.171 in de wachtrij**. Verse externals uit de 2.336.0-release erover; de kapotte set staat als `externals.kapot-20260808` (niets verwijderd, in één commando terug). **BIJWERKING DIE DE USER ZAG:** zodra de runner online kwam draaide hij alle 19 wachtende jobs in een paar minuten af — en die faalden allemaal, wat de stortvloed aan meldingen verklaarde. **(3) iOS-PLATFORM ONTBRAK, de eigenlijke reden dat er geen TestFlight-build kwam:** `xcodebuild: Unable to find a destination matching { generic:1, platform:iOS }` → `iOS 26.5 is not installed`. **Gereproduceerd in een gewone shell**, dus geen runner-/sessieprobleem. Xcode 26 splitst SDK-stub en platform-component: `-showsdks` meldde keurig `iOS 26.5` terwijl `iPhoneOS.platform` slechts 178 MB was en `CoreSimulator/Profiles/Runtimes/` leeg. `xcodebuild -downloadPlatform iOS` (8,52 GB, ~5 min) opgelost; `Any iOS Device` staat nu bij de geldige destinations i.p.v. bij "Ineligible". Schijf 26 → 18 GB vrij. Laatste geslaagde iOS-build daarvóór was ios-v1.7.168 (24 juli), wat past bij een Xcode-update rond die datum. **(4) PERIODIEKE BIBLIOTHEEKSYNC (user: "kan je een periodieke bibliotheek sync inbouwen")** — het punt uit ## Open items. Nieuwe scheduler-job `library-sync`, **wekelijks**: een Browse-walk is duur en de Browse-API is single-session, dus dagelijks zou met elke andere browse van de server vechten. Wacht af als de Core weg is (`.retry`, geen fout — de connect-loop probeert al), stapt opzij voor een handmatige sync, hervat via `sync_album_checkpoints`, en is zichtbaar + triggerbaar op `/system/tasks`. De beslislogica is een pure `nonisolated` functie met 4 tests. **Verified: 832 tests, 0 failures (was 828) · release-build exit 0 · Native Tests op de runner `success`.**
+- **BATCH 7/8 BENCHMARK-PROGRAMMA — F4 NOTIFICATIES (2026-08-08, 11:15)** — de server wist dingen die je zou willen horen (weekly klaar, taak faalt, Core weg) en de enige manier om het te weten was de app openen. Nieuw `NotificationService` naar Lidarr's providermodel: `NotificationDestination` (webhook of ntfy, per bestemming een event-filter), één `NotificationPayload`-vorm voor beide transports zodat een ontvangende automatisering op `event` kan vertakken, en `NotificationTransport` als protocol zodat de leveringsregels getest zijn zonder netwerk. **Het detail dat het verschil maakt is de Test-knop** — zonder dat configureert niemand een webhook goed — dus `POST /system/notifications/test` omzeilt bewust zowel het event-filter als het herhaalvenster; anders meldt de test "mislukt" op een prima configuratie. **Herhaalvenster van 6 u per event**: een taak die elk kwartier faalt zou anders 96 berichten per dag geven; verschillende events onderdrukken elkaar niet. Nieuwe scheduler-job `health-watch` (elk uur) draait de checks uit batch 6 en stuurt `health.degraded` als er een `error` tussen zit. Endpoints: `GET/POST/DELETE /system/notifications` + de test. Event-rawvalues zijn getest op stabiliteit, want gebruikers filteren hun automatisering erop. **F7 (route-tabel + `/api/v1`) BEWUST NIET GEDAAN, tegen mijn eigen "doe dit eerst" in**: het is een herstructurering van ~400 regels in `route()`, de heetste functie van de server, en de enige echte verificatie is live probing per route. Dat verdient een eigen sessie met een route-voor-route-check, niet een aanhangsel. De drie endpoints die deze sessie zijn toegevoegd (`/system/tasks`, `/health/detail`, `/events`) zijn handmatig op shadowing gecontroleerd; `/health` is bij die gelegenheid van `hasPrefix` naar exacte match gegaan. **Verified: 828 tests, 0 failures (was 816) · release-build exit 0.**
+- **BATCH 6/8 BENCHMARK-PROGRAMMA — F1 HEALTH CHECKS + F2 BACKUP + F3 OPRUIMING (2026-08-08, 11:00)** — **F1:** `/health` gaf alleen `{status:"ok",tracks:n}`, wat waar is tot het níét waar is: een weggevallen Core, verlopen Qobuz-sessie, volle schijf of ingezakte match-rate verschenen als een lege lijst in de UI en verder niets. Nieuw `HealthCheckService` (actor, registry, 30 s resultaatcache, concurrent uitgevoerd, ergste bovenaan) + zeven checks: Roon-verbinding, schijfruimte, sync-leeftijd, feature-dekking, mislukte geplande taken (leest `scheduled_tasks` uit batch 2), wachtende apparaten, en gedegradeerde discovery-ronde (leest de `degraded`-kolom uit v45). **Elke drempel is een pure functie** (`HealthChecks.diskSpace/syncAge/featureCoverage/…`) zodat de grenzen te toetsen zijn zonder Roon-sessie, netwerk of Keychain — 23 tests op precies die grenzen. Endpoint `GET /health/detail`; **de `/health`-vrijstelling in `authorize` is van `hasPrefix` naar exacte match gegaan**, anders had `/health/detail` — dat taakfouten, schijfdruk en hostadressen noemt — de open discovery-vrijstelling geërfd. **F2:** `library.db` bevat luistergeschiedenis, feedback, favorieten, bladwijzers, playlists en radio-configs, en **geen daarvan is uit Roon te reconstrueren** — een resync geeft je de tracklijst terug en verder niets. Er was geen enkel backupmechanisme. Nu een dagelijkse `VACUUM INTO` (consistent + gecomprimeerd vanaf een live WAL-db, zonder de "kwam het -wal-bestand mee?"-val van kopiëren) met retentie 7. De retentieregel is puur en getoetst, inclusief het geval dat het meest misgaat: `library.db` zelf, `-wal` en vreemde bestanden in dezelfde map worden nooit meegenomen, en de nieuwste back-up nooit. **F3:** wekelijkse opruiming van verlopen `editorial_cache` (30d TTL) en `recommendation_batches`+items ouder dan 180 dagen, daarna `VACUUM`. **BEWUST ONAANGERAAKT: `discovery_rejections`** — dat zijn de "nee"-signalen van de gebruiker, opruimen zou afgewezen albums laten terugkomen; net als `track_feedback`, `favorites`, `bookmarks`, `listening_history` en `playlists`. Beide taken draaien onder de scheduler uit batch 2, dus ze zijn zichtbaar op `/system/tasks`. **Verified: 816 tests, 0 failures (was 793) · release-build exit 0.**
+- **ANALYZER GEDEPLOYD + BATCH 1–5 LIVE GEVERIFIEERD (2026-08-08, 10:40)** — analyzer-**v1.1.192 LIVE op de mini**, was v1.1.186 (zes tags achter). Gebouwd met `SIGN_IDENTITY="Developer ID Application: Casper Jansen (5W3QDZ94FH)"` per `.claude/skills/deploy-mini`; LaunchAgent eerst geboot-out (KeepAlive herstart anders de oude binary), oude app **verplaatst** naar `/Applications/RoonSage Analyzer.app.bak-1.1.186` (niets verwijderd). Client-app NIET gedeployd (constraint). :5767 bond binnen 1 s, 76.571 tracks. **LIVE BEWEZEN, alles op loopback:** (1) **V3** — `GET /settings` zonder token geeft nu **401** op loopback, precies de versmalling uit batch 1. (2) **Batch 2** — `/system/tasks` geeft alle zes jobs met echte cadans (artist-radio 10800s, discover-weekly/digest 3600s, discovery-run 86400s, feature-sync 21600s, lastfm-scrobble 900s) en `lastfm-scrobble-sync` stond al op `completed`, runs 1. (3) **Batch 3 ETag** — `/on-this-day` geeft `ETag: "7f5e921a…"`; herhaling met `If-None-Match` → **304, 0 bytes** (was 12.836). (4) **Batch 3 gzip** — `/taste-analysis` 1238 → **554 bytes**, en `file` leest de RFC-1952-trailer correct terug (`original size … 1238`), dus de zelfgebouwde container klopt écht. (5) **Batch 3/4 headers** — `Cache-Control: private, no-cache`, `X-Content-Type-Options: nosniff`, `Connection: keep-alive`. (6) **Batch 4 SSE** — `/events` stuurt bij connect meteen `event: playback` met de huidige snapshot en is daarna **stil** zolang er niets speelt; de oude poll had in dat venster 8 volledige snapshots gestuurd. **BUG GEVONDEN DOOR DE VERIFICATIE ZELF EN GEFIXT (v1.1.192):** `curl -I` gaf 401 op een route waarvan de GET open is — `sensitive = method != "GET"` rekende **HEAD als mutatie**. HEAD is GET zonder body, dus read-only; nu `readOnly = GET || HEAD`. Fail-closed dus geen gat, wel fout. Tegelijk gefixt: `route` gaf een **body terug op HEAD** (HTTP-schending, pre-existing) — headers incl. Content-Length en ETag blijven, de body wordt nu weggelaten. **CPU-METING op verzoek (na bezinking, 10:47):** load 4,12; analyzer 3,2% CPU / 167 MB RSS. De machine wordt belast door Plex Music Analyzer (98,8%) en SoulSync gunicorn (94,5%), niet door RoonSage; verder Time Machine 6,6% en DroppedNeedle 4,3%. Swap 4051/5120 MB (macOS kromp het swapbestand van 6144→5120). **Verified: 793 tests, 0 failures · release-build exit 0.**
+- **BATCH 5/8 BENCHMARK-PROGRAMMA — V5 INKOMENDE RATE-LIMITING (2026-08-08, ochtend)** — `AuthThrottler` stopte alleen het gokken van tokens; een client mét geldig token had géén enkele limiet, terwijl de dure routes open werktriggers zijn: `POST /generate` start een volledige LLM-pijplijn, `POST /discovery/run` een pass van ~2 min, `GET /library` serialiseert de hele bibliotheek. Eén goedgekeurd apparaat in een retry-lus kon de mini platleggen (die óók Docker/Plex/rclone/*arr draait). Nieuw `RequestLimiter` (actor, token bucket per client×klasse, naar DroppedNeedle's `middleware.py`-model met per-pad-overrides): standaard 5/s met burst 60 (een scherm dat opent fant legitiem uit), zwaar 1 per 30 s met burst 3. **Alle zware routes delen één emmer per client** — anders zijn drie lussen op drie routes gewoon drie keer de last. Gesleuteld op de *hash* van het clienttoken (val terug op IP), dus één apparaat kan de andere niet uithongeren. Check staat ná auth, zodat een onbevoegde de tokens van een goedgekeurde client niet kan opmaken. `/health` en `/events` zijn vrijgesteld: discovery moet werken vóór koppeling, en de eventstream is één lange verbinding i.p.v. een stroom requests. Store begrensd op 500 emmers met stalest-eviction, zoals `AuthThrottler`. Weigering = 429 met `retryAfter`, nooit stil laten vallen. **S5 (de UITGAANDE kant: zes eigen throttles in MusicBrainz/Deezer/Discogs/Qobuz/ArtistRadio/LRCLIB vervangen door één `ProviderGate`) is BEWUST NIET GEDAAN.** Reden: die throttles zijn stuk voor stuk afgestemd op de gepubliceerde policy van hun API (MusicBrainz 1 req/s, Discogs-backoff, Qobuz' `retryDelay` met `Retry-After`), ze wholesale vervangen is een regressierisico op precies de code die voorkomt dát we gerate-limit worden — en de scheduler uit batch 2 haalt de gelijktijdige druk er al grotendeels uit. Hoort per client mét live verificatie, niet in één sweep. Verplaatst naar de resterende lijst. **Verified: 792 tests, 0 failures (was 782) · release-build exit 0.**
+- **BATCH 4/8 BENCHMARK-PROGRAMMA — S1 SSE-PUSH + S3 KEEP-ALIVE (2026-08-08, ochtend)** — de grootste snelheidspost. Elke remote client vroeg `GET /playback` elke 1,5 s (`RoonClient+Remote:219`) en de server sloot de verbinding ná elk antwoord: **één telefoon = 40 volledige snapshots + 40 TCP-handshakes per minuut, of er nu iets veranderd was of niet, en een tweede apparaat verdubbelde dat.** Nieuw `PlaybackEventHub` (actor) + `GET /events?zone=…` (`text/event-stream`): één interne ticker per zone, clients krijgen alleen bytes als de snapshot écht verschilt (digest-vergelijking via `HTTPPayload.etag`), plus een keepalive-comment elke 30 s zodat NAT/ZeroTier de stream niet stil dicht knijpt. **Snapshot-dan-deltas**, dus een herverbindende client staart nooit naar een leeg scherm. **EERLIJK OVER WAT DIT IS: de ticker pollt intern nog steeds `RoonClient`** — de Roon-extensie-API geeft geen change-callback (zie PROJECT.md#roon-api-constraints). Wat verdwijnt is de kosten *per client*, en dat is de dure helft. Client: `startRemoteEventStream` consumeert via `URLSession.bytes(for:).lines`; zolang de stream vers is (<30 s) zakt de poll van 1,5 s naar 15 s als vangnet voor een stream die stilvalt zonder te sluiten. Valt volledig terug op de oude poll als de server de route niet kent. **S3 keep-alive** meegenomen (hoorde bij batch 3, bewust doorgeschoven): HTTP/1.1 hergebruikt de verbinding tenzij `Connection: close`; `send` geeft resterende gebufferde bytes door aan de volgende `receive` (pipelining). Auth uit `route` getrokken naar `LibraryShareServer.authorize` zodat `/events` — dat nooit één body teruggeeft en dus niet door `route` kán — exact dezelfde poort gebruikt. **HERHAALDE VAL, nu vastgelegd in de testfile:** ik voegde twee tests toe die `authorize` aanriepen → `currentToken()` → Keychain → SecurityAgent-prompt → suite hing weer (tweede keer deze sessie). Verwijderd, mét een comment die opsomt welke symbolen tests NIET mogen aanraken (`authorize`, `currentToken`, `isApprovedDevice`, `SyncableSettings.exportCurrent`). **Verified: 782 tests, 0 failures (was 772) · release-build exit 0.** Na analyzer-deploy live te bevestigen: `curl -N -H "X-RoonSage-Token: <t>" http://<mini>:5767/events` → binnen 2 s een `event: playback`, daarna stilte tot je iets afspeelt, en elke 30 s `: keepalive`.
+- **BATCH 3/8 BENCHMARK-PROGRAMMA — S2 CONDITIONELE GET + GZIP (2026-08-08, ochtend)** — er stond nergens in de Swift-bron een `ETag`, `If-None-Match`, `gzip` of `Accept-Encoding` (repo-brede grep: 0 treffers), terwijl `/library` tientallen MB's is en clients 'm herpullen zodra `libraryRevision` schuift — wat tijdens analyse gebeurt terwijl de INHOUD alleen bij een sync verandert. Nieuw `HTTPPayload`: content-adressed ETag (SHA-256-prefix, sterke validator in quotes) + gzip. **`Cache-Control: no-store` uit batch 1 sloot 304 uit** (een client mag dan niets bewaren om te hervalideren) → nu per respons: `no-store` blijft op `/settings`, de rest krijgt `private, no-cache` = mag lokaal staan, moet hervalideren. Precies wat de ETag bruikbaar maakt, en `private` houdt beide uit gedeelde caches. **gzip zelf gebouwd want Apple's `COMPRESSION_ZLIB` levert ráw DEFLATE** (RFC 1951, staat zo in `compression.h`): 10-byte RFC-1952-header + die deflate + CRC32 + ISIZE. CRC32 getoetst tegen de gepubliceerde vectoren (`""`→0, `"123456789"`→0xCBF43926, quick-brown-fox→0x414FA339) — een foute CRC geeft een stream die élke client weigert en valt niet op in een happy-path-rondgang. Alleen boven 1 KB, en nooit als het níét krimpt (dan raw). Geen clientwijziging nodig: URLSession stuurt zelf `Accept-Encoding: gzip` en pakt transparant uit. **S3 (keep-alive) BEWUST DOORGESCHOVEN naar batch 4**, die de verbindingslevenscyclus toch herschrijft voor SSE — twee keer aan hetzelfde `receive`-pad sleutelen is onnodig risico. **Verified: 772 tests, 0 failures (was 763) · release-build exit 0.**
+- **BATCH 2/8 BENCHMARK-PROGRAMMA — S4 TASKSCHEDULER (2026-08-08, ochtend)** — het applicatie-frame dat Lidarr's `ScheduledTask`+`TaskManager` heeft en RoonSage niet. Achtergrondwerk was een dozijn losse `Task { while true { sleep; work } }`-lussen zonder gedeelde staat: **een herstart begon élke startgrace opnieuw en draaide dus dagelijkse jobs twee keer op een avond met twee herstarts**, er was geen manier om "wanneer slaagde de feature-sync voor het laatst" te beantwoorden behalve het log grepen, en een handmatige trigger kon náást de geplande draaien. Nieuw: `TaskScheduler` (actor) + `scheduled_tasks`-tabel (**migratie v46**) + `DatabaseManager+Tasks`. Zes jobs omgehangen — `artist-radio-sync`, `discovery-run`, `discovery-digest`, `discover-weekly`, `feature-sync`, `lastfm-scrobble-sync` — met behoud van de `startX()`/`stopX()`-namen, dus **geen enkel call-site gewijzigd**. `Outcome.retry(after:)` draagt de bestaande zelfsturende cadans over (feature-sync 6 u geregeld / 5 min tijdens opwarmen; discovery dagelijks / 30 min als er niets uitkwam; artiestradio 3 u / 15 min). Nieuwe endpoints `GET /system/tasks` en `POST /system/tasks/{name}/run`, waarbij de scheduler-dedupe een **409** geeft als de job al vliegt (dat is V5's "geen gestapelde pijplijnen"). **BEWUST NIET OMGEHANGEN:** `serverRoonConnectLoop` (waits hangen af van verbindingsstaat 3/5/6 s + lokale retry-tellers → omzetten is een herschrijving met gedragsrisico en nul winst) en de lyrics-backfill (eenmalige drain, geen cadans). De twee door-de-gebruiker-getoggelde playlist-syncs (LB/Last.fm) staan nog los — kandidaat voor een vervolg. **BEVINDING OVER ONZE EIGEN POORT: de in dit bestand gedocumenteerde actor-isolatie-gate `swift build -c release -Xswiftc -swift-version -Xswiftc 6` WERKT NIET (meer)** — hij faalt in 14 GRDB-bestanden (vendored checkout: `logError`, `SchedulingWatchdog`, `DatabaseFunction`, `SQLExpression`, …) en stopt dáár, dus onze eigen targets worden onder Swift 6 nooit gecompileerd en de poort geeft géén signaal over onze code. Niet op vertrouwen tot GRDB Sendable-schoon is. **Verified: 763 tests, 0 failures (was 755) · `swift build -c release --product RoonSage` exit 0.** `/system/tasks` is NIET live geprobed (draait in de analyzer op de mini); na deploy: `curl -H "X-RoonSage-Token: <t>" http://<mini>:5767/system/tasks | jq '.[].name'`.
+- **BATCH 1/8 BENCHMARK-PROGRAMMA — BEVEILIGING V1–V4 + V6 (2026-08-08, ochtend)** — uit `docs/BENCHMARK-LIDARR-DROPPEDNEEDLE.md`. **V1 (grootste):** `/settings` stuurde API-keys, de Last.fm-sessie en het Qobuz-wachtwoord in leesbare vorm over plat HTTP, óók over ZeroTier. **Mijn eerste aanname was fout en dat is de les:** ik schreef in het plan "stop met versturen, de server handelt tóch namens de gebruiker" — onjuist, de clients gebruiken die credentials écht lokaal (`ScrobbleCoordinator` scrobbelt vanaf het apparaat via `lastfmCreds()`, `QobuzStream` voor lokale playback). Weglaten zou functionaliteit slopen. In plaats daarvan **versleuteld in transit**: nieuwe `SecretsEnvelope` (HKDF-SHA256 uit het reeds gedeelde apparaat-token → AES-GCM; CryptoKit was al een dependency, geen nieuwe afhankelijkheid). `SyncableSettings` krijgt een `Secrets`-substruct + `encryptedSecrets`/`secretsVersion`; `exportCurrent(encryptingFor:)` verzegelt, `decryptSecrets(withToken:)` opent. **Faalt dicht:** geen token / mislukte seal = secrets wég uit de payload, nooit onversleuteld; een oude client ziet nil-secrets en `apply()`'s nil-skip laat z'n bestaande inloggegevens staan. **V2:** `enforceToken` was `bool(forKey:)` = false-tenzij-gezet; nu `object(forKey:) as? Bool ?? true` (zelfde vorm als `library_share_enabled`), zodat een verse installatie `/library` + `/history` niet aan ongekoppelde peers geeft. **V3:** de loopback-uitzondering sloeg de héle auth over — elk proces op de mini (die ook Docker/Plex/rclone/*arr draait) kon `/settings` lezen en Roon aansturen; nu dekt hij alleen niet-gevoelige GET's. Veilig omdat clients nooit loopback targeten (`startServerMode` gooit een loopback-base-URL expres weg). **V4:** goedgekeurde apparaat-tokens stonden plaintext in UserDefaults terwijl het master-token in de Keychain zat; nu alleen de SHA-256, met eenmalige migratie van de oude vorm. **V6:** `Cache-Control: no-store` + `X-Content-Type-Options: nosniff` op elke respons. **INCIDENT + LES:** ik zette de goedgekeurde apparaten éérst in de Keychain — `swift test` hing daarop 11 minuten (SecurityAgent-prompt, PID 72245, xctest op 0:09 CPU), exact de blokkerende ACL-prompt die `KeychainStore.swift:6-9` beschrijft, want de xctest-bundle is ongetekend. Teruggedraaid naar UserDefaults: zodra er alléén een hash in staat levert de store een dief niets bruikbaars op (je hebt de preimage nodig), dus de Keychain voegde weinig toe maar wél een prompt-risico op het hete pad (`isApprovedDevice` draait per request). **Om dezelfde reden roepen de tests `exportCurrent` niet aan** — die leest 7 Keychain-items. **Verified: 755 tests, 0 failures (baseline 743) · `swift build -c release --product RoonSage` exit 0.** LET OP: `/settings` is NIET live geprobed — die route draait in de analyzer op de mini; ná deploy te bevestigen met `curl -s -H "X-RoonSage-Token: <token>" http://<mini>:5767/settings | jq 'has("encryptedSecrets"), .qobuzPassword'` → verwacht `true`, `null`.
+- **VIER DISCOVERY-VERBETERINGEN NAAR DROPPEDNEEDLE-MODEL (2026-08-08, nacht)** — user: "Kan je kijken hoe ik de recommendation technologie van droppedneedle in roonsage kan verwerken/gebruiken?" → "Doe alle 4". **LICENTIE IS BEPALEND: DroppedNeedle (`~/MijnEigenApp/DroppedNeedle`) is AGPL-3.0, deze repo MIT — er is NIETS geport, alleen mechanismen opnieuw gebouwd.** **ANALYSE:** DroppedNeedles scoring is maar 110 regels (`discover/top_picks.py`: `0.5·sim + 0.35·genre + 0.15·log10(listens)/6`); zijn echte techniek is overleven onder rate limits — per-taak time-outs, één ContextVar die dezelfde bouwcode in "snel" of "grondig" (×40 budget) draait, en `_resolve_and_bank` dat élke MusicBrainz-resolutie meteen wegschrijft onder `asyncio.shield` omdat `gather` bij annulering álle voltooide resultaten weggooit. **MIJN EERSTE AANNAME WAS FOUT en dat is de les:** ik claimde dat RoonSage elke run de volle MB-prijs betaalt — onjuist, `DiscoveryHTTPCache` (30 dagen, disk) front `resolveArtist`/`relatedArtists`/`coverArt` al en `cachedJSON:262` bankt per call. Het échte gat was `studioAlbums`: kaal `getJSON`, gepagineerd 100/pagina op 1,1 s, 5 aanroepplekken. **VIER WIJZIGINGEN:** (1) `studioAlbums` krijgt persistente cache met KORTE TTL (6 u) — bewust kort zodat een dagelijkse run (~24 u) altijd mist en release-radar-versheid identiek blijft; lege resultaten worden NIET gebankt want de paginatielus breekt af bij een fout. (2) `RunOutcome.degraded` (niets overleefde / pure chart-vulling / meerderheid producers leeg) → schema **v45_batch_degraded**, default false; `shouldSkipRun` verkort zijn venster zesvoudig (6 u→1 u gepland, 30→5 min handmatig). (3) Twee-traps sortering: smaakgestuurd wordt eerst met MMR gevuld, generiek (`charts`, `dataset`) vult alleen de rest — een gewicht kan dit niet garanderen want een grote chart-artiest scoort hoog op consensus én populariteit; onbekende producer telt als persoonlijk. (4) Dag-jitter ≤0,05 via `seed64(dag|dedupKey)`, deterministisch binnen een dag, roterend over dagen — nadrukkelijk geen `Double.random`. **AANLEIDING BEVESTIGD IN HET LOG vlak vóór de deploy:** `23:30:55 [roon] Ontdekkingen (scheduled): smaak ongewijzigd sinds recente batch — overgeslagen`. **RESULT: v1.10.216 / ios-v1.7.181 / analyzer-v1.1.186 · 743 tests, 0 failures · release-build exit 0 · analyzer 1.1.185→1.1.186 LIVE op de mini (PID 76877, :5766+:5767 beide 200, migratie v45 aantoonbaar gedraaid op library.db).** Oude app bewaard als `/Applications/RoonSage Analyzer.app.bak-1.1.185`. LET OP bij verificatie: `:5766` heeft na een herstart >30 s nodig voor zijn eerste antwoord (CLAP-/indexload) — een curl met 10 s time-out geeft `000` en lijkt kapot terwijl de poort gewoon LISTEN staat.
+- **QOBUZ-ID-DEKKING 33%→67% (2026-08-07, nacht)** — user: "kan je ervoor zorgen dat er meer aanbevelingen zijn met een qobuz id?". Zonder id toont de feed "Niet op Qobuz gevonden" en valt het album ook uit de Aanbevelingen-playlist. **DIAGNOSE:** niet de scoring maar de ZOEKVRAAG. `scoreAlbumCandidate` accepteert 'Pyramid' voor 'Pyramid (Sessions)' prima (substring-tak, `minSubstringText`=3), maar `resolveAlbum` zocht enkel op "artiest album" en op de volledige albumtitel — en op 'Pyramid (Sessions)' vindt Qobuz niets terwijl 'Pyramid' gewoon in de catalogus staat. Alle 6 missers in batch 69/70 waren gekwalificeerde edities. **FIX:** `albumQueryVariants(artist:album:)` + `baseAlbumTitle(_:)` — na de twee bestaande pogingen volgen "artiest basis-titel" en "basis-titel" (afsluitende haakjes/blokhaak-kwalificatie weggelaten). Alleen bij een kwalificatie, alleen mét artiest (zonder artiest valt er niets te bevestigen), geen dubbele queries. **Verbreedt de ZOEKACTIE, niet de acceptatie** — nog steeds getoetst tegen de originele titel + bevestigde artiest, dus geen andere artiest kan binnenglippen. **BEWUSTE AFWEGING: kan een andere EDITIE opleveren dan aanbevolen** (studio i.p.v. live) — speelbare buur-editie > onspeelbare exacte; terugdraaien = deze variantenlijst inkorten. **GEMETEN op verse batches: batch 69 3/9, batch 70 3/9, batch 71 6/9 (33%→67%).** Opgelost: Sting (Live at the Rijksmuseum), Einaudi (Live at the Royal Albert Hall), Alan Parsons (Sessions). RESTEREND (ander probleem, niet dezelfde bug): Japanse compilatie-subtitel (Beach Boys), klassieke split-uitgave "Williams: … / Herrmann: …", en te generieke titel (John Williams 'Legacy'). **RESULT: v1.10.215 / ios-v1.7.180 / analyzer-v1.1.185 · 726 tests, 0 failures.**
+- **SHRINK-GUARD ONDERSCHEIDT STORING VAN ECHTE KRIMP (2026-08-07, nacht)** — live gevonden: 'RoonSage · Aanbevelingen' hield na het uitzetten van de dataset-producer zijn OUDE 23 pop-tracks vast. Log: `catastrophic-shrink guard — 7 resolved from 8 candidates vs 23 existing`. De guard vroeg alleen "is de nieuwe set minder dan de helft?" en kon dus niet onderscheiden tussen (a) Qobuz-matching die faalt — waarvoor hij bestaat — en (b) een caller die bewust minder aanlevert. Gevolg: **een playlist die legitiem kleiner wordt kan NOOIT meer krimpen**; de stale grotere versie blijft eeuwig staan. De resolve-rate scheidt beide (7/8 = 88% is gezond). `shouldBlockShrink(resolved:submitted:existing:)` uitgelicht als pure functie (was inline → onttoetsbaar); blokkeert nu alleen bij scherpe daling MÉT slechte resolve-rate; fail-closed op onbekende baseline ongewijzigd. Mutatietest: drempel weg → `testShrinkGuardAllowsADeliberatelySmallerSource` rood, hersteld → groen. **OOK:** `write()` in de discovery-playlists gaf stil 0 terug bij een nil-sync, waardoor dit geval GEEN enkele logregel opleverde — alleen gevonden door op de Qobuz-regels te zoeken. Logt nu een waarschuwing. **RESULT: v1.10.214 / ios-v1.7.179 / analyzer-v1.1.184 · 720 tests, 0 failures.**
+- **SKIP-GUARD TELT DE PRODUCER-SET MEE (2026-08-07, nacht)** — direct bij het uitrollen van de dataset-fix: zowel de scheduled als de handmatige run sloegen zichzelf over met "smaak ongewijzigd sinds recente batch", want `tasteSignature` hasht alleen top-artiesten/likes/dislikes/watchlist. Een producer uitzetten verandert die signature niet → batch 68 bleef staan, vol met precies de items die de fix moest verwijderen. De guard stelde de verkeerde vraag: niet "is de smaak veranderd?" maar "kan deze run iets anders opleveren?". `tasteSignature(…, producers:)` hasht nu de actieve producer-ids mee (genormaliseerd + gesorteerd, zodat registry-volgorde geen valse rebuilds triggert). **RESULT: v1.10.213 / ios-v1.7.178 / analyzer-v1.1.183 · 715 tests, 0 failures.**
+- **AANBEVELINGEN-KWALITEIT: DATASET-PRODUCER UIT (2026-08-07, laat)** — user: "rare aanbevelingen die ik niet kan plaatsen", "telkens twee tracks van een aanbeveling", "Nieuw voor jou zie ik niet in de playlists staan". **ROOT CAUSE (gemeten op batch 68):** 30 van de 34 album-aanbevelingen kwamen van `DatasetProducer`, die `ds_candidates ORDER BY fans DESC LIMIT 120` leest én diezelfde globale fan-telling log-geschaald AS `similarity` teruggeeft → de wereldwijd beroemdste artiesten scoren het HOOGST als "match voor jou". Gemeten: Ariana Grande 0.897 / Shawn Mendes 0.873 / Sean Paul 0.851 vs. Pink Floyd 0.86 (listenbrainz-exploration) op een bibliotheek van Dire Straits/Knopfler/Chris Rea. Enige filter in de distill is Deezers grove `AlbumGenreName` ∈ lib-top-genres — op ~72% pop/rock zeeft dat niets; **exact dezelfde umbrella-val als bij de genre-radio's van 26 juli.** **MIJN EIGEN PLAYLIST-FILTER VERERGERDE HET:** de eis `qobuzAlbumID != nil` correleert met bekendheid — dataset 30/30 mét id, smaak-gebaseerd 2/4 → Alan Parsons + Einaudi vielen eruit, de mainstream bleef. Filter selecteerde onbedoeld op beroemdheid. **FIXES (96e32c6→v1.10.212 · 713 tests):** `DatasetProducer` uit `discoveryProducers` (reden in de code; heraanzetten = scoren op echte genre/smaak-overlap, niet enkel lager gewicht). TWEE playlists i.p.v. één, gesplitst zoals de feed zelf ("Soort"-picker): `RoonSage · Nieuw voor jou` = aanbevolen ARTIESTEN (1 track elk; artiest-recs hebben geen album-id → via `searchArtistAlbums` → `albumTrackTitles`) en `RoonSage · Aanbevelingen` = aanbevolen ALBUMS. `tracksToTake(fromReleaseOf:)` vervangt de vaste 2 (single→1, EP→1, album→2-3) — user zag "twee tracks van een single" omdat veel recs singles waren. Blanks worden VÓÓR het budget gefilterd (test ving: 2-track-release met 1 blank gaf 0 tracks). **LET OP:** de playlists lezen de nieuwste COMPLETE batch, dus de oude poplijst blijft staan tot er een verse batch is — handmatig getriggerd via `POST :5767/discovery/run`. **RESTRISICO:** met dataset uit had batch 68 nog maar 4 album-recs (2 bruikbaar) → "Aanbevelingen" kan dun zijn tot de andere producers meer albums leveren; "Nieuw voor jou" heeft 15 artiest-recs en is wél gevuld.
+- **DEEL 2 + DUIDELIJKE TITELS (2026-08-07, avond)** — user: "doe beide en de titels moeten heel duidelijk zijn. Dus recent geluisterd, nieuw voor jou en aanbevelingen".
+  - **2a — Ontdek-feed seedt nu op RECENT (3db24f8 · v1.10.208/ios-v1.7.173/analyzer-v1.1.178, 695 tests):** `runDiscoveryPipeline` seedde `topArtists` uit `topArtistsListened(limit:60)` = pure all-time afspeelaantallen, dus aanbevelingen volgden je archief i.p.v. je huidige fase. Nieuw: `recentArtistsListened(listenLimit:)` (artiesten uit je laatste 50 plays, nieuwste eerst; venster over PLAYS zodat een artiest die je de hele avond opzet dat venster mág domineren) + pure `mergeRecentFirst(recent:allTime:limit:)` met all-time als staart (dunne/lege history regresseert niet) en case-insensitieve dedup (`listening_history.artist` is vrije tekst uit Roon ÉN geïmporteerde Last.fm → dezelfde artiest kan in casing verschillen en anders 2 seed-slots pakken). **Lost de eerder genoteerde skip-guard-val vanzelf op:** `tasteSignature` neemt topArtists mee, dus de signature schuift nu mee met je luistergedrag. LIVE BEWEZEN: 21:43 draaide de scheduled discovery en sloeg **49 aanbevelingen op (batch 68)** i.p.v. "smaak ongewijzigd — overgeslagen".
+  - **2b — "Aanbevelingen"-playlist (96e32c6 · v1.10.210/ios-v1.7.175/analyzer-v1.1.180, 703 tests):** nieuwe `RoonClient+RecommendationsPlaylist.swift` mirrort de nieuwste COMPLETE discovery-batch naar één Qobuz-playlist `RoonSage · Aanbevelingen` (20 albums × 2 tracks). Alleen ALBUM-aanbevelingen: een artiestkaart heeft geen `qobuzAlbumID` en "willekeurige track van die artiest" is een andere aanbeveling dan wat gescoord is. **VALKUIL AFGEVANGEN: de reconcile wist élke `RoonSage · `-playlist buiten z'n keep-set en deze is geen radio → stond in geen enkele keep-set.** `recommendationsQobuzKeep()` toegevoegd aan BEIDE reconcile-paden; sync draait ná de reconcile. `album/get` sequentieel (niet parallel) — dat endpoint is net door de radio-sync gejaagd en parallelle fan-out lokte de 503's uit het Qobuz-open-item uit.
+  - **Vaste titels (18028ae · v1.10.209/ios-v1.7.174/analyzer-v1.1.179, 697 tests):** `fixedMeta(category:)` geeft `.recent` de letterlijke titel "Recent geluisterd" (geen LLM-titeling, geen model-warmup); "Aanbevelingen" is per definitie letterlijk. De creatieve categorieën houden hun gegenereerde titels. **TWEE VALKUILEN die reconcile de playlist zouden laten wissen:** (1) `resolveTitle`'s fullyFresh-pad schreef nooit weg, terwijl een vaste-titelstation vanaf build 1 al fullyFresh is → titel belandde nooit in UserDefaults, waar `reconcileQobuzRadios(keepIDs:)` z'n keep-list uit bouwt → leest als wees; (2) deze radio was al LLM-getiteld vóór hij vast werd, dus de oude naam stond al op schijf → persist-conditie is "verschilt van wat we serveren", niet "ontbreekt".
+  - **Gedeployd:** analyzer-v1.1.180 op de mini (PID 47443) 21:44. LET OP: 5766 kwam deze keer pas na ~50s op i.p.v. ~3s (CLAP-load bovenop de verse batch) — geen crash, wel goed om te weten voor de volgende deploy-verificatie. Vóór de fix stond de recent-radio nog als 'RoonSage · Vrolijke Pop-Rock uit de jaren 80' op Qobuz (22/22 sync om 21:36); de hernoeming naar "Recent geluisterd" landt in de eerstvolgende sync-cyclus.
+- **"RECENT GELUISTERD"-RADIO (2026-08-07)** — user-wens: "een playlist op basis van wat ik recent heb geluisterd". Keuze (user): BEIDE varianten — (1) uit eigen bibliotheek, (2) discovery buiten de bibliotheek — venster = laatste ~50 tracks. **Deel 1 (bibliotheek) GESHIPT.** Nieuwe `RadioCategory.recent` → één station `recent:listened`, geseed op de 50 meest recente DISTINCTE plays; RadioEngine groeit daar sonisch omheen. Belangrijk onderscheid t.o.v. de rest: dit is een RECENCY-slice, geen metadata-slice — `DiscoverWeekly` doet nota bene het omgekeerde (seedt op meest-gespeeld en sluit recent juist UIT), dus er was nog niets dat hierop seedde. Seeds uit `playStatsByMatchKey()` (match_key + MAX(played_at)) i.p.v. `recentListens()`: die laatste geeft losse history-rijen met alleen title/artist (match keys opnieuw afleiden) en laat één track op repeat de seedset vullen. Geen `bucketGate` (default → nil: nabijheid ÍS de definitie); geen facet-mapping bij "overnemen" (zoals `.sonic`). Loopt automatisch mee in de bestaande Qobuz-sync/reconcile/selectie — 4 exhaustive switches moesten mee (fallbackMeta, 2× LLM-subject, radioConfigFromAIRadio, UI headerSubtitle). `rotationBucketStamp(date:hour:)` afgesplitst van `rotationStamp()` zodat de 3u-bucketing toetsbaar is zonder klok. **RESULT: 94d90c7 · v1.10.207 / ios-v1.7.172 / analyzer-v1.1.177 · 691 tests (was 687), 0 failures, release exit 0.** Mutatietest: sortering → afspeelaantal maakte `testRecentSeedKeysOrderByRecencyNotPlayCount` rood, hersteld → groen. Gedeployd op de mini (PID 39052) 21:04; `/artist-radios?category=recent` levert live 30 tracks in 62s (LLM-titel "Vrolijke Poprock uit de jaren 80", seeds duidelijk uit de recente Dire Straits/Knopfler-luisterbui). `recent:listened` toegevoegd aan `radiosync.selection.v1` (21→22 ids). **Deel 1 afgerond.**
+- **ACTIVITEITSRADIO'S: FOCUS + WORKOUT GEGATE (2026-08-07)** — user over 'Alternatieve Rock voor diepe concentratie' (Snow Patrol/Chris Rea) en 'Stevige Rock en Klassiek voor hard werken' (Hozier naast Vangelis): "rare titel?". De titels waren correct — de bucketing niet: `activityProfiles` gate UITSLUITEND op energie-percentiel + BPM, zonder genre- of zang-eis, dus "activiteit" betekende op een pop/rock-bibliotheek niets meer dan "BPM-band". Focus eist nu ook boven-mediane `instrumentalness` (CLAP-as die er al was maar hier niet gebruikt werd; bibliotheek-relatief percentiel want absoluut loopt leeg op een zangrijke collectie; degradeert naar energie+tempo als de as ontbreekt, maar een track ZONDER de as valt af — onbeoordeelbaar is precies de rij waarvoor de gate bestaat). Workout weert de klassieke familie via `t.genres` (MB∪Deezer), deny-list op specifieke frases zodat "classic rock" blijft passeren (getest). Nieuw: `Calibration.attributePercentile(_:axis:)` + `hasAxis(_:)`. **RESULT: v1.10.211 / ios-v1.7.176 / analyzer-v1.1.181 · 708 tests, 0 failures.**
+- **RADIO-ROTATIE PER 3U I.P.V. PER DAG (2026-08-07)** — user-report na de A4/B4-deploy: "Stevige rock uit de jaren 2004-2024" (mood:aggressive) had exact dezelfde 30 tracks van 06:56 tot 20:27 ondanks 6 auto-sync-runs, alleen de LLM-titel varieerde. ROOT CAUSE: de shuffle-seed was `dayStamp()` (kalenderdatum) → elke sync binnen dezelfde dag koos dezelfde deterministische volgorde; bevestigd in `roonsage.log` (zelfde "2/30 not found"-fingerprint 6× op een rij, wél een ander fingerprint op 2026-08-04). FIX: `dayStamp()` → `rotationStamp()` (yyyy-MM-dd + uur-bucket van nieuwe `radioRotationHours=3`, gelijk aan `artistRadioRefreshInterval` zodat elke geslaagde auto-sync een nieuwe bucket raakt); alle 8 aanroepsites hernoemd (genre/mood/activity/decade/sonic-buckets, artist-radiovolgorde, custom radio's — `RoonClient+Radio/+ArtistRadio/+CustomRadio/+RadioSyncSettings/+RadioCategories.swift`). `dailyShuffled`/`seed64` ongemoeid. **RESULT: 0bced3c · v1.10.206 / ios-v1.7.171 / analyzer-v1.1.176 · 687 tests, 0 failures, release-build groen.** Analyzer-v1.1.176 gedeployd op de mini (PID 35564, was 28935) 20:48, loopback binnen 2s gezond ({ok,54872}/{ok,76571}). Effect pas zichtbaar bij de volgende paar auto-sync-cycli (elke 3u); niet geforceerd om Qobuz niet extra te belasten.
+- **A4/B4 ANALYZER-REDEPLOY + QOBUZ-RECONCILE (2026-08-07 20:17-20:32)** — sonic-radio-audit (b5325a9) live gezet: `analyzer-v1.1.175` gedeployd via de deploy-mini skill (bootout LaunchAgent → install → bootstrap, geen `open -a` want KeepAlive), nieuwe PID 28935 (was 2195). Loopback binnen 3s gezond: :5766/health {ok,54695}, :5767/health {ok,76571}, /on-this-day echte data, geen launch-crash; RSS zakte na de opstart-piek van ~640MB naar 79MB (bevestigt de v1.1.173 libmalloc-relief werkt nog). Client-app NIET gedeployd (constraint).
+  De geplande auto-sync (20s na start, elke 3u) deed de churn zelf: **21/24 geselecteerde radio's gesynct** (was 24/24 vóór de deploy) — de 3 missers zijn precies de voorspelde dangling genre-ids. Bevestigd via `/artist-radios?category=genre`: de nieuwe MB∪Deezer-genre-buckets voor déze bibliotheek zijn nu maar **3** (`electronic`, `jazz`, `classical`) — `pop/rock`/`r&b`/`stage & screen` bestaan niet meer als bucket (geen synthetisch vervangbaar equivalent; de fijnere tags MB∪Deezer clusteren hier simpelweg niet groot genoeg voor de top-8-cap). Reconcile beschermt een id zolang die in de selectie staat, ook als er dit keer geen bucket voor gebouwd is — dus die 3 Qobuz-playlists zouden nooit meer bijgewerkt zijn maar ook nooit opgeruimd. **Fix: `genre:pop/rock`/`genre:r&b`/`genre:stage & screen` verwijderd uit `radiosync.selection.v1`** (`defaults write com.roonsage.analyzer`, 24→21 ids; de andere 21 — 7 artist/6 mood/5 activity/3 genre — ongemoeid). Geen vervangende genre-ids gekozen (smaakbeslissing, aan de user); de eerstvolgende reconcile-cyclus (over ~3u, geen extra sync geforceerd om Qobuz niet nodeloos te belasten) ruimt de 3 nu-orphaned Qobuz-playlists vanzelf op via `clearQobuzIDs(notIn:)`. Geen crashes/fouten in `roonsage.log` over de hele sync.
+- **SONIC-RADIO-AUDIT GESHIPT (2026-08-07, af 26 juli)** — mood-badge-kalibratie + genre-radioset uit MB∪Deezer (24 live Qobuz-radio's geauditeerd, zie [[project_radio_profile_clap_tags_2026_07_19]]-vervolg). B1 `MoodCalibration.ranked()`/`calibratedScore()` (z-score i.p.v. rauwe CLAP-cosines, sad 2.9%→19.6%/aggressive 5.2%→19.8%) via `SonicLibraryCache.moodCalibration()`; `TrackInfoSheet.topMoods` + `SonicDNA.profile` gebruiken 'm nu. A `genreBuckets`/`bucketGate` lezen nu `SonicTrack.genres` (MB∪Deezer) i.p.v. de Roon-genre-map + `genreBucketDenyList`; Roon `genresByTrackID()` ongemoeid (artist-affiniteit/custom/SonicDNA hangen eraan). B2 rijkere CLAP-mood-prompts + `prepareMoodProbes()` (runtime-herberekening, gebaked bestand als fallback). **RESULT: b5325a9 · v1.10.204 / ios-v1.7.169 / analyzer-v1.1.174 · 687 tests, 0 failures.** Analyzer geredeployd naar analyzer-v1.1.175 op 2026-08-07 20:17 — zie A4/B4 hierboven.
+- **C7-LOCALISATIESWEEP AFGEMAAKT (2026-08-07)** — 46 RoonSageUI-views hadden al hardcoded-NL naar `LS()`-keys omgezet zonder de `.strings`-catalogi bij te vullen (584 keys, nl.lproj dekte er maar 23/584 → shipte zo zou de UI kale keys tonen i.p.v. tekst). Alle 561 nieuwe keys + vertalingen toegevoegd aan zowel nl.lproj als en.lproj (echte vertaling, geen kopie — bv. "Ontdek Wekelijks"→"Discover Weekly"); 23 bestaande keys hergebruikt waar de tekst al identiek was. Geverifieerd: `plutil -lint` op beide catalogi, keyset-diff nl==en==618 en dekt alle 584 `LS()`-aanroepen in de code (0 missend, 0 overtollig). **RESULT: 0b8b750 · v1.10.205 / ios-v1.7.170 / analyzer-v1.1.175 · 687 tests, 0 failures.**
+- **ANALYZER-HERSTART NA OOM (2026-07-23 ~10:15)** — de analyzer (analyzer-v1.1.166) antwoordde niet meer op :5767 (host pingbaar, poort dood). Oorzaak: macOS "run out of application memory" → alle apps ge**paused** (incl. analyzer). Aanjager: iOS-functietest werd ONBEDOELD op de MÍNI zelf gedraaid (hostname Caspers-Mac-mini, Mac16,10) — iOS-simulator + herhaalde Xcode-builds bovenop Docker-VM (~5,4 GB) + analyzer (2 GB) + Plex + Roon op 16 GB. Er draaiden 2 analyzer-instances (PID 994 = 2 GB, 1426 = 25 MB). Herstel: sim + CoreSimulator gekild (mijn footprint), LaunchAgent `bootout` (KeepAlive!), PID 994 SIGKILL (gesuspend, reageerde niet op TERM), `launchctl bootstrap` → nieuwe PID 19001, `localhost:5767/health` {ok, 76571}. Daarna 1844M vrij (was 0). **LES: draai de sim/builds NIET op de mini** — dat kilt de server-of-record. Client-app NIET gedeployd (constraint).
+  **GESHIPT (2026-07-23):** de 3 code-fixes uit de iOS-audit gecommit + gepusht + getagd. `DatabaseManager+AudioFeatures.swift` (analyse-% teller/noemer, 129%→79% op sim bevestigd), `FilteredTracksView.swift` (knop-labels `.lineLimit(1)` — `.fixedSize` brak de layout op iOS 26, teruggedraaid), `SimilarTracksView.swift` ("Speel deze mix"-bevestiging, patroon van Sonic Journeys). `CLAPModel.swift` + `native/docs/KOEL_AUDIT.md` bewust NIET meegecommit (al gewijzigd vóór deze sessie, lopend Koel-audit-werk van de user). **RESULT: 4c0d57d · v1.10.191 / ios-v1.7.156 / analyzer-v1.1.167 · 665 tests, 0 failures.** #3/#7 sim-visueel niet herbevestigd na de OOM (analyzer lag toen plat) — zie hierboven. Audit-bevindingen: [[project_ios_functietest_audit_2026_07_22]].
+- **RADIO-GROUNDING LIVE OP DE MINI (2026-07-19 01:06)** — analyzer-v1.1.162 gedeployd (PID 69540, was 12904/v1.1.159). Bevat de drie radio-batches: grounding van titel+beschrijving (36c2790), `titlesig` v1→v2 (912d3c6), `trimDangling` los van de lengtecap (c40b62b). Build: `build-analyzer-release.sh analyzer-v1.1.162`, Developer-ID-keten geverifieerd (Casper Jansen 5W3QDZ94FH → Developer ID CA → Apple Root), 2 resource-bundles present, versie-stamp 1.1.162. LaunchAgent stond wél geïnstalleerd maar NIET geladen → geen KeepAlive-race bij de PID-kill. Loopback geverifieerd ná settelen: :5766/health {ok, 53787}, :5767/health {ok, 76571, hosts .59/.60/10.94.184.22}, /on-this-day echte data. Proces gezond (945 MB RSS, 2,6% CPU), beide poorten luisterden binnen 2s, geen launch-crash. Client-app NIET gedeployd (constraint).
+  **LIVE GEVERIFIEERD (01:08-01:17)**: de eerste run ná de deploy bouwde ALLE categorieën, niet één per run zoals ik eerst dacht: artist 10 + genre 6 + mood 6 + activity 5 = **27 playlists, 27 titels ge(her)genereerd** (elke eerdere run logde `0 titels ge(her)genereerd` — de titlesig-bump doet precies wat hij moet). Alle Qobuz-syncs slaagden, geen enkele 503. De vier afgekapte titels zijn WEG: grep op hangende voegwoorden over alle `title.v2.*` geeft 0 hits (waren: "Klassiek Instrumentaal: Melancholisch en", "Elektronische Party: Dansbare beats en", "R&B Sfeer: Vrolijke zangnummers met", "Film & Theater: Akoestisch en"). GROUNDING BEWEZEN op de 8 nieuwe titels met een toetsbare claim, elk tegen zijn eigen `titlesig.v2`-band (`a:[valence][dans][akoestiek][instr]`): Akoestisch Chill-out akoest=h · Vrolijke akoestische jazz val=h akoest=h · Elektronisch Party akoest=l · Elektronisch Rebuke akoest=l · Vrolijke Warm-up Hits val=h · Vrolijk Zonnig val=h · Dansbaar Partybeat dans=h · Melancholisch Akkoorden val=l. 8/8 correct, nul valse claims. "Akoestisch" komt nu nog in 2 titels voor, beide op selecties die hoog méten — vóór de fix stond het woord op 5 plekken waarvan 3 in ongevalideerde beschrijvingen (Level 42/RHCP, John Williams/Hans Zimmer). 25 van de 27 kregen een v2-signature; de 2 zonder zijn stations waar de generatie faalde → bewust niet gecachet, worden bij de volgende build opnieuw geprobeerd.
+  **ONTDEKT BIJ DE DEPLOY, LOSSTAAND PROBLEEM — zie Open items**: Qobuz `GET /playlist/get` gaf in de run van 22:43-22:44 (oude build) **HTTP 503 na 3 pogingen** voor élke radio in de run van 22:43-22:44 (oude build). Gevolg: de sync kent de bestaande inhoud niet → `catastrophic-shrink guard` slaat aan → "AI radio sync overgeslagen of mislukt". Alle 5 gesyncte radio's faalden zo. Dit is GEEN gevolg van de radio-batches (het is de Qobuz-leeskant, niet de titelkant), maar het betekent wél dat correcte nieuwe titels niet landen zolang de 503's aanhouden.
+- MATCH_KEY-COLLISION-FIX (BUG 2) GEÏMPLEMENTEERD + GEVERIFIEERD (2026-07-18, NIET gedeployd/gecommit) — de walker beslist skip/analyseer nu op `match_key`, dezelfde sleutel waarop `upsertBatch` conflict't, i.p.v. op (file_path, file_mtime). CAUSE (gemeten): 13.100 bestanden delen 5.743 match_keys (kwaliteitsversies 24bit/16bit, live vs studio, album+compilatie) — `matchKey` = `primaryArtist␟cleanTitle`, album/duration-agnostisch (TrackIdentity.swift:87). Path-gekeyd miste elk bestand de rij van zijn twin → heranalyse → `ON CONFLICT(match_key)` overschreef de ander → ping-pong, 130+ analyses/5min bij NUL netto voortgang (v3 exact 39.233, totaal exact 55.463 over 2u+). WIJZIGINGEN: `FeatureStore.rowState(matchKey:)` + `setEmbedding(matchKey:)` (nieuwe overloads, path-varianten blijven voor het fast-path + attribute-backfill); `LibraryWalker.decide(row:path:mtime:currentModel:)` = pure, uitgelichte beslisfunctie (skip / .full / .embeddingOnly) zodat élke branch toetsbaar is zonder audio-fixtures; walk-loop houdt een goedkoop path-fast-path (geen tag-read voor de ~39k onveranderde v3-bestanden) en valt alleen bij een miss terug op de tag-read + match_key-lookup; heranalyse-sentinel `file_mtime < 0` forceert nog steeds `.full` (user-constraint: full-track zoals AudioMuse), maar is nu ZICHTBAAR voor de lookup i.p.v. af te hangen van een mislukte match. GEVOLG BY DESIGN: van twee twin-bestanden wordt er één geanalyseerd — de app joint toch op match_key en kan er nooit meer dan één gebruiken. Verified: `swift test` → 625 tests 0 failures (was 614; +9 LibraryWalkerDecisionTests, +2 FeatureStore-collisietests), `swift build -c release --product RoonSage` exit 0. Mutatietest als bewijs dat de assert bijt: twin-branch tijdelijk gesloopt → `testTwinFileSharingTheKeyIsSkippedNotReanalysed` rood ("analyze(full)" ≠ "skip"), daarna hersteld → groen. **LIVE BEWEZEN op de mini** (analyzer-v1.1.159, PID 12904): v3 39.233 → 39.615 in 16 min (+382), na 2u+ exact stilstand — voortgang is weer monotoon. Meet-gotcha die me bijna een fout-negatief opleverde: de eerste 10-min-meting toonde v3 constant, maar er werd toen NIETS geanalyseerd (mini herstartte 17-07 20:53, analyzer kwam niet terug, DB sinds 20:48 onaangeraakt) — de walk was stil, niet de fix stuk. Tweede gotcha: `upsertBatch` buffert 64 rijen per transactie en full-track hi-res-analyse is traag, dus de eerste write kwam pas na ~25 min. Tempo ≈ 9/min → de 16k achterstand kost ~29u.
+- MTIME-FIX (BUG 1) LIVE OP MINI (2026-07-17) — analyzer-v1.1.158 live (PID 53234, was 90546; Developer-ID gesigneerd via build-analyzer-release.sh, /Applications vervangen + herstart, geen launch-crash). Loopback: :5766/health {ok,55463}, :5767/health {ok,76571, hosts .59/.60/10.94.184.22}. `FeatureStore.mtimeMatchSQL` = `abs(file_mtime - ?) < 0.5` i.p.v. exacte float-gelijkheid in isAnalyzed/rowState/setEmbedding. Verified: swift test → 614 tests 0 failures; swift build -c release exit 0; reproductietest rood→groen. Client-app NIET gedeployd (constraint). **MAAR: loste de stagnatie NIET op** — na deploy bleef v3-count EXACT 39233 + totaal 55463 constant over 10+ min ondanks 130+ analyses/5min → mtime-drift was maar een KLEIN deel (0/130 recent-geanalyseerde was sub-seconde). ECHTE oorzaak = match_key-collision (zie open items), structurele fix in uitvoering. NIET gecommit/getagd (werk loopt door in de structurele fix). — v1.10.171 / ios-v1.7.136 / analyzer-v1.1.146 (commit 7424839 + docs eb3746d). Zie ## Now (LAATST) voor de 4 ingrepen (P0-P3). Verified: swift build && swift test -> 584 tests, 0 failures; release-build RoonSage groen. **analyzer-v1.1.146 LIVE op de mini** (PID 31598, was 56825/v1.1.135; Developer-ID gesigneerd via build-analyzer-release.sh, /Applications vervangen + herstart, geen launch-crash). Loopback geverifieerd: :5766/health {ok,58915}, :5767/health {ok,76571, hosts .59/.60/10.94.184.22}, /on-this-day echte data (Sting/Phil Collins 2024-07-13). Client-app NIET gedeployd (constraint). **P1/P3-effect wordt zichtbaar bij de VOLGENDE pipeline-run/weekly-rebuild** (schedule) — de nu-geserveerde discover-weekly (2026-W28) is nog van vóór deze deploy; forceren niet gedaan (zwaar: MB/LLM/Qobuz). UI (nieuwe "Weer opzetten"-shelf + hero + filters) headless niet verifieerbaar → op toestel checken.
+- MAC-CLIENT VASTLOPER-FIX ("loopt vaak vast", 2026-07-09, "doe alles") — twee Explore-agents wezen dezelfde hoofdoorzaak aan: **synchrone GRDB `pool.read` op de `@MainActor`**. De ergste zat in `NowPlayingView.body` (`attributesFor` op regel 420), en de 1 Hz-positietimer (regel 320) forceert die body — dus de blokkerende SQLite-read — **elke seconde tijdens het afspelen**; die stalt achter elke lopende import-`pool.write` → zichtbare hang. Fix (7 files):
+  - `NowPlayingView.swift:420` leest nu de al-gecachte `attrs` @State i.p.v. de DB → de per-seconde main-thread-read is weg (de frequente vastloper).
+  - `featuresForMatchKey`/`attributesForMatchKey`/`sonicSeed` (DatabaseManager+AudioFeatures) + `RoonClient.featuresFor`/`attributesFor` → `async` (`await pool.read`); geen feature-read kan de UI-thread meer blokkeren. Callers (`refreshFeatures` in NowPlayingView + LocalNowPlaying → `async`, gedreven door `.task(id:)`; LiveDJView.reload; buildRadio; similarTracks) awaiten nu.
+  - `SettingsView.refreshLastSync` leest `syncStateValue` via `Task.detached` off-main (geen brede signatuurwijziging; die accessor heeft 6 background-callers die synchroon prima zijn).
+  - Tijd-polling van de Now-Playing-bar ONGEWIJZIGD en correct: `setAnchor()` + `tickPosition()` + de 1 Hz-timer zijn orthogonaal aan feature-loading; de klok tikt nu zelfs robuuster (trage DB-read kan de tick niet meer stallen).
+  - Lyrics-accessors bewust NIET aangeraakt: al off-main via `Task.detached` (RoonClient+Lyrics). Launch-DB-open (RoonSageApp.init) bewust NIET async gemaakt: eenmalige launch-kost, geen recurring freeze, en async maken raakt elke synchrone `database?.`-toegang (grote blast radius) — genoteerd als vervolg.
+  - RESULT: v1.10.154 / ios-v1.7.119 / analyzer-v1.1.129 · Verified: swift build && swift test → 552 tests, 0 failures; release-build RoonSage schoon. swiftlint lokaal niet geïnstalleerd (CI lint't). NIET gedeployd (client-app hoort niet op de mini; analyzer ongewijzigd).
+- BETERE CURATIE + MEER ONTDEKKING (2026-07-08, vervolg op het dataset-programma) — onderzoek (Explore-agent) naar de discovery-architectuur wees 2 concrete hefbomen aan, beide geshipt + live gedeployd (analyzer-v1.1.128, PID 25283):
+  - DatasetProducer eigen budget (v1.10.152): alle producers deelden `context.perProducerLimit`=40, ook de speculatieve (LLM/web-scrape) — nu heeft DatasetProducer (zero-network-cost, sinds de echte import 40k+ ISRC-gevalideerde tracks voor owned/disliked-filtering) een eigen `maxCandidates`=120.
+  - Deezer-genre-backfill (v1.10.153): `libraryGenreSet()` (de referentieset voor discovery's genreOverlap-score, 20% van het composiet) unieerde alleen Roon+MusicBrainz-genres — MB's per-release-dekking is sparse, en Qobuz-only tracks (geen lokaal bestand) hebben ÜBERHAUPT geen Roon-genre, dus die droegen NIETS bij aan de woordenschat (genreOverlap viel stil op 0 voor kandidaten die eigenlijk wél matchten). Nieuwe `DeezerGenreEnricher` (analyzer-side, mirrort GenreEnricher/PopularityEnricher): 1 track-search + 1 album-detail-lookup per album (gememoized), track_features +deezer_genres/+deezer_genre_checked_at, library v40_deezer_genres (eigen tabel zoals track_mb_genres), gesynct via /features, geünieerd in libraryGenreSet(). Auto-achtergrond-trickle (toggle + knop in Geavanceerd). LIVE GEVERIFIEERD: binnen 1 minuut na herstart al 779 tracks gecontroleerd, 322 met genres gevonden.
+  - Bewust NIET aangepakt (genoteerd voor een vervolgbatch): het 0.35-scoredrempel + preResolveCap=90 die samen verklaren waarom een batch 47 i.p.v. 60 items gaf (adaptieve per-producer-budgetten zijn de volgende stap); populariteit zit al met gewicht 0.00 in het composiet (bewust, alleen een ±0.10-dial-nudge) — geen wijziging, want "meer nieuwe muziek" pleit niet voor meer populariteits-bias; `DatabaseManager+Filter.swift`'s genre-zuiverheidsgate (roon/mb) NIET uitgebreid met de Deezer-bron — bewust klein gehouden na de recente v1.10.145-fix daar
+- MUSICMOVEARR-DATASET PROGRAMMA VOLLEDIG AFGEROND + LIVE (2026-07-08) — het complete traject van "doe alles" tot live geverifieerd:
+  - Fase-0-destillatie 2x gedraaid: pass 1 (18:11-19:48, oude schema) ONTDEKTE dat de sidecar de nieuwe kolommen nog niet had (script was al bijgewerkt terwijl pass 1 liep — draaiende processen lezen hun SQL niet opnieuw). Pass 2 (19:34-21:15, hergebruikte de al-uitgepakte CSV, geen nieuwe 121GB-download) leverde de volledige sidecar: 2.270.789 ds_tracks (allemaal met ISRC) + 50.000 ds_candidates, 423MB.
+  - BEVINDING tijdens verificatie: `explicit`-kolom was NULL voor alle 2.27M rijen — Deezer's CSV codeert deze velden als de strings "True"/"False", niet "0"/"1"/"2" zoals aangenomen. Gefixt in distill-datasets.sh (commit 16ad61f) voor de VOLGENDE distillatie; deze sidecar/release heeft nog geen explicit-data (isrc/mbid/bpm/gain/album_upc/label/release_date wél correct, COUNT=2.270.789 op alle velden behalve mbid=0 want geen MusicBrainz-bron in deze Deezer-only dump).
+  - ECHTE import tegen de mini's LIVE analyzer.db (eerst gebackupt naar analyzer-backup-pre-dataset-import-20260708T213741.db): 2x gecrasht op "SQLite error 5: database is locked" (collision met de draaiende analyzer-app se eigen 30s revision-refresh-timer, GEEN busy_timeout ingesteld) — resumable ontwerp betaalde zich uit, 3e poging maakte af. RESULTAAT: 40.329/58.835 tracks (68,5%) kregen een ISRC, 23.154 een deezer_bpm.
+  - Analyzer geredeployed: was v1.1.120 (voorafgaand aan DatasetProducer, fase 2 = v1.1.122!) → nu analyzer-v1.1.126 op de mini (PID 20399, Developer-ID gesigneerd via build-analyzer-release.sh). dataset_sidecar_path gezet via `defaults write com.roonsage.analyzer` vóór de herstart. Geen launch-crash, :5767/:5766 health OK.
+  - LIVE GEVERIFIEERD: geforceerde discovery-run (mood-seed omzeilt de "smaak ongewijzigd"-skip-guard) → batch 22 (47 items), waarvan **13 van producer "dataset"** — genre-divers (Electro/Dance/Pop/R&B/Rap/Latijns), niet de oude top-400-fans-monocultuur. Curatie-fix (v1.10.150) en échte data samen bewezen werkend.
+  - dataset-v1 GitHub Release gepubliceerd (github.com/Georgemvp/roonsage/releases/tag/dataset-v1): metadata.db.gz, 115MB gecomprimeerd (423MB→800MB na de import's match_key-stamps op ds_tracks, ongevacuumd — werkt prima maar kleiner na VACUUM, zie Open items). Geverifieerd discoverable via dezelfde GitHub API-call als DatasetFetcher gebruikt.
+  - NIET gedaan: tweede backfill-pass voor de explicit-kolom (kost nog een ~1,5u DuckDB-scan voor 1 boolean-kolom, bewust uitgesteld — zie Open items).
+- DATASET QUICK-WIN METADATA GESHIPT (2026-07-08) — RESULT: commit 4a65030, v1.10.149 + ios-v1.7.114 + analyzer-v1.1.124. UPC/label/release_date/explicit toegevoegd aan dezelfde sidecar-pass (Deezer CSV had de kolommen al: AlbumUPC/Label/TrackReleaseDate/*ExplicitLyrics — geen nieuwe 121GB-extractie nodig). Volledige keten: distill-datasets.sh (ds_tracks +4 kolommen) → FeatureStore (column-guarded +album_upc/label/release_date/explicit) → DatasetImporter.merge (zelfde "hoogste Deezer-rank wint"-regel als isrc/bpm) → setDatasetIdentity (COALESCE, overschrijft nooit) → /features export → library v39_track_dataset_metadata → DatabaseManager+AudioFeatures sync (21-kolom upsert, COALESCE). Nog GEEN UI-consumer (explicit-filter/precieze-decade-filter/label-discovery-verbreding) — data-plumbing alleen, consumer = volgende batch. 541 tests 0 failures, release-build schoon. Distillatie (fase 0, PID 6301/8842) liep ONGEWIJZIGD door tijdens deze batch (geen code-wijziging raakt het lopende proces).
+- DATASET IMPORT E2E GEVERIFIEERD (2026-07-08) — `roonsage-analyzer import-dataset` op een KOPIE van de live analyzer.db (247MB, interne SSD) met een synthetisch sidecar (5 echte geanalyseerde tracks + fake ISRC/MBID/bpm): 27s, 58820/58841 gecheckt (rest = lege artist/title, terecht skip), echte tracks kregen isrc+recording_mbid+deezer_bpm. 4/5 matchten — de 5e "miss" was fixture-corruptie (mijn bash `IFS=,` splitste "Weval, Solomun" op de veld-interne komma → sidecar-rij mangled; DuckAB's CSV-parser in het echte script heeft dit niet). Importer + CLI + matchKey-koppeling + kolomschrijf bewezen correct tegen het ECHTE schema. GOTCHA: sidecar én analyzer-db op dezelfde USB-schijf als de 121GB DuckDB-scan = totale I/O-uithongering (0 progress in 16min) → smoke-test op interne SSD. Scratch opgeruimd.
+- DATASET FASE 3 GESHIPT — Deezer-BPM octaaf-kruischeck + eerlijke descope. TempoReconciler (puur, AudioAnalysis): snapt een LAGE-confidence native BPM naar de ½×/1×/2×-octaaf die 't dichtst bij de Deezer-referentie ligt (±6% accept-tolerantie, high-confidence blijft onaangeroerd) → fixt de klassieke half/double-time-fout. deezer_bpm door de keten: analyzer-export → library v38_track_deezer_bpm → sync (COALESCE) → djCandidates past reconcile toe op de bpm-WAARDE (pool-samenstelling ongewijzigd, geen sequencer-regressie). Sonische opname van dataset-kandidaten vereist GEEN nieuwe code: bestaande PreviewEmbeddingBackfill (Deezer-preview→CLAP) dekt Qobuz-geresolvde picks al. DESCOPED met reden: related_artists-merge uit de fan-GRAAF kan NIET met deze flat-CSV (die heeft alleen fan-COUNTS ArtistNbFan, geen related-artist edges) → adjacency loopt via genre+fans in de destillatie. RESULT: 535 tests 0 failures met CLAP-GPU-tests overgeslagen (+7: 6 TempoReconciler + 1 DJ-octaaf), release-build exit 0. CLAP-golden = omgevings-flake (zie Failed attempts).
+- DATASET FASE 2 GESHIPT — DatasetProducer: nieuwe DiscoveryProducer (id "dataset") die ds_candidates uit de sidecar leest (albums van niet-bezeten artiesten in de top-genres, log-fans→0.3-0.9 similarity, geshuffeld voor variatie), owned/disliked/dup filtert, capt op perProducerLimit. Gegate op ProducerContext.datasetSidecarPath (nieuw, read-only DatabaseQueue, ontbrekend pad = producer uit). Server-setting datasetSidecarPath (UserDefaults). Geregistreerd in discoveryProducers → erft MB-validatie + Qobuz-resolutie (library-first) + scoring gratis. Distill-script native/scripts/distill-datasets.sh: DuckDB over deezer_flat.csv → compacte metadata.db (ds_tracks identity library-artiesten, ds_candidates adjacency). RESULT: 534 tests 0 failures (+3), release-build exit 0. Torrent CSV.7z (10GiB) BINNEN via publieke trackers; deezer_flat=121GB uitgepakt-formaat.
+- DATASET FASE 1 GESHIPT — ISRC/MBID-identiteit: analyzer track_features +isrc/+recording_mbid/+deezer_bpm/+deezer_gain/+dataset_checked_at (column-guarded), DatasetImporter (pass A keyt sidecar-rows met échte TrackIdentity in Swift — nooit SQL-nabouw; pass B matcht op VERSE key à la exportJSON, update op stored PK; COALESCE — dump overschrijft nooit API-popularity), CLI `import-dataset --sidecar`, /features exporteert isrc/recording_mbid, library v37_track_identity + sync-decode + upsert-COALESCE. Sidecar-schema: ds_tracks(source,artist,title,album,isrc,recording_mbid,duration,bpm,gain,rank,match_key) op /Volumes/Elements/roonsage-datasets. RESULT: 531 tests 0 failures (+4), release-build exit 0. Fase 0 (torrent CSV.7z 10GiB) liep nog: 0 seeders op de originele trackers — herstart met publieke trackerlijst
+- analyzer-v1.1.120 live op mini (PID 98947, was 76205/v1.1.119) — Developer-ID gesigneerd, geïnstalleerd in /Applications, herstart. Loopback: :5767/health {ok,76571}, :5766/health {ok,58841}, geen launch-crash. LIVE GEVERIFIEERD: POST /generate "rustige avond jazz" (HTTP 200) → nu zuivere smooth-jazz (Jeff Lorber/David Benoit/Dave Koz/Melody Gardot/Jay Beckenstein…), **Bob Moses + Daft Punk WEG**; trace toont `genre-zuiverheid: 323 off-genre tracks weg → 592`. Client-app NIET gedeployd (constraint).
+- Genre-zuiverheid generate-pool GESHIPT — RESULT: v1.10.145 + ios-v1.7.110 + analyzer-v1.1.120 (tag matcht live binary), 527 tests 0 failures — Casper meldde Bob Moses + Daft Punk in "rustige avond jazz". CAUSE (geen pipeline-bug): filterTracks (DatabaseManager+Filter.swift:36-37) matcht een genre in ÓF Roon track_genres ÓF MB track_mb_genres → één spooktag lekt. Bewijs uit library.db: Bob Moses "Here We Are" heeft MB-tag `jazz` (naast electronic/house); Daft Punk "Nightvision" heeft Roon-genre `Jazz` (naast Electronic). Extra bevinding: `genre_taxonomy` is PLAT (expandGenres('jazz')→['jazz'], smooth/contemporary/vocal jazz hebben NULL parent) → subgenre-expansie is dood. FIX: genre-zuiverheidsgate in buildCandidatePool — DatabaseManager.genreFamily(tag) (keyword→coarse family, jazz vóór "smooth", groepeert house/electro/dance→electronic) + passesGenrePurity(roon,mb,requested) = keep als requested-family de PLURALITEIT is óf cross-source bevestigd; soft-gate (verzacht < minPool). genresForTracks batch-fetch. Trace-regel "genre-zuiverheid". Gevalideerd tegen de 12 echte picks: houdt Jay Beckenstein/Dave Koz/Melody Gardot/Boney James (echt smooth/vocal jazz), dropt Bob Moses+Daft Punk (electronic) + Chet Atkins/Knopfler/Dire Straits (country/soundtrack/soft-rock). Verified: swift test → 527 tests 0 failures (8 nieuw); swift build -c release → complete. swiftlint niet geïnstalleerd op mini-shell (CI-gate). LIVE nog UNVERIFIED: draaiende analyzer = v1.1.119 (pre-fix); vereist analyzer-redeploy om POST /generate live te toetsen.
+- Generate-audit "doe alles" GESHIPT + GETAGD — RESULT: commits a5e1244 + c956ceb + 79ef519, v1.10.142 + ios-v1.7.107 + analyzer-v1.1.118 (gepusht + tags gepusht). AI-playlistgeneratie erft nu de sonische radio-engine: RadioEngine.rank(queryAnchor:) over sub-VectorIndex van de gefilterde pool (taste/like/dislike-push, MMR + expliciete dropNearDuplicates, dial), mood/activity-facetten in analyzeForFilters + gemeten gate met verzachting, [mood,bpm]-hints in de curator-lijst, RadioSequencer-flow met arc, TitleGrounding-gevalideerde titel, reasons per track; U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers → fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc). Verified: swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enkel open: "volledig M3" (bewust, regressierisico). Zie native/docs/GENERATE_AUDIT.md. UI-flow zelf EDITED-UNVERIFIED (headless).
+- analyzer-v1.1.118 live op mini (PID 42177, was 78772) — Developer-ID gesigneerd, geïnstalleerd in /Applications, herstart. Loopback geverifieerd: :5766/health {ok,58840}, :5767/health {ok,76571, hosts .59/.60/10.94.184.22}, /on-this-day echte data. Client-app NIET gedeployd (constraint). NB: mijn wijzigingen zitten in het CLIENT-generate-pad (RoonSageCore/UI); de analyzer-server gebruikt dat pad niet → deze deploy is versie-pariteit, geen runtime-gedragswijziging voor de server.
+- Eindeloze scroll Tracks-browser + Albums/Artiesten-grids GESHIPT — RESULT: commit c3ce71f, v1.10.141 + ios-v1.7.106 + analyzer-v1.1.117. Vaste caps (tracks 300/albums 100/artiesten 200) → offset-paginatie: browseTracks/searchAlbums/searchArtists +offset (LIMIT ? OFFSET ?); LibraryView laadt pagina's bij tijdens scrollen. Tracks: elke sort ordent in SQL (BrowseOrder +title/album/year/bpm, COLLATE NOCASE titel) → consistente paging; dedup artiest+titel incrementeel in view. Random + meest/recent-gespeeld blijven single-shot (begrensd). Grids 120/pagina; favorieten-filter pauzeert paging (client-side). Sort-wissel=reload; pull-refresh reset cursor. DB-tests testBrowseTracksPaginatesWithOffset/testAlbumAndArtistGridsPaginate (497 tests, build debug+release exit 0). NIET headless UI-geverifieerd
+- Eindeloze scroll gefilterde bibliotheeklijst GESHIPT — RESULT: commit 2d5931b, v1.10.140 + ios-v1.7.105 + analyzer-v1.1.116. FilteredTracksView stopte op FilterOptions.limit (500); nu offset-paginatie (FilterOptions.offset → LIMIT ? OFFSET ?, stabiele ORDER BY) + view laadt pagina's van 200 bij tijdens scrollen (prefetch 8 rijen voor eind) tot uitputting. "Speel alles" haalt volledige set (≤500); teller "N+" zolang meer. DB-test testFilterTracksPaginatesWithOffset (495 tests, build debug+release exit 0). NB: de platte Tracks-browser (browseTracks) blijft apart gecapt op 300 (dedup/sort-modi) — niet aangeraakt
+- NowPlayingBar-overlap in Bibliotheek GEFIXT — RESULT: commit 62b2d11, v1.10.139 + ios-v1.7.104 + analyzer-v1.1.115. LibraryView-root was VStack{picker;List}; een geneste List erft de bottom safe-area inset (gedeelde NowPlayingBar) niet → mini-player zweefde vóór de laatste content. Nu is de mode-scrollview de root (modeContent), header (banner+picker+tagchips) en selectiebalk in .safeAreaInset(top/bottom). build+test exit 0, 494 tests. NIET headless UI-geverifieerd (GUI-automation geblokkeerd → op toestel checken)
+- Bibliotheek-hero speelduur + snelkoppelingen GESHIPT — RESULT: commit 74e980d, v1.10.138 + ios-v1.7.103 + analyzer-v1.1.114. Stats-hero toont totale speelduur ("N uur muziek") via nieuwe DatabaseManager.libraryDurationSeconds() = SUM(duration) over track_audio_features + RoonClient-wrapper. Snelkoppelings-navCards (Ontdek Wekelijks / Mijn radio's / Aanbevelen) onder "Blader door"; weeklyInstap veralgemeend naar herbruikbare navCard (pusht doelview op de stack). swift build (debug+release) + test exit 0, 494 tests. NIET headless UI-geverifieerd, NIET op mini
+- Bibliotheek → overzicht-landing GESHIPT — RESULT: commit 7558266, v1.10.137 + ios-v1.7.102 + analyzer-v1.1.113. Bibliotheek-tab opent nu op scrollbaar Overzicht (nieuw ViewMode `.overview`, default): stats-hero (tracks/artiesten/albums + topgenre + %geanalyseerd), "Recent toegevoegd"/"Onlangs gespeeld" (laatste via playStats→tracksByMatchKeys want ListenEntry heeft geen art), "Voor jou" (toptracks/onontdekte albums/vergeten favorieten), radiostations (dailyRadios→startRadio), Ontdek Wekelijks-instap, en "Blader door" genre/sfeer/decennium-tegels → nieuwe FilteredTracksView (Hashable LibraryFilter {genre/tag/decade} + navigationDestination; FilterOptions niet Hashable dus primitives dragen). Zoeken springt naar Tracks. Shelf/hero/stat-bouwstenen uit DiscoveryView gelicht → publieke Shelves.swift (Ontdek ongewijzigd). "Sfeer"=audio-tags (FilterOptions.tags); CLAP-moods zijn geen FilterOptions-dimensie. swift build (debug+release) + test exit 0, 494 tests 0 failures. NIET headless UI-geverifieerd (GUI-automation geblokkeerd) + swiftlint lokaal niet geïnstalleerd (CI-gate). NIET op mini gedeployd
+- Audit 6 dimensies afgerond — RESULT: rapport met SEC-H1 (default-open server), COR-H1..4 (Qobuz fail-closed + DiscoverWeekly), PERF-H1..7, UX-M1..4, Code-H1..3, 13 features
+- B1 Kritiek GESHIPT — RESULT: commit d8b912e, v1.10.118 + analyzer-v1.1.94. QobuzClient getJSON+fail-closed (count→Int?, ids→[String]?, findPlaylist→PlaylistLookup, searchTracks retry), DiscoverWeekly matchKey-gate, LibraryShareServer non-GET+/settings altijd token + auto-enforce na 1e pairing. 463 tests 0 failures
+- B2 Security GESHIPT — RESULT: commit 5778071, v1.10.119 + analyzer-v1.1.95. Analyzer-server ACAO:* weg (M4), share-server POST vereist application/json (CSRF M5), pending-cap 50 (L6). 463 tests
+- B3a Correctheid GESHIPT — RESULT: commit 8486494, v1.10.120 + analyzer-v1.1.96. FuzzyMatch version-qualifier-guard +regressietest (MED-1), LB submit status-check + loved partial-log (MED-7), bpm_confidence NULL conditioneel (MED-8). 464 tests
+- B3b Correctheid GESHIPT — RESULT: commit 000b02b, v1.10.121 + analyzer-v1.1.97. Digest sluit accepted albums uit op dedup_key+artiest|album (MED-5), Chillen/Lounge vereisen echt bpm (zero-is-data LOW). 464 tests
+- B4a Perf GESHIPT — RESULT: commit b44a9f2, v1.10.122 + analyzer-v1.1.98. Qobuz session-cache 10-min TTL (PERF-H6). 464 tests
+- B4b Perf GESHIPT — RESULT: commit 0703238, v1.10.124 + analyzer-v1.1.100. Discovery filter-reorder (PERF-M5): identity-drop (in-library/listened/blocked/cooldown) verplaatst naar 3a-ter, vóór álle album/cover-resolutie (MB studioAlbums/coverArt + Qobuz resolveAlbums/artistCovers) i.p.v. erna; final Score/Filter blijft autoriteit → correctheid ongewijzigd. Bounded concurrency (PERF-M6): QobuzClient.resolveAlbums + resolveArtistCovers nu ≤5 in flight via withTaskGroup (was volledig sequentieel over ~dozijnen wants); artistCover-helper geëxtraheerd. swift build+test exit 0, 464 tests 0 failures
+- B4c Perf GESHIPT — RESULT: v1.10.125 + analyzer-v1.1.101 + ios-v1.7.90. PERF-H1: FeatureStore.filePath deed per /audio-request een FULL TABLE SCAN (matchKey per rij herberekend) als de client-key ≠ stored PK (oud-schema rijen); nu O(1)-lookup in gememoiseerde current-scheme [matchKey→file_path]-map, herbouwd alleen als contentSignature wijzigt (proces-scoped → normaliser-wijziging = nieuwe binary = restart = herbouw, dus nooit stale). playableMatchKeys deelt dezelfde map. **H2 (signature memoize) + H3 (embeddings ETag) NIET gedaan — REDUNDANT**: client gate't de hele /features+/embeddings pull al op featuresRevision (RoonClient+Features.swift:186-187 → geen HTTP-request bij ongewijzigde revisie), dus ETag heeft geen caller en contentSignature draait op de 30s revision-timer i.p.v. per poll. swift build+test exit 0, 464 tests. GEEN schema-migratie (in-memory map i.p.v. current_match_key kolom → geen stale-key 404-risico bij schemawissel)
+- LAUNCH-CRASH GEFIXT + GESHIPT — RESULT: commit fccf37d, v1.10.123 + analyzer-v1.1.99. v1.10.117 crashte bij opstarten (SIGTRAP): LS→Bundle.module fatalError want release-packaging kopieerde RoonSage_RoonSageUI.bundle niet in .app. Fix: beide release-scripts kopiëren *.bundle → Contents/Resources; LS/LT defensieve uiBundle-lookup (fallback .main ipv fatal). GEVERIFIEERD: .app mét bundle start (ALIVE 5s), .app zónder bundle start óók (fallback). 464 tests
+- Share-tekst (terugblik) GESHIPT — RESULT: v1.10.136 + analyzer-v1.1.112 + ios-v1.7.101. ShareSummary (puur): onThisDay(_:max:) + tasteTimeMachine(_:maxYears:artistsPerYear:) → deelbare NL-tekst met signature "via RoonSage"; lege input → "". ShareLink in RecentView-toolbar voor de Op-deze-dag/Tijdmachine-pivots (alleen als er iets te delen is). 4 ShareSummary-tests (regels/cap/nil-artiest/leeg). 494 tests, build+test exit 0. BEVINDING: loudness-normalisatie was al geshipt (LocalLoudness + tests) — feature-lijst was stale
+- NL-steer-veld GESHIPT — RESULT: v1.10.135 + analyzer-v1.1.111 + ios-v1.7.100. RadioSteerField (gedeelde component): vrij-tekstveld in de actieve-radio-banner (SonicRadioView + CustomRadioView) → client.steerActiveRadio(phrase:); onherkende frase → hint-toast via reportError. LS-keys nl+en (radio.steer.*). Laatste consumer → alle B8-API's nu bereikbaar. Build+test exit 0, 490 tests. UI EDITED-UNVERIFIED (headless); parser al getest (RadioSteerParserTests)
+- Terugblik-consumers GESHIPT — RESULT: v1.10.134 + analyzer-v1.1.110 + ios-v1.7.99. RoonClient.onThisDay()/tasteTimeMachine() dual-mode (isRemote→HTTP+decode /on-this-day|/taste-timemachine, else DB direct — mirror van yearInReview). RecentView: 2 nieuwe pivots "Op deze dag" (tappable-to-play, relatieve datum toont "1 jaar geleden") + "Tijdmachine" (Section per jaar, top-artiesten). LS-keys nl+en. 2 decode-tests tegen ECHTE live-server-JSON (borgt fetch-contract). 490 tests, build+test exit 0. UI zelf EDITED-UNVERIFIED (headless); endpoints al live op v1.1.108, geen deploy nodig
+- B8 "NL-steering" GESHIPT — RESULT: v1.10.133 + analyzer-v1.1.109 + ios-v1.7.98. RadioSteerParser (puur, NL+EN): parse(phrase)→RadioSteer{adventurousnessDelta}; up (avontuurlijker/verras me/surprise) +0.2, safe (veiliger/vertrouwder) −0.2, negatie-bewust (minder verrassing/niet zo avontuurlijk/less adventurous → −), intensifier (veel/heel → 0.35), energie-frasen → nil (geen mis-map). steerActiveRadio(phrase:) past dial aan + resteerActiveRadio (bestaande infra). 5 parser-tests. 488 tests, build+test exit 0. Consumer (voice/chat/tekstveld) = follow-up; niet gedeployd (geen live consumer)
+- B8 "taste-timemachine" GESHIPT — RESULT: v1.10.132 + analyzer-v1.1.108 + ios-v1.7.97. DatabaseManager.tasteTimeMachine(topPerYear:): top-artiesten per kalenderjaar uit listening_history (SQL-aggregatie per (jaar,artiest) + top-N-per-jaar in Swift), nieuwste jaar eerst; TastePeriod(year,totalPlays,topArtists) Codable. /taste-timemachine endpoint. 2 unit-tests (temp-DB): top-per-jaar+nieuwste-eerst+totalPlays, top-N-cap. 483 tests, build+test exit 0
+- B8 "op deze dag" GESHIPT — RESULT: v1.10.131 + analyzer-v1.1.107 + ios-v1.7.96. DatabaseManager.onThisDay(now:limit:): plays uit dezelfde maand-dag (MM-DD, UTC via strftime) in eerdere jaren, huidig jaar uitgesloten, nieuwste eerst; OnThisDayEntry (Codable). /on-this-day thin-client-endpoint in LibraryShareServer (naast /year-review). 3 unit-tests (temp-DB via appendImportedListens): MM-DD-match+prior-years+DESC, huidig-jaar-excl+limit, leeg. 481 tests, build+test exit 0. Endpoint NIET live tot analyzer-redeploy; client-fetch+UI = follow-up
+- B8 skip re-steer GESHIPT — RESULT: v1.10.130 + analyzer-v1.1.106 + ios-v1.7.95. "Skip = live re-steer" (best-ratio feature): RadioEngine.rank kreeg skippedKeys → zachte negatieve query-push (skipPush 0.20 < dislikePush 0.40), sessie-scoped. RadioRunState.skippedKeys accumuleert; regenerateRadioPool geeft ze door aan buildRadioCandidates→rank; recordRadioSkip(matchKey:) voegt toe + triggert resteerActiveRadio (single-flight). Hook in next(zoneID:): skip op de actieve-station-zone → nowPlaying-matchKey geregistreerd (server routeert remote "next" óók via next(), dus thin-client-skips tellen mee). Engine UNIT-GETEST (symmetrisch: skip +y⇒−y wint, skip −y⇒+y wint); 478 tests, build+test exit 0. Live-gedrag EDITED-UNVERIFIED (headless, geen live Roon-zone)
+- B7a Architectuur GESHIPT — RESULT: v1.10.129 + analyzer-v1.1.105 + ios-v1.7.94. Mock-transport testharnas: TransportDispatching-protocol (1 methode: dispatch(endpoint,body)) geëxtraheerd; RoonTransport conformeert (additief), TransportService hangt nu aan het protocol i.p.v. de concrete actor → MockTransport in tests. 5 nieuwe TransportServiceTests pinnen elke command-payload vast (control/volume/mute-bool→how/repeat-enum→loop_one|disabled/shuffle/seek/group/transfer). Enige caller RoonClient:630 ongewijzigd (RoonTransport conformeert). Eerste unit-dekking van de transport-commandolaag. build+test exit 0, 477 tests
+- B6a UX GESHIPT — RESULT: v1.10.128 + analyzer-v1.1.104 + ios-v1.7.93. ZoneGate: library "speel nu"-oppervlak (LibraryView selectie+rijen, LibraryDetailViews album-rijen+meest-gespeeld) routeert nu via playToActiveOutput + gate hasActiveOutput i.p.v. curateTracks(zoneID)+selectedZone==nil → honoreert lokale output ("dit apparaat"). Roon-pad bewijsbaar identiek (playToActiveOutput==curateTracks als zone gekozen). Wachtrij + sonic radio + album/artist-bulk (heeft eigen lokale knop) blijven zone-gated. Help-tekst "Kies eerst een zone of apparaat". build+test exit 0, 472 tests. Lokaal on-device pad EDITED-UNVERIFIED (headless mini, geen GUI) — Casper test op toestel
+- B5b Perf client GESHIPT — RESULT: v1.10.127 + analyzer-v1.1.103 + ios-v1.7.92. Taste/embedding alloc (PERF-M1-4): TasteVector.compute kopieerde ELKE library-embedding in een dict (1 [Float]-alloc per rij, ~50k) om er ~honderden op te zoeken → nu idByKey (goedkope strings) + embedding-lookup enkel voor gespeelde+geliked keys (M1). vDSP-accumulaties (TasteVector.add, VectorIndex.centroid, nnSimilarityStats) gebruiken in-place vsma / hergebruikte buffer i.p.v. per-iteratie temp-array (M2-4): centroid geen scaled-temp per seed, nnStats één scores-buffer + query wijst direct in de matrix (was per-sample alloc+kopie). Numeriek identiek: 5 nieuwe tests (gewogen centroid, nnStats finite/in-range, taste lean/like/nil). 472 tests, build+test exit 0
+- B5a Perf client GESHIPT — RESULT: v1.10.126 + analyzer-v1.1.102 + ios-v1.7.91. Music Map spatial index (PERF-H7/M9): MusicMapView.selectNearest deed O(n) over álle ~50k tracks per tap (position per track herberekend); nu SpatialGrid (nieuw, RoonSageCore, uniform 64×64 grid over genormaliseerde [0,1]²-coords) → O(1)-amortized cell-query. norm[] + grid 1× gebouwd in load(); render scaalt goedkoop i.p.v. bounds-math per punt. Selectie bewijsbaar identiek (±20pt candidate-box ⊇ 14pt hit-radius, exacte afstandstest + 196-drempel ongewijzigd). 467 tests (3 nieuw: SpatialGridTests, nearest==brute-force). swift build+test exit 0
+- ANALYZER REDEPLOY 2026-07-07 — RESULT: analyzer-v1.1.108 live op de mini (PID 78772, was v1.1.101/98941). Bevat alle B4-serverfixes + skip-re-steer + /on-this-day + /taste-timemachine. Geverifieerd op loopback 5767: /on-this-day gaf echte 2025-07-07-plays (Knopfler/Dire Straits; huidig jaar 2026 correct uitgesloten, nieuwste eerst), /taste-timemachine top-5-artiesten per jaar 2026→2024. Geen launch-crash. Client-app NIET gedeployd (constraint)
+- Alle batches gepusht. ANALYZER-SERVER GEDEPLOYD op de mini 2026-07-06 — RESULT: analyzer-v1.1.101 (build-analyzer-release.sh 1.1.101, Developer-ID signed, *.bundle mee), /Applications/RoonSage Analyzer.app vervangen + herstart (PID 98941). Geverifieerd op loopback: /health 5766=58839 features + 5767=76571 library, /features 200 51MB 0.57s (warm), /audio 206 audio/flac (H1-pad live). GEEN launch-crash. Client-app NIET gedeployd (constraint). Gotcha: /features cold-cache + herhaalde 120s-probes = GRDB reader-pileup (opstart-piek) → meet één keer na settle
+
+## Open items
+- **[2026-08-23] "BESTE ALBUMS VAN DE 2000'S" EN "MEER IN POP/ROCK" ONTBREKEN NOG IN DE FEED — ER IS GEEN GERANGSCHIKTE ALBUMS-PER-FACET-QUERY.** De referentie heeft die twee secties; ik heb ze bewust NIET gebouwd. `filterTracks(options:)` (`DatabaseManager+Filter.swift:24`) geeft tracks, geen albums, met `ORDER BY t.artist, t.year, t.title LIMIT ?` — dus een venster aan het begin van het alfabet. Client-side groeperen op album zou dus altijd dezelfde A-artiesten tonen, en dat is geen "beste albums van". Wat het nodig heeft: een `albumsForFilter(options:orderedBy:)` in `DatabaseManager+Filter.swift` die op album groepeert en op afspeelaantal of jaar rangschikt.
+- **[2026-08-22] `docs/STATE.md` is 1189 regels; de eigen guardrail (`docs/guardrails/SESSION.md` S2) zegt onder de 80.** `## Now` besloeg in z'n eentje ~988 regels. Ik heb de nieuwe stand vóór de oude gezet en de oude bewaard onder een scheidingslijn in plaats van 'm te schrappen — dat is jouw materiaal, niet het mijne om weg te gooien. Opruimen betekent volgens S2: oude `## Done`-entries verwijderen, nooit specifics uit de overgebleven regels trimmen.
+- **[2026-08-22] LOKAAL SIGNEREN KAN NIET MEER — DEPLOY LOOPT NU VIA DE CI-DMG.** `security find-identity -v -p codesigning` geeft op de actieve sleutelhangers alleen "Apple Development"; de "Developer ID Application: Casper Jansen (5W3QDZ94FH)" zit in `~/Library/Keychains/login_renamed_1.keychain-db` (restant van de auto-login/keychain-affaire). Expliciet signeren met `codesign --keychain <die sleutelhanger>` geeft `errSecInternalComponent` (= vergrendeld/geen toegang tot de private sleutel), en de zoeklijst aanpassen is geblokkeerd. **Werkende omweg, gebruikt voor analyzer-v1.1.200:** tag pushen → workflow *Release Analyzer App* bouwt Developer ID-gesigneerd met de CI-secrets → `gh release download analyzer-v<versie> -p "*.dmg"` → mounten, `codesign -dvv` controleren (team moet `5W3QDZ94FH` zijn, anders verliest de app zijn Keychain-items) → oude app naar `.bak-<oude versie>` → kopiëren → `launchctl bootstrap`. **Wil Casper weer lokaal kunnen bouwen:** die sleutelhanger ontgrendelen en aan de zoeklijst toevoegen.
+- **[2026-08-22] DE TWEEDE AUTOSTART STAAT ER NOG, MAAR IS ONSCHADELIJK — BRON NIET DEFINITIEF VASTGESTELD.** `strings /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18*.btm | grep -i roonsage` toont nog steeds twee records: de LaunchAgent-plist én een los `com.roonsage.analyzer`-item op bundle-id. `reconcileAutostart()` heeft bij de start van 1.1.200 **niets** uitgezet en logt ook niets, dus `SMAppService.mainApp.status` is niet `.enabled` — het tweede record komt dus ergens anders vandaan (kandidaten: "heropen vensters bij inloggen", of een BTM-record dat blijft hangen na een eerdere registratie). **Waarom het niet meer erg is:** `SingleInstance.enforce()` vangt élke tweede kopie, ongeacht wie hem start — live bewezen. **Wil je het record tóch weg:** Systeeminstellingen → Algemeen → Inloggen → "RoonSage Analyzer" uitzetten en na de volgende login opnieuw dumpen.
+- **[2026-08-22] ONGECOMMIT WERK VAN EEN EERDERE SESSIE IN DE BOOM:** `AnalyzerMenuBarContent.swift` (menubar-herziening "Server 2.0") compileerde niet — `zone.name` bestaat niet op `Zone`. Eén regel naar `zone.displayName` gezet zodat de build doorloopt; de rest van die wijziging is niet van deze sessie en niet nagekeken. `Package.swift` heeft daarnaast een ongecommitte `.process("Resources")` → `.copy("Resources")` staan.
+- **[OPGELOST 2026-08-08] BIBLIOTHEEKSYNC DRAAIDE NIET PERIODIEK — GEVONDEN DOOR DE NIEUWE HEALTH CHECK**: opgelost met de wekelijkse `library-sync`-job, zie ## Done. Onderstaande diagnose blijft staan als context: `/health/detail` meldde binnen een minuut na deploy "laatste sync 39 dagen geleden" (error). **Geen meetfout, geverifieerd in de DB**: `sync_state.last_sync = 2026-06-30T11:38:50Z`, `sync_in_progress = 0`, terwijl de server gewoon leeft (`listening_history` loopt tot 2026-08-07T20:50Z) en 76.571 tracks bevat. **OORZAAK (RoonClient.swift:802):** `startSync()` wordt alleen aangeroepen als `trackCount == 0` **of** de Core gewisseld is **of** er NULL match_keys zijn — plus handmatig via Instellingen/LibraryView/MCP. Er is dus **geen periodieke bibliotheeksync**: zodra de bibliotheek gevuld is en de Core hetzelfde blijft, wordt er nooit meer gewandeld. Alles wat na 30 juni aan Roon is toegevoegd staat niet in `library.db`, en dus ook niet in discovery/DJ/sonic. **NIET STIL OPGELOST** — een Browse-walk is duur (uren bij koude start) en de mini is krap; een wekelijkse `library-sync`-job in de scheduler is de voor de hand liggende fix, maar dat is een gedragswijziging die de user moet willen. De incrementele infrastructuur bestaat al (`sync_album_checkpoints` + `hasInterruptedSync` hervat een afgebroken walk). Tussentijds: "Synchroniseer nu" in Instellingen.
+- **QOBUZ `playlist/get` GEEFT 503 → AI-RADIO-SYNC LANDT NIET (ontdekt 2026-07-19)**: in de run van 22:43-22:44 (analyzer-v1.1.159) faalde `GET /api.json/0.2/playlist/get` met **HTTP 503 na 3 pogingen** voor élke AI-radio. Keten: sync kent de bestaande playlistinhoud niet → `catastrophic-shrink guard` (QobuzClient.swift:135) weigert te schrijven ("keeping existing tracks") → `AI radio sync overgeslagen of mislukt` (RoonClient+ArtistRadio.swift:1116). Alle 5 gesyncte radio's van die run faalden zo; `5/24 geselecteerde radio's naar Qobuz` betekent dus 0 geslaagd. GEVOLG: de hergenereerde titels van de titlesig-v2-bump landen NIET op Qobuz zolang dit aanhoudt — het probleem zit aan de LEESkant van Qobuz, niet aan de titelkant, dus geen van de drie radio-batches lost dit op. NIET een brede Qobuz-storing: in dezelfde periode haalde de ListenBrainz-mirror zijn playlists wél op (01:07:11, gewone matching-misses, geen 503). Verdenkingen, ongetoetst: (a) 503 specifiek op `playlist/get` voor playlists die de guard beschermt, (b) rate-limiting doordat de auto-sync 24 radio's kort na elkaar afgaat, (c) verlopen/half-geldige Qobuz-sessie die alleen op schrijf-adjacent endpoints struikelt. **AANGEPAKT 2026-07-19 (user: "fix dit")**: de guard is NIET verzwakt — dat zou de bug certificeren. In plaats daarvan is de LEESkant taaier gemaakt in `QobuzClient.getJSON` (:690): `attempts` 3→5, en de wachttijd komt nu uit een pure, getoetste `QobuzClient.retryDelay(attempt:retryAfter:)` die (a) een server-gestuurde `Retry-After` honoreert, geklemd op [0,10] s, en (b) anders `0.5·2^n` doet met een plafond van 8 s. Totale wachtbudget 1,2 s → 7,5 s over 4 pauzes. Structuur bewust gekopieerd van `LLMClient.backoff` (:295) zodat beide uitgaande clients zich gelijk gedragen onder rate limiting. Daarnaast logt de laatste mislukte poging nu de eerste 200 tekens van de responsbody — precies de diagnose-stap die anders elke volgende keer blind begint. 3 nieuwe tests op de pure schedule. NB: `getJSON` bestaat als naamgenoot in 6 andere clients (MusicBrainz/Deezer/Lyrics/Discogs/RelatedArtists/MBDiscovery), elk een eigen private functie — die zijn NIET aangepast.
+  NOG STEEDS ONBEWEZEN wat de 503 veroorzaakte: het reproduceerde niet meer (de run van 01:08-01:17 synchroniseerde alle 27 radio's zonder één 503). De fix is dus verdediging, geen bewezen genezing. EERSTE STAP als het terugkomt: lees de nu-gelogde body — 503 met een Qobuz-foutbody ("rate limit exceeded") zegt iets anders dan een kale gateway-503. Diagnose-regel uit [[project_qobuz_sync_broken_2026_06_25]]: 0/alles = login, gedeeltelijk laag = matching; dit is 0/alles op één endpoint, dus richt eerst op sessie/rate-limit.
+- **CLAP-TESTFLAKE OPGELOST 2026-07-19 (v1.10.187) — was: crasht intermittent**: FIX = env-vlag `ROONSAGE_CLAP_CPU_ONLY`, standaard UIT, gelezen in `CLAPModel.init` (CLAPModel.swift:75-ish, naast de bestaande `ROONSAGE_CLAP_DIR`-conventie op :34). Alleen de twee testklassen die een CLAPModel laden zetten 'm in `override class func setUp()` (CLAPEmbeddingTests, CLAPTextSearchTests). BEWIJS: `.all` 5 crashes / 16 runs · `.cpuOnly` 0 / 24 in het experiment · 0 / 20 in de verificatie via de echte code (44 schone runs totaal). BESLISSEND VOOR DE SCOPE: de PRODUCTIE-analyzer heeft hier nooit op gecrasht — 0 hits op MPSGraph in roonsage.log, 0 crash reports in ~/Library/Logs/DiagnosticReports, over 70 sessies en 41.699 CLAP-tracks. Dus geen productiebug maar een testverschijnsel; vermoedelijk de levenscyclus (tests bouwen/slopen het model tientallen keren in korte processen, productie laadt één keer en draait uren). Productie blijft daarom op `.all`: daar én sneller (16-24 s vs 17-47 s voor cpuOnly op een rustige machine) én stabiel. **PRIJS, bewust betaald en in de code gedocumenteerd: CI test de ANE/GPU-backend niet meer.** De embedding-wiskunde is backend-onafhankelijk en de golden-vector-asserties zijn ONGEWIJZIGD, maar een regressie die specifiek in het versnelde pad zit valt hier niet meer op. Terugdraaien = de `setenv` in de twee testklassen weghalen. Onderstaande historie bewaard omdat er twee weerlegde hypotheses in staan die anders opnieuw onderzocht worden.
+- **(historie) CLAP-TESTS CRASHEN INTERMITTENT ONDER GEHEUGENDRUK (2026-07-18)**: `CLAPEmbeddingTests` faalt soms met `MPSGraphTensorData.mm:208: failed assertion 'shape.count = 0 != strides.count = 2'` → xctest `signal code 6` (SIGABRT). Een nul-dimensionale tensor = profiel van een mislukte GPU-allocatie. NIET aan één test gebonden: crashte zowel in `testMoodsProduceScores` als in `testWindowedEmbeddingMatchesSingleForHomogeneousSignal` — het treft wélke CLAP-test er op dat moment draait. Waargenomen tijdens zware machinebelasting (SoulSync `--apply` deed 87 GB `cmp` op de USB-schijf, analyzer-app hield CLAP op de GPU, swap 4,8/6 GB, macOS herschaalde de swapfile live 6144M→5120M). A/B-poging was NIET conclusief: schone boom 3/3 groen vs. eigen branch 2/6 groen, maar de omstandigheden dreven meetbaar tussen de monsters en de volle suite draaide twee keer 630/630 groen mét dezelfde wijziging. Er is ook geen mechanisme (de betreffende diff raakt alleen float-drempels en string-trimming, geen Metal/tensors). CONCLUSIE: vrijwel zeker resource-afhankelijke flakiness in de Metal/CLAP-laag, niet code — maar NIET bewezen. Bij herhaling: meet swap/geheugendruk mee, en A/B pas op een rustige machine (geen analyzer-app, geen zware I/O). **VERSLECHTERT (2026-07-18, later)**: bij de v1.10.186-batch faalde de volle suite 2 van 3 keer (≈50%, was 2 van 6) terwijl swap op 3.932/5.120 MB stond en SoulSync `--apply` nog in de cmp-fase zat. Zelfde assertie (`MPSGraphTensorData.mm:208`, `shape.count = 0`, SIGABRT). Er is dus twee batches lang op een derde/tweede poging groen geshipt — als dit in CI opduikt is het waarschijnlijk dezelfde flake, maar CI draait niet onder deze druk, dus een CI-rode run is juist WEL verdacht. **ONDERZOCHT 2026-07-18 (user: "doe dat") — NIET OPGELOST, maar het zoekgebied is kleiner.** Vier dingen vastgesteld:
+  1. **Mijn eigen "nul-lengte venster"-hypothese is WEERLEGD.** Beide crashende tests (`testMoodsProduceScores`, `testWindowedEmbeddingMatchesSingleForHomogeneousSignal`, CLAPEmbeddingTests.swift:109/126) voeden `goldenWaveform()` — een VASTE input (exact 10 s resp. 3× herhaald tot 30 s, vensters 0/5/10/15/20 s, allemaal vol). Deterministische input die intermittent crasht ⇒ de invoervorm is niet de oorzaak; was een leeg samples-array bereikbaar, dan faalde het élke keer. Niet verder zoeken in `embed`/`embedWindowed` op lege buffers.
+  2. **Compute-unit-hypothese: INCONCLUSIEF.** `CLAPModel.swift:75` gebruikt `MLModelConfiguration()` zonder `computeUnits`, dus `.all` (ANE+GPU+CPU) met live fallback onder druk — plausibele bron van MPSGraph-descriptorfouten. Experiment: `.cpuOnly` gepind → 4/4 groen; daarna teruggedraaid en controle gedraaid → óók 4/4 groen. De controle flakete niet, dus die 4/4 bewijst NIETS. Experiment volledig gerevert (`git diff` leeg geverifieerd).
+  3. **NIET verklaard door geheugendruk of de analyzer-app.** Tijdens de 8 groene runs: swap 3.876/5.120 MB, 45% vrij, SoulSync `--apply` nog in cmp-fase, analyzer-app dezelfde PID 12904 onafgebroken actief — vrijwel identiek aan de omstandigheden tijdens de 4 crashes (3.932 MB, 44%). Beide "verdachten" waren constant over zowel flaky als schone vensters.
+  4. **WEL reproduceerbaar (8 monsters, consistent): `.all` is 2-3× TRAGER en veel variabeler dan `.cpuOnly` op deze belaste machine** — 32/36/39/54 s tegen 18/18/19/22 s. Los van de crash is dat een echt performance-signaal: de ANE/GPU-route levert hier netto verlies zolang de analyzer-app het accelerator-pad al bezet. Overweeg `computeUnits` configureerbaar te maken (of `.cpuOnly` in de testomgeving) — maar meet eerst op een RUSTIGE mini, want dit is gemeten onder contentie.
+  RESTEREND VERMOEDEN (ongetest): de 4 crashes vielen in een venster waarin ik parallel volle suites én release-builds draaide, dus zwaardere gelijktijdige compilatie. Concurrent `swift build` naast CoreML-inferentie is de volgende kandidaat.
+  **CORRECTIE 2026-07-19 (user: "fix dit") — MIJN CONCLUSIE HIERBOVEN WAS FOUT.** Op een RUSTIGE machine (SoulSync klaar, load 1,4, 84% geheugen vrij) reproduceert de crash nog steeds: **1 op 10 runs**, opnieuw in `testWindowedEmbeddingMatchesSingleForHomogeneousSignal`, zelfde assertie. Het is dus GEEN resource-afhankelijke flakiness maar een echte latente bug in het CLAP/Metal-pad; geheugendruk verhoogt alleen de frequentie (2-op-3 onder druk → 1-op-10 in rust). Ook weerlegd: **bufferoverflow in `embed(samples:)`** — `CLAPMel.logMel` (CLAPMel.swift:74) alloceert `frames * nMels` (1001×64) vast en retourneert altijd exact dat, dus `dst.update(from:count: src.count)` past per definitie in de `MLMultiArray` van shape [1,1,1001,64]. Dat pad is gezond, niet verder zoeken. RESTERENDE KANDIDAAT: cross-process contentie op ANE/GPU — de analyzer-app draait mét CLAP geladen terwijl de tests hun eigen CLAPModel laden; `CLAPMel.swift:80` documenteert al dat één CLAPModel over threads gedeeld wordt. Let op de grens van wat hier haalbaar is: de assertie zit IN Apple's MPSGraph, dus "fixen" betekent de trigger vermijden (computeUnits pinnen), niet de bug repareren.
+- **SOULSYNC-NESTELBUG: VERPLAATSING GEDAAN, 86 GB OPRUIMEN NOG NIET (2026-07-18)**: op 2026-06-05 heeft SoulSync bij het verplaatsen het ABSOLUTE bronpad ín elke doelmap nagebouwd (`/Muziek/<Artist>/<Album>/Volumes/4tbdrive/SoulSync-Staging/<Artist>/<Album>/…`) — patroon van `rsync -R` / `relative_to("/")`. Omvang: 440 bomen, 4.947 bestanden, ~181 GB (mijn eerste schatting van 47 GB was fout — dat was alleen het deel dat niet in de analyzer-DB stond). Eenmalig: geen enkele boom na 05-06; SoulSync-container heeft nu GEEN mount naar /Volumes/4tbdrive en staged naar /app/Staging. Script: `native/scripts/fix-soulsync-nesting.sh` (droogloop default, `--apply-moves` = alleen verplaatsen, `--apply` = ook verwijderen). **GEDAAN**: 2.824 unieke bestanden omhoog verplaatst + analyzer-rijen meeverhuisd (3.475→839 geneste paden), 207 lege mappen weg, 0 overgeslagen, DB-backup `analyzer.db.pre-soulsync-fix`. Integriteit ná de verhuizing: 139 rijen wijzen naar een niet-bestaand bestand — exact hetzelfde aantal als ervóór, 0 daarvan met genest pad, dus geen nieuwe breuk (het zijn oude stale rijen, bv. hernoemde `AC_DC`-map). **OOK GEDAAN (2026-07-19 00:52)**: `--apply` → 2.105 duplicaten verwijderd, 18 overgeslagen, 229 mappen opgeruimd. Schijf 57%→54% (**~86 GB vrij**), bestanden 55.129→53.024 (exact −2.105), geneste DB-paden 839→1, rijen totaal 53.787 ongewijzigd, analyzer gezond. Integriteit: DB-rijen naar een niet-bestaand bestand **139, precies als ervóór**, 0 met genest pad → geen nieuwe breuk. RESTEREN 18 CONFL (tegenhanger bestaat maar verschilt, dus bewust laten staan): Nils Frahm 'Spaces [24-BIT MASTER]' 10, Pink Floyd '1979 The Wall [Harvest Vinyl 24-96]' 6, The National 'Boxer (2007) vinyl' 1, Nicole Cabell 'Soprano' 1 — user kiest zelf welke versie weg mag. **LES OVER HET SCRIPT**: de eerste twee `--apply`-runs stierven stil ná ~45 min in de classificatiefase (geen log, geen exit-reden, niets gemuteerd — run 1 door een kapotte `tail`-pijp/SIGPIPE, run 2 onverklaard). Opgelost door het ontwerp te wijzigen i.p.v. door te diagnosticeren: classificatie doet GEEN byte-vergelijking meer (90s i.p.v. 48 min) want de verwijderlus vergelijkt tóch vlak vóór elke `rm` — díe is de echte garantie. Voortgang wordt nu elke 100 bestanden gelogd, zodat een stille dood afleesbaar is. `CMP_SCAN=1` zet de oude vergelijking-vooraf terug.
+- **HERANALYSE AFGEROND 2026-07-18 14:40 — restanten uitgezocht**: v3 = 41.699 unieke lokale bestanden; dedup definitief gedraaid (53.787 rijen, 0 spoken, backup `analyzer-backup-pre-dedup-20260718-1540.db`). Van de 55.129 audiobestanden op schijf hebben er **6.415 geen DB-rij**, uitgesplitst: (a) **1.469 geneste SoulSync-kopieën, 47 GB** — SoulSync heeft bij het verplaatsen het hele bronpad ín de albummap opnieuw aangemaakt (`…/<Album>/Volumes/4tbdrive/SoulSync-Staging/<Artist>/<Album>/…`); 1.283 hebben een origineel op de normale plek, **186 bestaan ALLEEN daar** → nooit blind verwijderen; (b) 27 playlist-kopieën; (c) ~3.500 in mappen die de walker wél bereikte (v3-rijen aanwezig) → bewust overgeslagen twins of mislukte tag-lezing; (d) **1.131 bestanden in 311 mappen die HELEMAAL GEEN rij hebben** (bv. `10cc/10cc - Classic Album Selection/Disc 2`) — die zijn nooit geanalyseerd, oorzaak onbekend. (d) IS UITGEZOCHT (2026-07-18): 793 van de 1.131 (70%) zijn aantoonbaar twins — de bibliotheek bevat dezelfde albums dubbel (bv. `Michael Kiwanuka - KIWANUKA/` geanalyseerd op v3 náást `… KIWANUKA (2019) [FLAC] [24B-48kHz]/` overgeslagen). Bewezen met de CLI tegen een DB-KOPIE (`roonsage-analyzer analyze <dir> --db /tmp/probe.db`, gebruikt dezelfde LibraryWalker): het overgeslagen album gaf "0 analyzed, 0 failed" = skip, niet fail. Van de 186 alleen-genest-bestanden faalt een deel écht (The Who Live At Leeds, 28 stuks): faalt binnen een fractie van een seconde en ook op een KORT pad, dus geen pad-/emoji-/samplerate-probleem maar de lege-match_key-guard → **die bestanden missen leesbare artiest/titel-tags**. Samplerate-hypothese getest en verworpen (192k en 44.1k werden gewoon overgeslagen). RESTRISICO: alleen die untagged bestanden blijven ongeanalyseerd; taggen lost het op. Meet-gotcha's bij dit soort werk: titels uit BESTANDSNAMEN afleiden faalt systematisch (macOS zet `:`→`_`, en "01. Artiest - Titel" vs "01 - Titel"); `mdls` werkt NIET (Spotlight uit op die schijf) → `mdls` werkt NIET op deze schijf (Spotlight bewust uit) → geeft het pad terug i.p.v. tags; gebruik AVFoundation (MetadataReader) of `ffprobe`, niet mdls.
+- **VIJF TAGS HEBBEN GEEN GITHUB-RELEASE (ontdekt 2026-07-18)**: `v1.10.173`, `v1.10.174`, `v1.10.180`, `v1.10.181`, `v1.10.182` staan wel als tag maar CI heeft er nooit een release/DMG voor gepubliceerd. NIET cosmetisch: de in-app updater consumeert deze feed, dus tussen 13 en 18 juli kreeg de app `v1.10.179` als "nieuwste" terwijl `v1.10.182` de echte laatste was. Uitzoeken via `gh run list --workflow=<macos-dmg>` rond 13-07 (verwachting: gefaalde of niet-getriggerde runs); herstellen door de workflow opnieuw te draaien op die tags. Release notes zelf staan al klaar in CHANGELOG.md.
+- **DEDUP-MIGRATE MOET AAN HET EIND NOG ÉÉN KEER (2026-07-18)**: tussentijds gedraaid om 13:33 (backup `analyzer-backup-pre-dedup-20260718.db`, 0,48s, geen lock-conflict): 2.346 v2-spookrijen weg (56.215→53.869), hun tags eerst gemigreerd, integrity ok, 13.874 sentinel-rijen zonder v3-partner onaangeraakt. De walk maakt nieuwe wezen zolang hij legacy-rijen verwerkt → **herhalen zodra de heranalyse klaar is**. Achtergrond:
+- **LAUNCHAGENT GEÏNSTALLEERD MAAR NOG ONBEWEZEN (2026-07-18)**: `~/Library/LaunchAgents/nl.roonsage.analyzer.plist` staat er (plutil OK, binary-pad bestaat), bewust NIET ge-bootstrapt — dat zou een 2e instantie naast de lopende walk starten (poortconflict). Activeert dus vanzelf bij de volgende login/reboot. NOG NIET IN ACTIE GETEST: bewijzen kan pas bij de eerstvolgende herstart (`launchctl bootstrap gui/$UID …` ná het stoppen van de huidige instantie), b.v. bij de volgende deploy. Oude open-item-tekst: de walk maakt weer voortgang, maar elke heranalyse van een LEGACY-rij voegt een nieuwe rij toe i.p.v. te updaten — de oude matchKey-formule bevatte het ALBUM (`artist␟album␟title`), de huidige niet (`artist␟title`, TrackIdentity.swift:87). Van de 16.225 sentinel-rijen hebben er 11.071 zo'n 3-segment-sleutel (5.154 het huidige formaat, die updaten wél in-place). Bewijs: `/Volumes/4tbdrive/…/02 - III. Entr'acte No. 2.flac` heeft nu 2 rijen — oud `london philharmonic orchestra␟beethoven symphonies…␟iii entr acte no 2` (v2, mtime −1) naast nieuw `london philharmonic orchestra␟iii entr acte no 2` (v3, 11:13). EENMALIG migratie-artefact, zelf-beperkend (na de walk staat alles op het nieuwe formaat), maar `~/Library/Application Support/RoonSageAnalyzer/dedup-migrate.sql` MOET daarna draaien: de verweesde oude rij houdt de enrichment (tags/mb_genres/populariteit) vast en pass 1 migreert die naar de v3-rij. Zonder die stap missen ~11k v3-rijen hun tags — precies het probleem van 2026-07-17.
+- **LAUNCHAGENT NOG NIET GEÏNSTALLEERD (2026-07-18)**: `native/scripts/nl.roonsage.analyzer.plist` (plutil -lint OK) staat in de repo maar is NIET actief — schrijven naar `~/Library/LaunchAgents/` werd door de permissie-classifier geblokkeerd. Installeren: `cp native/scripts/nl.roonsage.analyzer.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$UID ~/Library/LaunchAgents/nl.roonsage.analyzer.plist`. NIET doen terwijl de walk loopt (KeepAlive start een tweede instantie → poortconflict + DB-contentie). BEPERKING: FileVault staat aan + geen auto-login → niets start vóór iemand de mini ontgrendelt; een LaunchAgent vuurt bij login, een LaunchDaemon kan niet (SwiftUI-app heeft Aqua-sessie nodig). Dekt wél de lange staart: 17-07 boot 20:53, login 21:49, daarna nog ~15u plat.
+- **HERANALYSE-DUPLICAATBUG (code-fix nog nodig, 2026-07-17)**: `markAllForReanalysis` (FeatureStore.swift:428) zet `file_mtime=-1`; heranalyse schrijft met echte mtime; index `idx_tf_path(file_path,file_mtime)` niet-uniek → INSERT nieuwe rij i.p.v. UPDATE → duplicaten + enrichment (tags) verloren op de v3-rij. Data-fix (`dedup-migrate.sql`) is herhaalbaar dweilen. Echte fix-opties: (a) UNIQUE-constraint op file_path + INSERT..ON CONFLICT(file_path) DO UPDATE, óf (b) markAllForReanalysis niet via mtime-sentinel maar via een aparte `needs_reanalysis`-vlag/model-mismatch-check zodat rowState de rij hervindt en `.embeddingOnly`/update-pad pakt. Let op de walker mode-logica LibraryWalker.swift:110-118.
+- **v3-COUNT STAGNEERT op 39.233 → OORZAAK GEVONDEN (2026-07-17)**: de heranalyse maakt GEEN netto voortgang (v3 exact constant 15:31→17:30). ROOT CAUSE = de walker's skip-check en de opslag gebruiken VERSCHILLENDE sleutels: `rowState` (FeatureStore.swift:284) checkt `WHERE file_path=? AND file_mtime=?` met EXACTE float-gelijkheid, maar `upsertBatch` (:394) schrijft `ON CONFLICT(match_key)` — match_key is de PK. Twee bewezen gevolgen: (1) **mtime-float-drift**: `LibraryWalker.mtime()` → FileManager `.modificationDate` → `Date.timeIntervalSince1970` rondt nanoseconde-mtimes niet bit-stabiel af; opgeslagen file_mtime ≠ verse lezing voor SUB-seconde mtimes (bewezen: 51/200 sub-seconde v3 opgeslagen≠os.stat, 0/200 hele-seconde) → rowState exists=FALSE → mode=.full → eeuwige herkauw (verse analyzed_at, geen file_path-flip, count constant want ON CONFLICT(match_key) UPDATE't in-place). 27% van v3 (10.723 rijen) heeft sub-seconde mtime. (2) **matchKey album/duration-agnostisch** (TrackIdentity.swift: bewust alleen primaryArtist|title) → als metadata tussen v2/v3 driftte krijgt hetzelfde bestand een andere match_key → geen ON CONFLICT → INSERT duplicaat (de 37k opgeruimde + de nu weer groeiende). NUANCE (niet 100% dichtgetimmerd): in een 4min-venster was herkauw NIET oververtegenwoordigd sub-seconde (12% vs 27%) → mtime-drift verklaart niet alle herkauw, mogelijk draagt de matchKey-collision ook bij. FIX BUG 1 GEÏMPLEMENTEERD+GEVERIFIEERD (2026-07-17, NIET gedeployd): `FeatureStore.mtimeMatchSQL` = `abs(file_mtime - ?) < 0.5` i.p.v. exacte `file_mtime = ?`, toegepast in isAnalyzed/rowState/setEmbedding (de 3 walk-flow-sites; setAttributes/featureRow ongemoeid — mtime komt daar uit de DB, geen drift). Reproductietest `testRowStateToleratesSubSecondMtimeDrift` (rood vóór → groen na, bewezen). Verified: swift test → 614 tests 0 failures; swift build -c release exit 0. **DEPLOY NODIG om de walk op de mini te laten afkomen** (draaiende binary heeft de fix niet → blijft stagneren tot redeploy analyzer). BUG 2 (matchKey-duplicaten) NIET door deze fix opgelost — blijft: skip-check (file_path) ≠ opslag-key (match_key). Restfix-richting: unieke identiteit op file_path óf heranalyse-hervat via needs-reanalysis-vlag i.p.v. mtime=-1-sentinel. Meet-gotchas: sqlite3-CLI rondt REAL-WEERGAVE af (gebruik Python of printf('%.15f')); `analyzed_at` is UTC ondanks Z-suffix; `?mode=ro` (niet immutable) om verse writes te zien.
+- Explicit-kolom backfill: huidige sidecar/dataset-v1-release heeft explicit=NULL voor alle rijen (CSV-parsebug, gefixt in distill-datasets.sh commit 16ad61f voor de VOLGENDE distillatie). Backfill vereist een hernieuwde ~1,5u DuckDB-scan puur voor die ene kolom — bewust uitgesteld, geen blokkade voor de rest (isrc/mbid/bpm/upc/label/release_date zijn al correct en live)
+- Sidecar-bloat: metadata.db groeide 423MB→800MB doordat `import-dataset` de sidecar's eigen match_key-kolom in-place bijwerkt (2.27M UPDATEs, geen VACUUM). De gepubliceerde dataset-v1.gz (115MB) is hier al ná genomen — werkt prima, maar een `VACUUM`vóór de volgende release-publicatie zou 'm kleiner maken
+- SQLite-lock-crashes tijdens import (2x, "database is locked" bij COMMIT): collision met de analyzer-app's eigen 30s revision-refresh-timer terwijl de CLI concurrent naar dezelfde analyzer.db schreef. Resumable ontwerp ving het op (3e poging maakte af), maar een GRDB `busyTimeout`/retry op de FeatureStore-writer-connectie zou dit structureel voorkomen voor toekomstige `import-dataset`/`enrich`-runs naast een levende server
+- SEC-M2 cleartext secrets: TLS of ZeroTier-only transport — architectuurbeslissing, in B2 afwegen
+- searchTracks conflateert nog hard-fail vs leeg naar caller (resolveTrackID); retry dekt transient, diepere abort-op-hardfail = mogelijke follow-up
+- SEC-M2 cleartext secrets: TLS of ZeroTier-only transport — architectuurbeslissing, in B2 afwegen
+- searchTracks conflateert nog hard-fail vs leeg naar caller (resolveTrackID); retry dekt transient, diepere abort-op-hardfail = mogelijke follow-up
+- Skip re-steer: alleen skips via de app-next() (lokaal + thin-client) worden gevangen; Roon-zijde skips (fysieke afstandsbediening / andere Roon-controllers) NIET — zou een zone-update-heuristiek vereisen (nowPlaying-wissel + played-fraction uit liveSeek). Follow-up indien gewenst
+- PERF-H2/H3 GESLOTEN als redundant (zie B4c) — als /features ooit ZONDER revision-gate gepolld wordt, heropenen: contentSignature memoize vereist write-generatie-invalidatie over ~12 write-sites (data_version werkt niet bij single-connection GRDB) + botst met MusicBrainzGenreTests:59 (write moet signature direct wijzigen)
+
+## Failed attempts
+- CLAPEmbeddingTests (testEmbeddingMatchesGolden) crasht met SIGABRT / MPSGraph-assertie `shape.count=0 != strides.count=2` — ALLEEN wanneer de zware dataset-destillatie (7zz 121GB + DuckDB) gelijktijdig draait. Slaagde deze sessie 2× (531/534) vóór de destillatie startte; diff raakt CLAP niet; 535/535 groen met CLAP-GPU-tests overgeslagen. CONCLUSIE: omgevings-flake door GPU/CPU-contentie, geen regressie. Her-toetsen op een stille machine.
+- ATTEMPT 1 [L1] (2026-08-23, jaartallen): COALESCE(excluded.year, year) op de ON CONFLICT-tak van replaceAlbumTracks/replaceAlbumBatch -> jaar bleef nil. Oorzaak: die tak draait niet, want de walk DELETE't de albumrijen eerst en INSERT ze daarna vers. Het jaar sneuvelt op de delete. Opgelost door de door de analyzer ingevulde jaren binnen dezelfde transactie te bewaren en na de insert terug te zetten (preserveAnalyzerYears).
