@@ -81,6 +81,30 @@ extension DatabaseManager {
         plexKeyPrefix + ratingKey
     }
 
+    /// Artwork key for a Plex row: `plex::<ratingKey>|<matchKey>`.
+    ///
+    /// It carries BOTH ids on purpose, because the two ways to fetch a cover live
+    /// on different devices:
+    ///   • a device signed in to Plex resolves it from Plex directly (which is the
+    ///     only option in standalone mode — there is no analyser to ask);
+    ///   • a device with a RoonSage server but no Plex sign-in resolves it from
+    ///     the analyser's `/artwork?match_key=`, exactly as before.
+    /// Storing only one of the two would leave one of those devices without covers,
+    /// and a library without covers reads as broken.
+    public static func plexImageKey(ratingKey: String, matchKey: String) -> String {
+        plexKeyPrefix + ratingKey + "|" + matchKey
+    }
+
+    /// Inverse of `plexImageKey`. nil when this is not a Plex artwork key.
+    public static func parsePlexImageKey(_ key: String) -> (ratingKey: String, matchKey: String)? {
+        guard key.hasPrefix(plexKeyPrefix) else { return nil }
+        let body = key.dropFirst(plexKeyPrefix.count)
+        guard let sep = body.firstIndex(of: "|") else { return nil }
+        let rk = String(body[..<sep])
+        let mk = String(body[body.index(after: sep)...])
+        return rk.isEmpty ? nil : (rk, mk)
+    }
+
     /// Album grouping key. Prefers Plex's own album id; falls back to the same
     /// `album|artist` fingerprint the other two sources use so a track whose
     /// album Plex could not key still groups instead of becoming its own album.
@@ -194,18 +218,11 @@ extension DatabaseManager {
                         // joins on it, and the exact file_path join is an
                         // addition, not a replacement.
                         Self.plexMatchKey(c),
-                        // Artwork resolves through the analyser's /artwork, which
-                        // reads the cover out of the file — the same file Plex
-                        // shows a cover for.
-                        //
-                        // Deliberately the `local::` prefix on a `source='plex'`
-                        // row: that prefix is a RESOLUTION SCHEME, not a claim
-                        // about provenance (`imageURL(forKey:)` switches on it).
-                        // Using Plex's own `thumb` would be marginally faster —
-                        // Plex pre-resizes and caches — but it would require
-                        // every thin client to hold a Plex token, which they
-                        // don't and shouldn't. This path already works on iOS.
-                        Self.plexMatchKey(c).isEmpty ? nil : Self.localKeyPrefix + Self.plexMatchKey(c),
+                        // Both ids, so either resolution path works — see
+                        // `plexImageKey`. A standalone device has no analyser to
+                        // ask, so a key that only pointed at `/artwork` would
+                        // leave it with a library of blank covers.
+                        Self.plexImageKey(ratingKey: c.ratingKey, matchKey: Self.plexMatchKey(c)),
                         albumKey,       // album_fp
                         Self.plexSource,
                         c.filePath,

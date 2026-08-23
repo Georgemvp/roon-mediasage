@@ -64,20 +64,26 @@ final class PlexLibrarySourceTests: XCTestCase {
         XCTAssertEqual(rows.map { $0["source"] as String? }, ["plex", "plex"])
     }
 
-    /// Artwork must resolve through the analyser's /artwork, not through Plex:
-    /// a thin client holds no Plex token. The `local::` prefix here is the
-    /// resolution scheme `imageURL(forKey:)` switches on, not a provenance claim.
-    func testArtworkKeyUsesTheAnalyserResolutionScheme() async throws {
-        try await db.ingestPlexTracks([plex("1", artist: "A", title: "T", album: "Al",
-                                            thumb: "/library/metadata/9/thumb/1")])
+    /// De artwork-sleutel draagt BEIDE ids: een standalone toestel heeft geen
+    /// analyzer om naar /artwork te vragen, een toestel zonder Plex-koppeling
+    /// heeft geen Plex-token. Eén van de twee zou dus lege hoezen krijgen.
+    func testArtworkKeyCarriesBothIDs() async throws {
+        try await db.ingestPlexTracks([plex("1", artist: "A", title: "T", album: "Al")])
         let imageKey = try await db.pool.read { db in
             try String.fetchOne(db, sql: "SELECT image_key FROM tracks WHERE id = 'plex::1'")
         }
-        let expected = DatabaseManager.localKeyPrefix
-            + TrackIdentity.matchKey(artist: "A", album: "Al", title: "T")
-        XCTAssertEqual(imageKey, expected)
-        XCTAssertFalse(imageKey?.hasPrefix(DatabaseManager.plexKeyPrefix) ?? true,
-                       "de Plex-thumb mag hier niet staan — clients hebben geen Plex-token")
+        let mk = TrackIdentity.matchKey(artist: "A", album: "Al", title: "T")
+        XCTAssertEqual(imageKey, "plex::1|" + mk)
+
+        let parsed = try XCTUnwrap(DatabaseManager.parsePlexImageKey(try XCTUnwrap(imageKey)))
+        XCTAssertEqual(parsed.ratingKey, "1")
+        XCTAssertEqual(parsed.matchKey, mk)
+    }
+
+    func testParsePlexImageKeyRejectsOtherSchemes() {
+        XCTAssertNil(DatabaseManager.parsePlexImageKey("local::abc"))
+        XCTAssertNil(DatabaseManager.parsePlexImageKey("plex::geen-pipe"))
+        XCTAssertNil(DatabaseManager.parsePlexImageKey("plex::|alleen-matchkey"))
     }
 
     // MARK: - Sync wiring

@@ -146,6 +146,14 @@ extension RoonClient {
     /// key) and resolves against the analyser's `/artwork`, which reads the
     /// cover out of the file or a sidecar beside it.
     public func imageURL(forKey key: String, size: Int = 200) -> URL? {
+        // A Plex row carries both ids (see `DatabaseManager.plexImageKey`) because
+        // the two devices that need a cover reach it differently: one is signed in
+        // to Plex, the other has an analyser. Prefer Plex — on a standalone device
+        // it is the only option, and it also resizes server-side.
+        if let (ratingKey, matchKey) = DatabaseManager.parsePlexImageKey(key) {
+            if let url = plexArtworkURL(ratingKey: ratingKey, size: size) { return url }
+            return localArtworkURL(matchKey: matchKey, size: size)
+        }
         if key.hasPrefix(DatabaseManager.localKeyPrefix) {
             return localArtworkURL(
                 matchKey: String(key.dropFirst(DatabaseManager.localKeyPrefix.count)), size: size)
@@ -157,6 +165,29 @@ extension RoonClient {
     /// `<analyser>/artwork?match_key=…&size=…`. The token rides in the query
     /// like it does for `/audio`: an image loader can't attach a custom header
     /// any more than AVPlayer can.
+    /// Cover from Plex, resized server-side.
+    ///
+    /// Goes through Plex's photo transcoder rather than `/library/metadata/<rk>/thumb`
+    /// directly: measured on the live server, the raw thumb for one album is
+    /// 564 KB while the 200 px transcode is 14,8 KB. A grid of covers pulling the
+    /// full-size original would be an easy way to make a fast app feel slow.
+    ///
+    /// nil when this device has no Plex token, which sends the caller to the
+    /// analyser's `/artwork` instead.
+    func plexArtworkURL(ratingKey: String, size: Int) -> URL? {
+        guard let token = PlexClient.availableToken(),
+              var comps = URLComponents(string: plexBaseURL.trimmingCharacters(in: .whitespaces)
+                                        + "/photo/:/transcode") else { return nil }
+        comps.queryItems = [
+            URLQueryItem(name: "url", value: "/library/metadata/\(ratingKey)/thumb"),
+            URLQueryItem(name: "width", value: "\(size)"),
+            URLQueryItem(name: "height", value: "\(size)"),
+            URLQueryItem(name: "minSize", value: "1"),
+            URLQueryItem(name: "X-Plex-Token", value: token),
+        ]
+        return comps.url
+    }
+
     func localArtworkURL(matchKey: String, size: Int) -> URL? {
         let base = localStreamBase()
         guard !base.isEmpty, !matchKey.isEmpty,
