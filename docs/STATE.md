@@ -1,30 +1,25 @@
-<!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
-Lees docs/STATE.md en ga verder met het snoeiprogramma in ## Next, stap voor stap.
-Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build && swift test
-→ commit → (push+tag alleen als Casper daar in dat gesprek om vraagt) → STATE.md bijwerken.
-Houd dit bestand onder ~40 regels. Historie staat in docs/STATE-archief-2026-08-23.md.
-═══════════════════════════════════════════════════════════════════ -->
-
-## Goal
-Van monoliet naar een snelle, stabiele Plexamp/Symfonium-achtige client. Maatstaf is
-iOS: snel en zonder bugs. Snoeien is het middel, niet het doel.
-
 ## Now
-Snoeiprogramma gestart na de audit van 2026-08-23 (twee onafhankelijke audits, zelfde
-diagnose). Stap 1 is af en gecommit (`e464bdd`, nog niet gepusht/getagd): AudioAnalysis
-gesplitst in een lichte kern + `CLAPEngine`, waardoor de 746 MB CLAP-modellen uit beide
-client-apps verdwijnen. Gemeten iOS-bundel 793 MB → 96 MB. 1074 tests, 0 failures.
+Snoeiprogramma loopt. Vier batches af en lokaal gecommit, **nog niet gepusht/getagd**:
+`e464bdd` CLAP uit de clients (iOS-bundel 793 MB -> 96 MB) · `3c9e3cb` STATE.md 1656 -> 70
+regels · `7ad4a0b` Plex als bibliotheekbron (exacte join op bestandspad) · `57a66b1`
+RadioEngine.Context. 1088 tests, 4 skipped, 0 failures; release-build groen; lint 474 =
+baseline.
 
-## Next
-1. ~~CLAP-modellen uit de clients~~ — AF (`e464bdd`)
-2. Plex als catalogus + streaming/transcode/remote onderzoeken en beslissen (§ Decisions).
-   Plex draait al, indexeert `/Volumes/4tbdrive/Muziek`, 65.738 tracks, stabiele ratingKeys.
-3. Identiteit repareren — `native/docs/STANDALONE_LIBRARY_PLAN.md` §5d, of vervallen als
-   Plex' ratingKey de sleutel wordt.
-4. Eén `RecommendationEngine` i.p.v. ~10 motoren (51 bestanden raken similarity/kNN).
-5. `RoonClient` opbreken: 13.041 regels / 547 functies / 115 properties → < 2.000, alleen
-   protocol + transport.
-6. UI snoeien: 31 navigatiebestemmingen → ~10, gemeten op echt gebruik via `/play-stats`.
+<!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
+Lees docs/STATE.md en ga verder met het snoeiprogramma in ## Next
+1. ~~CLAP-modellen uit de clients~~ AF · 2. ~~STATE opschonen~~ AF
+3. ~~PlexLibrarySource prototype~~ AF (`7ad4a0b`) — maar **niets roept ingestPlexTracks aan**.
+   Volgende stap: een PlexSyncService in de analyzer die periodiek importeert, plus een
+   artwork-resolver voor `image_key = "plex::<thumb>"`.
+4. ~~RadioEngine-signatuur~~ AF (`57a66b1`). De audit-aanname "10 motoren samenvoegen" was
+   fout — zie de commit; er valt hier niets meer samen te voegen.
+5. `RoonClient` opbreken: 13.041 regels / 547 functies / 115 properties -> < 2.000.
+6. UI snoeien: 31 navigatiebestemmingen -> ~10, gemeten op echt gebruik via `/play-stats`.
+7. Beslissen over Plex als volwaardige catalogus + streaming-/transcodelaag (§ Decisions).
+   Zou ~2.800 regels eigen code kunnen vervangen (LibraryShareServer, LocalAudioCache,
+   LocalTranscode, AudioTranscoder, Downloads, Offline, ArtworkProvider, LibrarySyncService).
+8. Opruimen: 8.038 analyzer-rijen wijzen naar bestanden die niet meer bestaan (steekproef
+   300/300 weg), waarvan 1.638 in `MuziekDown` — de SoulSync-verhuizing.
 
 ## Constraints
 - "Geen Apple TV / tvOS (scope is strikt macOS 14+ en iOS 17+)" (user, 2026-08-23)
@@ -42,7 +37,7 @@ client-apps verdwijnen. Gemeten iOS-bundel 793 MB → 96 MB. 1074 tests, 0 failu
 - CLAPEngine mag NOOIT een dependency van RoonSageCore/RoonSageUI worden: dat blaast elke client weer op met ~746 MB
 
 ## Decisions
-- **Open, ligt bij Casper:** Plex als catalogus + streaming/transcode/remote-laag, met de analyzer teruggebracht tot alléén analyse. Zie de audit; Plex dekt ~2.800 regels eigen code die we onderhouden, maar heeft geen CLAP/BPM/Camelot. Raakt de constraint "de analyzer is de primaire bron".
+- **Open, ligt bij Casper (uitgebreid 2026-08-23):** Plex als catalogus + streaming/transcode/remote-laag, met de analyzer teruggebracht tot alléén analyse. Zie de audit; Plex dekt ~2.800 regels eigen code die we onderhouden, maar heeft geen CLAP/BPM/Camelot. Raakt de constraint "de analyzer is de primaire bron".
 - Sonic-fit CLAP zit achter `SonicFitScoring`; alleen `ClapSonicFit` in de analyzer-app registreert. Client = provider nil = pre-sonische ordening (2026-08-23).
 
 ## Facts
