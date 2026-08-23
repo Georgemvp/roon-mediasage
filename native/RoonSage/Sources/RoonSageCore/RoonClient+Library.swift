@@ -137,9 +137,37 @@ extension RoonClient {
         return (try? await db.tasteTimeMachine()) ?? []
     }
 
+    /// Artwork URL for a library row's `image_key`.
+    ///
+    /// Two sources, one call site shape — every artwork view already had an
+    /// image key, so none of them had to learn about this. A Roon key resolves
+    /// against the Core's image API; a `local::` key belongs to a row the
+    /// analyser contributed (Roon never indexed that file, so there IS no Roon
+    /// key) and resolves against the analyser's `/artwork`, which reads the
+    /// cover out of the file or a sidecar beside it.
     public func imageURL(forKey key: String, size: Int = 200) -> URL? {
+        if key.hasPrefix(DatabaseManager.localKeyPrefix) {
+            return localArtworkURL(
+                matchKey: String(key.dropFirst(DatabaseManager.localKeyPrefix.count)), size: size)
+        }
         guard let host = coreHost else { return nil }
         return URL(string: "http://\(host):\(corePort)/api/image/\(key)?width=\(size)&height=\(size)&scale=fit")
+    }
+
+    /// `<analyser>/artwork?match_key=…&size=…`. The token rides in the query
+    /// like it does for `/audio`: an image loader can't attach a custom header
+    /// any more than AVPlayer can.
+    func localArtworkURL(matchKey: String, size: Int) -> URL? {
+        let base = localStreamBase()
+        guard !base.isEmpty, !matchKey.isEmpty,
+              var comps = URLComponents(string: "\(base)/artwork") else { return nil }
+        var q = [URLQueryItem(name: "match_key", value: matchKey),
+                 URLQueryItem(name: "size", value: "\(size)")]
+        if let t = LibraryShareServer.configuredToken, !t.isEmpty {
+            q.append(URLQueryItem(name: "token", value: t))
+        }
+        comps.queryItems = q
+        return comps.url
     }
 
     public func selectZone(_ id: String) {

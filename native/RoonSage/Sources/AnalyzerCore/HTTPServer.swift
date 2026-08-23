@@ -10,6 +10,8 @@ import Network
 ///   GET /text-embed?q=… → {"embedding":[…]}  (text→vector for search)
 ///   GET /audio?match_key=… → the track's on-disk file (Range-aware) for
 ///       local playback on the phone
+///   GET /artwork?match_key=…&size=… → embedded/sidecar cover art, for library
+///       rows the analyser contributed (they have no Roon image_key)
 ///   GET /health → status
 ///
 /// When `token` is set, every endpoint but `/health` requires it in the
@@ -136,6 +138,16 @@ public final class HTTPServer {
                 }
                 return
             }
+            // /artwork needs its own Content-Type and a long Cache-Control, so it
+            // bypasses `route()` too. Off the receive queue: decoding a cover out
+            // of a FLAC touches the music volume.
+            if path == "/artwork" {
+                Task.detached {
+                    let (status, headers, body) = self.artworkResponse(target: target, request: req, loopback: loopback, peerIP: peerIP)
+                    self.sendRaw(conn, status: status, headers: headers, body: body)
+                }
+                return
+            }
             let (status, body, ctype) = self.route(target, request: req, loopback: loopback, peerIP: peerIP)
             var header = "HTTP/1.1 \(status)\r\n"
             header += "Content-Type: \(ctype)\r\n"
@@ -178,6 +190,53 @@ public final class HTTPServer {
         let ok = Self.constantTimeEquals(provided, token) || isApprovedToken(provided)
         if ok { authThrottler.recordSuccess(peerIP) } else { authThrottler.recordFailure(peerIP) }
         return ok
+    }
+
+    /// Album art for an analyser-sourced library row.
+    ///   GET /artwork?match_key=<key>&size=<px>
+    ///
+    /// Roon rows resolve artwork through the Roon Core's image API by
+    /// `image_key`; rows the analyser contributed have no such key, so the cover
+    /// comes out of the file (or a sidecar beside it) here. Same shape as
+    /// `/audio`: the client names a track, never a path, and the path is
+    /// resolved server-side from the analyser's own DB.
+    private func artworkResponse(target: String, request: String, loopback: Bool, peerIP: String)
+    -> (String, [String: String], Data) {
+        func err(_ status: String, _ msg: String) -> (String, [String: String], Data) {
+            (status, ["Content-Type": "text/plain"], Data(msg.utf8))
+        }
+        // Auth mirrors /audio: header OR `token` query param, because an image
+        // loader (AsyncImage / SDWebImage) can't attach a custom header either.
+        if let token, !loopback {
+            if authThrottler.isThrottled(peerIP) {
+                return err("429 Too Many Requests", "too many attempts; retry later")
+            }
+            let provided = Self.headerValue(Self.tokenHeader, in: request) ?? Self.queryValue("token", in: target)
+            guard let provided, Self.constantTimeEquals(provided, token) || isApprovedToken(provided) else {
+                authThrottler.recordFailure(peerIP)
+                return err("401 Unauthorized", "unauthorized")
+            }
+            authThrottler.recordSuccess(peerIP)
+        }
+        guard let key = Self.queryValue("match_key", in: target), !key.isEmpty else {
+            return err("400 Bad Request", "missing match_key")
+        }
+        // Clamped: `size` decides a decode + encode, so an unbounded value is an
+        // easy way to make the server-of-record chew CPU. 1200 covers the
+        // full-screen artwork view (PlayerScreen asks for 1200).
+        let requested = Int(Self.queryValue("size", in: target) ?? "") ?? 300
+        let maxPixel = min(max(requested, 32), 1200)
+        guard let image = ArtworkProvider.artwork(matchKey: key, maxPixel: maxPixel, store: store) else {
+            return err("404 Not Found", "no artwork for this track")
+        }
+        return ("200 OK", [
+            "Content-Type": image.contentType,
+            // Artwork for a given key+size only changes if the file is retagged.
+            // Immutable would be a lie; a day is long enough that scrolling a
+            // library doesn't re-fetch, short enough that a retag lands.
+            "Cache-Control": "private, max-age=86400",
+            "Access-Control-Allow-Origin": "*",
+        ], image.data)
     }
 
     /// Stream a library track's on-disk audio for local playback on the phone.

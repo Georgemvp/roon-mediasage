@@ -101,7 +101,7 @@ prune weet wie waar vandaan komt.
 
 ## 5. Het plan — vier fasen, los te shippen
 
-### Fase 1 — De bibliotheek krijgt een tweede bron 🟠 M
+### Fase 1 — De bibliotheek krijgt een tweede bron 🟠 M — ✅ af, zie 5b
 Kolom `tracks.source` (`roon` | `local`, default `roon`), de prune beperkt tot
 `source = 'roon'`, en een ingest die van elke feature-rij zonder `tracks`-rij een
 lokale bibliotheekrij maakt: `id = "local::<match_key>"`, artiest/titel/album/jaar
@@ -122,12 +122,12 @@ bekende datum uit die tabel.
 **Klaar wanneer:** `swift test` groen met nieuwe tests op de ingest en op de
 prune-grens, en `analyzedTrackIdentities()` levert meetbaar meer rijen.
 
-### Fase 2 — Lokale albumhoezen 🔴 M
+### Fase 2 — Lokale albumhoezen 🔴 M — ✅ af, zie 5c
 Zonder dit heeft fase 1 duizenden albums zonder hoes. Embedded artwork via
 `MetadataReader` (AVFoundation `commonKeyArtwork`), anders `cover.jpg`/`folder.jpg`
 naast het bestand; uitserveren als `/artwork?match_key=…` op :5766 naar analogie
-van `/audio` (Range-loos, wél ETag/cache), en de zeven weergaveplekken via één
-resolver die op `source` beslist: Roon-sleutel → Roon-API, lokale rij → `/artwork`.
+van `/audio` (Range-loos, wél cache), en de weergaveplekken via één resolver die
+op de sleutel beslist: Roon-sleutel → Roon-API, `local::` → `/artwork`.
 
 ### Fase 3 — Stabiele track-identiteit 🔴 L
 `tracks.id` los van `item_key`: Roon's sleutel naar een eigen kolom
@@ -182,13 +182,53 @@ meer voorkomt: historische sleutels van vóór een normaliser-wijziging, plus ri
 zonder BPM (`exportJSON` filtert op `bpm IS NOT NULL`). Er bestaat geen analyse
 meer die ze onderbouwt. Opruimen hoort bij een aparte onderhoudsronde, niet hier.
 
+## 5c. Uitvoering — fase 2 (2026-08-23)
+
+**Af en gemeten.** `MetadataReader.artwork(url:)` haalt ingebedde cover art uit
+het bestand (ID3 `APIC`, FLAC `METADATA_BLOCK_PICTURE`);
+`AnalyzerCore/ArtworkProvider` valt terug op een sidecar
+(`cover`/`folder`/`front`/`album`/`artwork` × jpg/jpeg/png/webp, in die volgorde,
+hoofdletter-ongevoelig gematcht tegen de échte mapinhoud), schaalt met ImageIO
+naar de gevraagde maat en cachet 512 uitkomsten — misser inbegrepen, anders
+wordt een map zonder hoes bij elke scrollbeweging opnieuw gelijst.
+`GET /artwork?match_key=…&size=…` op :5766, met dezelfde auth als `/audio`
+(header óf `token`-queryparameter, want een image loader kan net zomin een eigen
+header meesturen als AVPlayer) en `size` geklemd op 32…1200.
+
+**De UI hoefde niet aangeraakt.** Een lokale rij krijgt als `image_key` dezelfde
+`local::<match_key>`-markering die zijn id draagt, en
+`RoonClient.imageURL(forKey:)` kiest daarop: Roon-sleutel → de image-API van de
+Core, `local::` → `/artwork` van de analyzer. Alle zeven weergaveplekken
+(`AlbumArtView`, `PlayerScreen` ×4, `ShareCardView`, `WallDisplayView`) namen al
+een image key aan en zijn ongewijzigd.
+
+**De meting** (zelfde opt-in test, tegen echte bestanden):
+
+```
+steekproef van 200 lokale rijen
+  ingebed in het bestand : 182
+  cover.jpg ernaast      :  16
+  geen hoes te vinden    :   2      → 99% dekking
+
+/artwork end-to-end (echt bestand, over HTTP)
+  200 OK · image/jpeg · 199x200 px · 14.143 bytes
+```
+
+Die 14 kB is het punt van het schalen: dezelfde hoes zit als ~1 MB in het
+bestand, en de uplink hier is 39 Mbps.
+
+**Eén verwachting stond verkeerd om** en de test ving het:
+`kCGImageSourceThumbnailMaxPixelSize` begrenst de **langste** zijde, dus een
+niet-vierkante hoes komt op 199×200 uit. De toets kijkt nu naar die afspraak in
+plaats van naar de breedte.
+
 ## 6. Maten om achteraf te toetsen
 
-| maat | vóór | na fase 1 | doel |
+| maat | vóór | nu | doel |
 |---|---|---|---|
-| rijen uit `analyzedTrackIdentities()` | 49.166 | **64.219** | ✅ |
-| feature-rijen zonder `tracks`-rij | 19.537 | **4.484** (verweesd, zie 5b) | ✅ |
-| albums zonder hoes | 0 (alles via Roon) | de 15.053 lokale | 0 na fase 2 |
+| rijen uit `analyzedTrackIdentities()` | 49.166 | **64.219** | ✅ fase 1 |
+| feature-rijen zonder `tracks`-rij | 19.537 | **4.484** (verweesd, zie 5b) | ✅ fase 1 |
+| lokale rijen met een vindbare hoes | — | **99%** (198/200 steekproef) | ✅ fase 2 |
 | bibliotheekrijen met een Roon-sleutel als identiteit | 100% | 86% | 0% na fase 3 |
 | tracks die verdwijnen als Roon uitgaat | 13.175 | 13.175 | 0 na fase 4 |
 

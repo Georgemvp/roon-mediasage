@@ -1,8 +1,8 @@
 <!-- ═══ START HIER (kopieer dit als prompt voor een nieuwe sessie) ═══
 Lees docs/STATE.md en ga verder met `native/docs/STANDALONE_LIBRARY_PLAN.md`:
-fase 1 (de bibliotheek krijgt een tweede bron) is AF, gemeten en lokaal gecommit
-— **nog niet gepusht en niet getagd**. De volgende stap is fase 2 (lokale
-albumhoezen), want de 15.053 nieuwe bibliotheekrijen hebben er geen.
+fase 1 (tweede bibliotheekbron) én fase 2 (lokale albumhoezen) zijn AF, gemeten
+en lokaal gecommit — **nog niet gepusht en niet getagd**. De volgende stap is
+fase 3 (stabiele track-identiteit) of eerst uitrollen; zie ## Next.
 Werk incrementeel: per batch bewerken → cd native/RoonSage && swift build &&
 swift test → commit + push + tag (vX.Y.Z, ios-vX.Y.Z én analyzer-vX.Y.Z) → werk
 STATE.md bij. Constraints in ## Constraints naleven: niet tests verzwakken,
@@ -22,7 +22,7 @@ Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performan
 
 ## Now
 NU (2026-08-23, ochtend): **DE BIBLIOTHEEK LOS VAN ROON — PLAN GESCHREVEN, FASE 1
-AF EN GEMETEN.** (user: "Ga daar in werken en begin maak een duidelijk plan en
+EN FASE 2 AF EN GEMETEN.** (user: "Ga daar in werken en begin maak een duidelijk plan en
 voer die uit.") Plan: `native/docs/STANDALONE_LIBRARY_PLAN.md`, vier fasen.
 **Lokaal gecommit, NIET gepusht, NIET getagd** — een tag stuurt de analyzer via
 de CI-DMG naar de mini en daar is deze sessie niet om gevraagd.
@@ -73,11 +73,28 @@ en kreeg hier bijna een tweede kopie. Nu één definitie,
 via de ene bron en studio via de andere, en `excludeLive` filtert álle stations
 op precies die vlag.
 
-**Verified: `swift build` exit 0 · `swift test` 996 tests, 0 fouten, 1
-overgeslagen (baseline 984) · `swift build -c release --product RoonSage`
-exit 0 · swiftlint 466 violations / 2 serious — exact gelijk aan de baseline ·
-check-localization `--strict` exit 0, 1134 sleutels, 0 missend, 0 geïnterpoleerd,
-0 wees.**
+**Fase 2: lokale albumhoezen.** `MetadataReader.artwork(url:)` (ID3 `APIC`, FLAC
+`METADATA_BLOCK_PICTURE`), `AnalyzerCore/ArtworkProvider` met sidecar-terugval
+(`cover`/`folder`/`front`/`album`/`artwork` × jpg/jpeg/png/webp, in die volgorde,
+hoofdletter-ongevoelig tegen de échte mapinhoud), ImageIO-schaling en een cache
+van 512 — missers inbegrepen, anders wordt een map zonder hoes bij elke
+scrollbeweging opnieuw gelijst. Nieuw endpoint `GET /artwork?match_key=…&size=…`
+op :5766, zelfde auth als `/audio`, `size` geklemd op 32…1200.
+
+**De UI hoefde niet aangeraakt.** Een lokale rij krijgt als `image_key` dezelfde
+`local::`-markering die zijn id draagt, en `RoonClient.imageURL(forKey:)` kiest
+daarop. Alle zeven weergaveplekken namen al een image key aan.
+
+**Gemeten, tegen echte bestanden:** steekproef van 200 lokale rijen → 182 hoezen
+ingebed, 16 als `cover.jpg` ernaast, 2 nergens = **99% dekking**. En `/artwork`
+end-to-end over HTTP: 200 OK, `image/jpeg`, 199×200 px, **14.143 bytes** — die
+hoes zit als ~1 MB in het bestand, en de uplink hier is 39 Mbps.
+
+**Verified: `swift build` exit 0 · `swift test` 1003 tests, 0 fouten, 1
+overgeslagen (baseline 984) · `swift build -c release` groen voor RoonSage én
+RoonSageAnalyzerApp · swiftlint 466 violations / 2 serious — exact gelijk aan de
+baseline · check-localization `--strict` exit 0, 1134 sleutels, 0 missend,
+0 geïnterpoleerd, 0 wees.**
 
 ---
 _Hieronder de `## Now` van de vorige sessie (de 360°-audit). Bewaard, niet
@@ -1164,8 +1181,9 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
-- **Fase 2 van `native/docs/STANDALONE_LIBRARY_PLAN.md`: lokale albumhoezen.** De 15.053 nieuwe bibliotheekrijen hebben er geen — er is nul lokale artwork-code in de repo, alle zeven weergaveplekken gaan via `client.imageURL(forKey:)` = Roon's image-API. Nodig: embedded artwork via `MetadataReader` (AVFoundation `commonKeyArtwork`), anders `cover.jpg`/`folder.jpg` naast het bestand; een `/artwork?match_key=…` op :5766 naar analogie van `/audio`; en één resolver die op `tracks.source` beslist welke bron.
-- **Fase 1 pushen + taggen** (`v1.10.275` / `ios-v1.7.241` / `analyzer-v1.1.205`) en de analyzer via de CI-DMG uitrollen — fase 1 zit ín de analyzer, dus op de mini gebeurt er niets tot die uitrol. Bewust niet gedaan zonder opdracht.
+- **Fase 1+2 pushen + taggen** (`v1.10.275` / `ios-v1.7.241` / `analyzer-v1.1.205`) en de analyzer via de CI-DMG uitrollen. Allebei de fasen zitten ín de analyzer (de ingest draait alleen in `.direct`-modus, `/artwork` is een analyzer-endpoint), dus op de mini gebeurt er niets tot die uitrol. Bewust niet gedaan zonder opdracht.
+- **Op het toestel beoordelen.** Twee dingen wil je zíen: of de 15.053 nieuwe albums er in de bibliotheek uitzien zoals de Roon-albums (hoes, groepering, jaartal), en of een lokale rij op een Roon-zone speelt — dat gaat via een verse Roon-zoekopdracht, en of Roon die klassieke boxsets op artiest+titel terugvindt is niet headless te toetsen.
+- **Fase 3 (stabiele track-identiteit)** uit `native/docs/STANDALONE_LIBRARY_PLAN.md`: `tracks.id` los van Roon's `item_key`. Let op de meting die er al staat — `match_key` alléén kan niet, hij is niet uniek in `tracks` (67.262 unieke sleutels op 89.752 rijen).
 - **4.484 verweesde rijen in `track_audio_features`** — sleutels die de huidige `/features`-export niet meer produceert (oude normaliser, of `bpm IS NULL`). Geen analyse meer achter; kandidaat voor een onderhoudsronde.
 - **Op het toestel beoordelen.** Alles is code-only geverifieerd; vier wijzigingen wíl je zien: de optimistic play/pause (moet direct reageren), het live volume tijdens slepen, de `zonesAreStale`-pil als je de Core even wegtrekt, en ⌘F op de Mac.
 - **Optioneel: `swiftlint --fix`** voor de resterende 464 opmaakwaarschuwingen — één commando, maar een diff van honderden regels over 306 bestanden. Bewust apart gehouden zodat hij de inhoudelijke wijzigingen niet onleesbaar maakt.

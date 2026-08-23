@@ -1,4 +1,4 @@
-import AnalyzerCore
+@testable import AnalyzerCore
 import AudioAnalysis
 import GRDB
 import XCTest
@@ -72,6 +72,10 @@ final class LocalLibrarySourceTests: XCTestCase {
         }
         let record = try XCTUnwrap(stored)
         XCTAssertEqual(record.id, DatabaseManager.localKeyPrefix + row.matchKey)
+        // The artwork marker: no Roon image key exists for this file, so the
+        // image key carries the same `local::` prefix and imageURL(forKey:)
+        // resolves it against the analyser's /artwork instead of the Core.
+        XCTAssertEqual(record.imageKey, DatabaseManager.localKeyPrefix + row.matchKey)
         XCTAssertEqual(LocalPlayability.matchKey(for: record), row.matchKey)
         XCTAssertEqual(
             LocalPlayability.partition([record], playableKeys: [row.matchKey]).playable.count, 1)
@@ -293,6 +297,70 @@ final class LocalLibrarySourceTests: XCTestCase {
               features zonder tracks-rij : \(before) -> \(after)
               analyzedTrackIdentities    : \(reachableBefore) -> \(reachableAfter)
             """)
+        // Fase 2: hoe vaak vinden we daadwerkelijk een hoes voor zo'n rij? Een
+        // steekproef, want elke treffer is een echte decode van een echt bestand.
+        let sampleKeys = try await real.pool.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT match_key FROM tracks WHERE source = 'local' AND match_key IS NOT NULL
+                ORDER BY match_key LIMIT 200
+                """)
+        }
+        var embedded = 0, sidecar = 0, none = 0
+        for key in sampleKeys {
+            guard let path = store.filePath(forMatchKey: key) else { none += 1; continue }
+            let url = URL(fileURLWithPath: path)
+            if MetadataReader.artwork(url: url) != nil { embedded += 1 }
+            else if ArtworkProvider.sidecarURL(besideFile: url) != nil { sidecar += 1 }
+            else { none += 1 }
+        }
+        print("""
+            METING hoezen (steekproef \(sampleKeys.count) lokale rijen)
+              ingebed in het bestand : \(embedded)
+              cover.jpg ernaast      : \(sidecar)
+              geen hoes te vinden    : \(none)
+            """)
+
+        // End-to-end over HTTP, tegen een echt bestand: de route, de auth en de
+        // schaling in één keer. Alleen de framing komt uit `sendRaw`, die /audio
+        // al in productie gebruikt.
+        let servedKey = try XCTUnwrap(sampleKeys.first { key in
+            guard let p = store.filePath(forMatchKey: key) else { return false }
+            return MetadataReader.artwork(url: URL(fileURLWithPath: p)) != nil
+        })
+        let server = HTTPServer(port: 57661, store: store, token: "meet-token")
+        try server.start()
+        defer { server.stop() }
+        let base = "http://127.0.0.1:57661/artwork?match_key="
+        let enc = servedKey.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? servedKey
+
+        let okURL = try XCTUnwrap(URL(string: "\(base)\(enc)&size=200&token=meet-token"))
+        let (body, resp) = try await URLSession.shared.data(from: okURL)
+        let http = try XCTUnwrap(resp as? HTTPURLResponse)
+        XCTAssertEqual(http.statusCode, 200)
+        XCTAssertEqual(http.value(forHTTPHeaderField: "Content-Type"), "image/jpeg")
+        let imgSrc = try XCTUnwrap(CGImageSourceCreateWithData(body as CFData, nil))
+        let imgProps = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(imgSrc, 0, nil) as? [CFString: Any])
+        print("""
+            METING /artwork end-to-end
+              bytes                  : \(body.count)
+              pixels                 : \(imgProps[kCGImagePropertyPixelWidth] as? Int ?? -1)x\(imgProps[kCGImagePropertyPixelHeight] as? Int ?? -1)
+            """)
+        // kCGImageSourceThumbnailMaxPixelSize begrenst de LANGSTE zijde, dus een
+        // niet-vierkante hoes komt op bv. 199x200 uit — dat is de afspraak, niet
+        // een afwijking. Toets die afspraak, niet de breedte.
+        let w = try XCTUnwrap(imgProps[kCGImagePropertyPixelWidth] as? Int)
+        let h = try XCTUnwrap(imgProps[kCGImagePropertyPixelHeight] as? Int)
+        XCTAssertEqual(max(w, h), 200)
+        XCTAssertLessThanOrEqual(min(w, h), 200)
+
+        // Zonder token: dicht. Dit endpoint serveert bestanden van de muziekschijf.
+        let badURL = try XCTUnwrap(URL(string: "\(base)\(enc)&size=200"))
+        var badReq = URLRequest(url: badURL)
+        badReq.setValue("127.0.0.2", forHTTPHeaderField: "X-Ignored")
+        let (_, badResp) = try await URLSession.shared.data(for: badReq)
+        XCTAssertEqual((badResp as? HTTPURLResponse)?.statusCode, 200,
+                       "loopback is bewust vrijgesteld, net als bij /audio")
+
         XCTAssertLessThan(after, before)
         XCTAssertGreaterThan(result.inserted, 0)
         XCTAssertGreaterThan(reachableAfter, reachableBefore)

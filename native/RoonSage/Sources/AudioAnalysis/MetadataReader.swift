@@ -55,4 +55,29 @@ public struct MetadataReader {
         apply(asset.metadata)
         return m
     }
+
+    /// Embedded cover art, if the file carries any.
+    ///
+    /// Roon-sourced library rows get their artwork from the Roon Core's image
+    /// API by `image_key`. Analyser-sourced rows have no such key — Roon never
+    /// saw them — so their artwork has to come out of the file itself (or a
+    /// sidecar next to it; see `ArtworkProvider`).
+    ///
+    /// Same two-pass shape as `read`: `commonMetadata` covers ID3/iTunes, while
+    /// FLAC's `METADATA_BLOCK_PICTURE` surfaces only in `metadata` under a raw
+    /// key. Returns the first non-empty payload — files with both a front and a
+    /// back cover list the front first.
+    public static func artwork(url: URL) -> Data? {
+        let asset = AVURLAsset(url: url)
+        func pick(_ items: [AVMetadataItem]) -> Data? {
+            for item in items {
+                if item.commonKey == .commonKeyArtwork, let d = item.dataValue, !d.isEmpty { return d }
+                let raw = ((item.key as? String) ?? item.identifier?.rawValue ?? "").uppercased()
+                if raw.contains("PICTURE") || raw.contains("COVER") || raw.contains("APIC"),
+                   let d = item.dataValue, !d.isEmpty { return d }
+            }
+            return nil
+        }
+        return pick(asset.commonMetadata) ?? pick(asset.metadata)
+    }
 }

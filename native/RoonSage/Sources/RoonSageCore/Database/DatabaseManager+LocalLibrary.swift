@@ -169,7 +169,14 @@ extension DatabaseManager {
                         c.year,
                         TrackIdentity.looksLive(title: c.title, context: c.album),
                         c.matchKey,
-                        nil,            // image_key — no Roon artwork; see fase 2 of STANDALONE_LIBRARY_PLAN
+                        // image_key — Roon never saw this file, so there is no
+                        // Roon image key. The same `local::` marker the id
+                        // carries: `RoonClient.imageURL(forKey:)` sees it and
+                        // resolves the cover from the analyser's /artwork
+                        // instead of the Roon Core's image API. Every artwork
+                        // view already takes an image key, so none of them
+                        // needed to change.
+                        Self.localKeyPrefix + c.matchKey,
                         albumKey,       // album_fp — album grouping for the library share export
                         Self.localSource,
                     ] as [DatabaseValueConvertible?])
@@ -184,8 +191,8 @@ extension DatabaseManager {
                     ON CONFLICT(id) DO UPDATE SET
                       title=excluded.title, artist=excluded.artist, album=excluded.album,
                       album_key=excluded.album_key, year=excluded.year, is_live=excluded.is_live,
-                      match_key=excluded.match_key, album_fp=excluded.album_fp,
-                      source=excluded.source
+                      match_key=excluded.match_key, image_key=excluded.image_key,
+                      album_fp=excluded.album_fp, source=excluded.source
                 """, arguments: StatementArguments(args))
                 start += slice.count
             }
