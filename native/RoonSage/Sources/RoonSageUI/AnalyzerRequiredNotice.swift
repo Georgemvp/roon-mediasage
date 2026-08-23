@@ -57,6 +57,12 @@ extension View {
     /// A modifier rather than an `if` inside each screen: the feature views stay
     /// unchanged and the gate is one line, so adding it somewhere new cannot
     /// accidentally re-indent or restructure the screen it guards.
+    /// `@MainActor` because it reads `client.plexStandalone` and builds a
+    /// main-actor view. A `View` extension is nonisolated by default, so without
+    /// this the call is only legal by accident of the local toolchain — it built
+    /// here and failed on CI with "main actor-isolated property 'plexStandalone'
+    /// can not be referenced from a non-isolated context".
+    @MainActor
     @ViewBuilder
     public func requiresAnalyzer(_ client: RoonClient, feature: String, reason: String) -> some View {
         if client.plexStandalone {
