@@ -136,11 +136,34 @@ artiest = UUID **412 → 0** · 412 rijen hersteld, **waarvan 352 duplicaten van
 correcte rij** (66.378 → 66.026). Kosten ~48 ms per bestand, dus de volle
 backfill is ~1 uur, eenmalig en hervatbaar.
 
-**Verified: `swift build` exit 0 · `swift test` 1022 tests, 0 fouten, 2
-overgeslagen (baseline 984) · `swift build -c release` groen voor RoonSage,
-RoonSageAnalyzerApp én roonsage-analyzer · swiftlint 465 violations / 2 serious —
-één minder dan de baseline, dus geen nieuwe · check-localization `--strict`
-exit 0, 1134 sleutels, 0 missend, 0 geïnterpoleerd, 0 wees.**
+**De bibliotheek zónder Roon, gemeten — en de sleutelfout die dat blootlegde.**
+Op een kopie is de bibliotheek volledig herbouwd uit alleen de bestanden. Daaruit
+bleek dat fase 1's rij-id (`local::<match_key>`) fout was: `match_key` is bewust
+albumvrij, dus dezelfde opname op twee albums viel samen op één primaire sleutel
+— 66.377 bestanden werden 59.517 rijen, **6.860 tracks verdwenen spoorloos**. De
+id is nu `local::<album>|<artiest>::<match_key>`; `image_key` blijft bewust op
+`match_key` alleen (twee rijen van dezelfde opname delen hoes én cache). Gevolg
+dat daarbij hoort: een gecorrigeerde albumtag landt op een nieuwe rij, dus de
+ingest ruimt de wees op — met de rem van `finishSyncRun`: een payload die met meer
+dan de helft kromp wist niets.
+
+Na die fix, **met Roon**: lokale rijen 15.053 → 15.532, `analyzedTrackIdentities`
+64.219 → 64.335. **Zonder Roon**: tracks 65.759 van 66.377 aangeboden · albums
+9.908 · 100% albumhoezen · **jaartal 1.071 (Roon) → 59.136 (tags)** · sonisch
+bereikbaar 49.166 → **60.621**. De standalone bibliotheek is dus op twee punten
+béter dan de Roon-bibliotheek. Wat er nog aan Roon vastzit is de identiteit van de
+Roon-rijen zelf en de Qobuz-laag (fase 4).
+
+**Verified: `swift build` exit 0 · `swift test` 1026 tests, 0 fouten, 3
+overgeslagen (baseline 984) · `swift build -c release` groen voor RoonSage én
+RoonSageAnalyzerApp · swiftlint 465 violations / 2 serious — één minder dan de
+baseline, dus geen nieuwe · check-localization `--strict` exit 0, 1134 sleutels,
+0 missend, 0 geïnterpoleerd, 0 wees.**
+
+**GESHIPT + GROEN (2026-08-23 08:31): `v1.10.275` / `ios-v1.7.241` /
+`analyzer-v1.1.205`**, alle vier de workflows success (Native Tests, Analyzer DMG,
+macOS DMG, iOS TestFlight). De mini draait nog analyzer-v1.1.202 — een tag levert
+een DMG, geen uitrol.
 
 ---
 _Hieronder de `## Now` van de vorige sessie (de 360°-audit). Bewaard, niet

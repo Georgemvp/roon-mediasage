@@ -329,6 +329,53 @@ paden zijn bij allebei bekend, en 25.470 daarvan hebben er al een. Dat is een
 koppeling tussen twee projecten, dus een beslissing voor Casper, geen
 implementatiedetail.
 
+## 5e. De sleutel moest de album meenemen — gemeten (2026-08-23)
+
+Om te weten wat fase 3 écht moet oplossen is de bibliotheek op een kopie
+**volledig herbouwd uit alleen de bestanden** — Roon-rijen weg, alles opnieuw uit
+de analyzer. Dat legde meteen een fout in fase 1 bloot: de lokale rij-id was
+`local::<match_key>`, en `match_key` is bewust albumvrij (edities en boxsets
+lopen uiteen). Dus **dezelfde opname op twee albums viel samen op één primaire
+sleutel**: 66.377 geanalyseerde bestanden werden 59.517 rijen — 6.860 tracks
+verdwenen zonder een spoor.
+
+De id is nu `local::<album>|<artiest>::<match_key>`. De `image_key` blijft
+bewust op `match_key` alleen: `/artwork` zoekt een bestand op inhoud, en twee
+rijen van dezelfde opname mogen dezelfde hoes én dezelfde cache delen.
+
+Daar hing één gevolg aan: met het album in de sleutel landt een gecorrigeerde
+albumtag op een **nieuwe** rij, en bleef de oude achter voor een album zonder
+bestanden. De ingest ruimt die nu op — met dezelfde rem als de Roon-walk
+(`finishSyncRun(pruneStale:)`): een payload die met meer dan de helft kromp is
+een afgebroken lezing, geen bibliotheek die halveerde, en dan wordt er niets
+gewist.
+
+### De bibliotheek zonder Roon, gemeten
+
+| | met Roon | alleen bestanden |
+|---|---|---|
+| tracks | 89.752 | **65.759** (van 66.377 aangeboden) |
+| albums | 13.153 | 9.908 |
+| artiesten | 6.563 | 4.886 |
+| met albumhoes | 89.680 | **65.759 — 100%** |
+| **met jaartal** | **1.071** | **59.136** |
+| sonisch bereikbaar | 49.166 | **60.621** |
+| MB-genres (los van Roon) | — | 177.756 rijen |
+
+Twee dingen springen eruit. **Roon levert vrijwel geen jaartallen** — 1.071 van
+89.752, omdat de Browse-API het jaar alleen in een subtitle-string zet die lang
+niet altijd te parsen is; de bestandstags geven er 59.136. En de standalone
+bibliotheek is **sonisch groter** dan de Roon-bibliotheek: 60.621 tegen 49.166
+bereikbare tracks, want elk geanalyseerd bestand heeft nu een rij.
+
+Het verschil in aantallen (89.752 → 65.759) is geen verlies: de Roon-kant telt
+~13.175 Qobuz-only tracks mee én dubbele edities van hetzelfde album. De 618 die
+nog wegvallen zijn dezelfde opname twee keer op één album.
+
+**Conclusie voor fase 3.** De bibliotheek kán al zonder Roon, en is op twee punten
+beter. Wat er nog aan vast zit is de identiteit van de Roon-rijen zelf
+(`tracks.id` = een sessie-sleutel) en de Qobuz-laag (fase 4).
+
 ## 6. Maten om achteraf te toetsen
 
 | maat | vóór | nu | doel |
@@ -336,6 +383,7 @@ implementatiedetail.
 | rijen uit `analyzedTrackIdentities()` | 49.166 | **64.219** | ✅ fase 1 |
 | feature-rijen zonder `tracks`-rij | 19.537 | **4.484** (verweesd, zie 5b) | ✅ fase 1 |
 | lokale rijen met een vindbare hoes | — | **99%** (198/200 steekproef) | ✅ fase 2 |
+| tracks in een bibliotheek zonder Roon | — | **65.759** van 66.377 bestanden | ✅ |
 | bestanden met een harde identiteit gelezen uit de tags | 52% (sidecar) | **73%** binnen de gemeten scope | ~80% na de volle backfill |
 | rijen met een UUID als artiestnaam | 412 | **0** | ✅ |
 | bibliotheekrijen met een Roon-sleutel als identiteit | 100% | 86% | 0% na fase 3 |

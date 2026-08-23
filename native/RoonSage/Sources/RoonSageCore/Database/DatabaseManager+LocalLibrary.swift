@@ -60,13 +60,38 @@ extension DatabaseManager {
         public var refreshed: Int
         /// Local rows dropped because a Roon row now carries the same key.
         public var reclaimed: Int
+        /// Local rows dropped because the analyser no longer offers that file —
+        /// deleted from disk, or re-tagged onto a different album.
+        public var pruned: Int
         /// Local rows in the library after this pass.
         public var total: Int
 
-        public init(offered: Int, inserted: Int, refreshed: Int, reclaimed: Int, total: Int) {
+        public init(offered: Int, inserted: Int, refreshed: Int, reclaimed: Int,
+                    pruned: Int = 0, total: Int) {
             self.offered = offered; self.inserted = inserted; self.refreshed = refreshed
-            self.reclaimed = reclaimed; self.total = total
+            self.reclaimed = reclaimed; self.pruned = pruned; self.total = total
         }
+    }
+
+    /// Stable id for a local row: album context + the content key.
+    ///
+    /// `match_key` alone is NOT enough. It is deliberately album-free (editions
+    /// and box sets diverge), so the same recording on two albums collapses onto
+    /// one primary key. Measured on the real library (2026-08-23): rebuilding the
+    /// whole library from the files that way turned 66.377 analysed files into
+    /// 59.517 rows — **6.860 disappeared**, each one a track that exists on a
+    /// second album. Album fingerprint first, so rows of one album sort together.
+    public static func localTrackID(album: String?, artist: String?, matchKey: String) -> String {
+        localKeyPrefix + localAlbumFingerprint(album: album, artist: artist) + "::" + matchKey
+    }
+
+    /// Album identity for a local row, without the `local::` prefix — shared by
+    /// the row id and the album key so both group identically.
+    static func localAlbumFingerprint(album: String?, artist: String?) -> String {
+        let al = (album ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        let ar = (artist ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        if al.isEmpty && ar.isEmpty { return "unknown" }
+        return al + "|" + ar
     }
 
     /// Album grouping for a local row. Mirrors the fallback the library-share
@@ -74,10 +99,7 @@ extension DatabaseManager {
     /// group albums the same way — `COUNT(DISTINCT album_key)` and `playAlbum`'s
     /// `WHERE album_key = ?` both depend on it being stable and non-null.
     public static func localAlbumKey(album: String?, artist: String?) -> String {
-        let al = (album ?? "").trimmingCharacters(in: .whitespaces).lowercased()
-        let ar = (artist ?? "").trimmingCharacters(in: .whitespaces).lowercased()
-        if al.isEmpty && ar.isEmpty { return localKeyPrefix + "unknown" }
-        return localKeyPrefix + al + "|" + ar
+        localKeyPrefix + localAlbumFingerprint(album: album, artist: artist)
     }
 
     /// Merge the analyser's on-disk tracks into the library as `source='local'`
@@ -106,8 +128,7 @@ extension DatabaseManager {
                 WHERE source = 'roon' AND match_key IS NOT NULL AND match_key != ''
                 """))
             let existingLocal = Set(try String.fetchAll(
-                db, sql: "SELECT match_key FROM tracks WHERE source = ? AND match_key IS NOT NULL",
-                arguments: [Self.localSource]))
+                db, sql: "SELECT id FROM tracks WHERE source = ?", arguments: [Self.localSource]))
 
             var candidates: [LocalTrackRow] = []
             candidates.reserveCapacity(rows.count)
@@ -118,15 +139,45 @@ extension DatabaseManager {
                 // row without a title can't be shown — neither is a library row.
                 guard !key.isEmpty, !r.title.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
                 guard !roonKeys.contains(key) else { continue }
-                // The analyser's export is keyed by match_key, but two rows can
-                // still normalise onto one key; `id` is the primary key, so the
-                // second would silently overwrite the first mid-statement.
-                guard seen.insert(key).inserted else { continue }
+                // Dedup on the ROW id, not on the content key: the same recording
+                // on two albums is two library rows (that is the whole point of
+                // putting the album in the id), but the same recording twice on
+                // ONE album would collide on the primary key mid-statement.
+                guard seen.insert(Self.localTrackID(album: r.album, artist: r.artist, matchKey: key)).inserted
+                else { continue }
                 var row = r
                 row.matchKey = key
                 candidates.append(row)
             }
-            let inserted = candidates.reduce(into: 0) { $0 += existingLocal.contains($1.matchKey) ? 0 : 1 }
+            let candidateIDs = Set(candidates.map {
+                Self.localTrackID(album: $0.album, artist: $0.artist, matchKey: $0.matchKey)
+            })
+            let inserted = candidateIDs.subtracting(existingLocal).count
+
+            // Rows the analyser no longer offers: the file was deleted, or its
+            // album tag was corrected — and since the album is part of the id,
+            // a re-tag lands on a NEW row and would otherwise leave the old one
+            // behind for an album that has no files.
+            //
+            // Same brake as the Roon walk's prune (`finishSyncRun(pruneStale:)`):
+            // a payload that shrank by more than half is a truncated read, not a
+            // library that halved. Never let one bad fetch empty the shelf.
+            var pruned = 0
+            let stale = existingLocal.subtracting(candidateIDs)
+            if !stale.isEmpty, candidates.count * 2 >= existingLocal.count {
+                let ids = Array(stale)
+                let chunk = Self.rowsPerChunk(columns: 1)
+                var start = 0
+                while start < ids.count {
+                    let slice = ids[start..<min(start + chunk, ids.count)]
+                    let placeholders = slice.map { _ in "?" }.joined(separator: ",")
+                    try db.execute(
+                        sql: "DELETE FROM tracks WHERE source = ? AND id IN (\(placeholders))",
+                        arguments: StatementArguments([Self.localSource] + slice.map { $0 as DatabaseValueConvertible }))
+                    pruned += db.changesCount
+                    start += slice.count
+                }
+            }
 
             // Backdate first-seen BEFORE inserting. `trg_tracks_first_seen` stamps
             // every new row with `now`, which would announce 19.5k tracks as "new
@@ -161,7 +212,7 @@ extension DatabaseManager {
                 for c in slice {
                     let albumKey = Self.localAlbumKey(album: c.album, artist: c.artist)
                     args.append(contentsOf: [
-                        Self.localKeyPrefix + c.matchKey,
+                        Self.localTrackID(album: c.album, artist: c.artist, matchKey: c.matchKey),
                         c.title,
                         c.artist,
                         c.album,
@@ -170,12 +221,16 @@ extension DatabaseManager {
                         TrackIdentity.looksLive(title: c.title, context: c.album),
                         c.matchKey,
                         // image_key — Roon never saw this file, so there is no
-                        // Roon image key. The same `local::` marker the id
-                        // carries: `RoonClient.imageURL(forKey:)` sees it and
-                        // resolves the cover from the analyser's /artwork
-                        // instead of the Roon Core's image API. Every artwork
-                        // view already takes an image key, so none of them
-                        // needed to change.
+                        // Roon image key. `RoonClient.imageURL(forKey:)` sees the
+                        // `local::` marker and resolves the cover from the
+                        // analyser's /artwork instead of the Roon Core's image
+                        // API. Every artwork view already takes an image key, so
+                        // none of them needed to change.
+                        //
+                        // Deliberately keyed on match_key ALONE, not on the row
+                        // id: /artwork resolves a file by match key, and two rows
+                        // of the same recording on different albums share the
+                        // cover lookup — and the analyser's cache with it.
                         Self.localKeyPrefix + c.matchKey,
                         albumKey,       // album_fp — album grouping for the library share export
                         Self.localSource,
@@ -205,6 +260,7 @@ extension DatabaseManager {
                 inserted: inserted,
                 refreshed: candidates.count - inserted,
                 reclaimed: reclaimed,
+                pruned: pruned,
                 total: total)
         }
     }

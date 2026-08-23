@@ -71,7 +71,8 @@ final class LocalLibrarySourceTests: XCTestCase {
             try TrackRecord.fetchOne(db, sql: "SELECT * FROM tracks WHERE source = 'local'")
         }
         let record = try XCTUnwrap(stored)
-        XCTAssertEqual(record.id, DatabaseManager.localKeyPrefix + row.matchKey)
+        XCTAssertEqual(record.id, DatabaseManager.localTrackID(
+            album: row.album, artist: row.artist, matchKey: row.matchKey))
         // The artwork marker: no Roon image key exists for this file, so the
         // image key carries the same `local::` prefix and imageURL(forKey:)
         // resolves it against the analyser's /artwork instead of the Core.
@@ -81,17 +82,60 @@ final class LocalLibrarySourceTests: XCTestCase {
             LocalPlayability.partition([record], playableKeys: [row.matchKey]).playable.count, 1)
     }
 
-    func testReIngestRefreshesInsteadOfDuplicating() async throws {
+    func testReIngestRefreshesInPlaceWhenTheAlbumIsUnchanged() async throws {
         _ = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "Heroes")])
-        let second = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "\"Heroes\"", year: 1977)])
+        let second = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "Heroes", year: 1977)])
 
         XCTAssertEqual(second.inserted, 0)
         XCTAssertEqual(second.refreshed, 1)
+        XCTAssertEqual(second.pruned, 0)
+        XCTAssertEqual(second.total, 1)
+        let year = try await db.pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT year FROM tracks WHERE source = 'local'")
+        }
+        XCTAssertEqual(year, 1977)
+    }
+
+    func testARetaggedAlbumMovesTheRowInsteadOfLeavingAnOrphan() async throws {
+        // The album is part of the row id, so a corrected album tag lands on a
+        // NEW row. Without the prune the old one stays behind for an album that
+        // no longer has any files.
+        _ = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "Heroes")])
+        let second = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "\"Heroes\"", year: 1977)])
+
+        XCTAssertEqual(second.inserted, 1)
+        XCTAssertEqual(second.pruned, 1)
         XCTAssertEqual(second.total, 1)
         let album = try await db.pool.read { db in
             try String.fetchOne(db, sql: "SELECT album FROM tracks WHERE source = 'local'")
         }
         XCTAssertEqual(album, "\"Heroes\"")
+    }
+
+    func testTheSameRecordingOnTwoAlbumsIsTwoRows() async throws {
+        // match_key is album-free by design, so keying rows on it alone collapsed
+        // 66.377 analysed files into 59.517 library rows on the real library —
+        // 6.860 tracks that exist on a second album simply vanished.
+        let result = try await db.ingestLocalTracks([
+            local("Bowie", "Heroes", album: "\"Heroes\""),
+            local("Bowie", "Heroes", album: "Best of Bowie"),
+        ])
+        XCTAssertEqual(result.inserted, 2)
+        XCTAssertEqual(result.total, 2)
+    }
+
+    func testAHalvedPayloadDoesNotEmptyTheShelf() async throws {
+        // Same brake as the Roon walk's prune: a truncated read must never be
+        // mistaken for a library that shrank.
+        _ = try await db.ingestLocalTracks([
+            local("Bowie", "Heroes", album: "Heroes"),
+            local("Bowie", "Ashes to Ashes", album: "Scary Monsters"),
+            local("Menuhin", "Chaconne", album: "The Century"),
+            local("Menuhin", "Partita", album: "The Century"),
+        ])
+        let truncated = try await db.ingestLocalTracks([local("Bowie", "Heroes", album: "Heroes")])
+        XCTAssertEqual(truncated.pruned, 0, "een gehalveerde payload mag niets wissen")
+        XCTAssertEqual(truncated.total, 4)
     }
 
     func testKeylessAndTitlelessRowsAreRejected() async throws {
@@ -364,5 +408,77 @@ final class LocalLibrarySourceTests: XCTestCase {
         XCTAssertLessThan(after, before)
         XCTAssertGreaterThan(result.inserted, 0)
         XCTAssertGreaterThan(reachableAfter, reachableBefore)
+    }
+
+    /// Wat blijft er over als Roon wegvalt? Bouwt de bibliotheek op een KOPIE
+    /// volledig opnieuw uit alleen de analyzer, en telt wat je dan hebt. Zelfde
+    /// opt-in als de meting hierboven.
+    func testMeasureFullStandaloneLibrary() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let libSrc = env["ROONSAGE_REAL_LIBRARY_DB"], let anSrc = env["ROONSAGE_REAL_ANALYZER_DB"] else {
+            throw XCTSkip("Set ROONSAGE_REAL_LIBRARY_DB + ROONSAGE_REAL_ANALYZER_DB to measure.")
+        }
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("rs-standalone-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        let libCopy = dir.appendingPathComponent("library.db")
+        let anCopy = dir.appendingPathComponent("analyzer.db")
+        try fm.copyItem(at: URL(fileURLWithPath: libSrc), to: libCopy)
+        try fm.copyItem(at: URL(fileURLWithPath: anSrc), to: anCopy)
+
+        let store = try FeatureStore(path: anCopy.path)
+        let arr = try XCTUnwrap(try JSONSerialization.jsonObject(
+            with: store.exportJSON(includeEmbedding: false)) as? [[String: Any]])
+        var rows: [DatabaseManager.LocalTrackRow] = []
+        for o in arr {
+            guard let mk = o["match_key"] as? String, !mk.isEmpty,
+                  let t = o["title"] as? String, !t.isEmpty else { continue }
+            let year = o["year"] as? Int
+            rows.append(DatabaseManager.LocalTrackRow(
+                matchKey: mk,
+                artist: (o["artist"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                title: t,
+                album: (o["album"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                year: (year ?? 0) > 1900 ? year : nil))
+        }
+
+        let real = try DatabaseManager(url: libCopy)
+        func shape() async throws -> (tracks: Int, albums: Int, artists: Int, art: Int, years: Int) {
+            try await real.pool.read { db in
+                (
+                    try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tracks") ?? 0,
+                    try Int.fetchOne(db, sql: "SELECT COUNT(DISTINCT album_key) FROM tracks") ?? 0,
+                    try Int.fetchOne(db, sql: "SELECT COUNT(DISTINCT LOWER(artist)) FROM tracks WHERE artist IS NOT NULL") ?? 0,
+                    try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tracks WHERE image_key IS NOT NULL AND image_key != ''") ?? 0,
+                    try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tracks WHERE year IS NOT NULL") ?? 0
+                )
+            }
+        }
+        let withRoon = try await shape()
+        let reachableWithRoon = try await real.analyzedTrackIdentities(excludeLive: false).count
+
+        // Roon uit: al zijn rijen weg, daarna alles opnieuw uit de bestanden.
+        try await real.pool.write { db in try db.execute(sql: "DELETE FROM tracks WHERE source = 'roon'") }
+        let result = try await real.ingestLocalTracks(rows)
+        let standalone = try await shape()
+        let reachableStandalone = try await real.analyzedTrackIdentities(excludeLive: false).count
+        let genres = try await real.pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM track_mb_genres") ?? 0
+        }
+
+        print("""
+            METING bibliotheek zonder Roon
+                                     met Roon   ->   alleen bestanden
+              tracks               : \(withRoon.tracks)  ->  \(standalone.tracks)
+              albums               : \(withRoon.albums)  ->  \(standalone.albums)
+              artiesten            : \(withRoon.artists)  ->  \(standalone.artists)
+              met albumhoes        : \(withRoon.art)  ->  \(standalone.art)
+              met jaartal          : \(withRoon.years)  ->  \(standalone.years)
+              sonisch bereikbaar   : \(reachableWithRoon)  ->  \(reachableStandalone)
+              MB-genres (los van Roon) : \(genres)
+              ingest: \(result.inserted) nieuw van \(result.offered) aangeboden
+            """)
+        XCTAssertGreaterThan(standalone.tracks, 0)
     }
 }
