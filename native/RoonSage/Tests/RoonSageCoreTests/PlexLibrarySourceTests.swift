@@ -140,6 +140,29 @@ final class PlexLibrarySourceTests: XCTestCase {
         XCTAssertEqual(sources, ["plex"])
     }
 
+    /// De regressie die dit vond: beide bronnen liepen, geen van beide verdrong
+    /// de ander, en de echte bibliotheek stond op 147.692 rijen voor 79.704
+    /// unieke nummers. Waar Plex het nummer heeft, hoort er één rij te zijn.
+    func testPlexDisplacesTheAnalyserRowForTheSameRecording() async throws {
+        try await db.ingestLocalTracks([
+            DatabaseManager.LocalTrackRow(
+                matchKey: TrackIdentity.matchKey(artist: "A", album: "Al", title: "T"),
+                artist: "A", title: "T", album: "Al", year: nil),
+            DatabaseManager.LocalTrackRow(
+                matchKey: TrackIdentity.matchKey(artist: "A", album: "Al", title: "AlleenLokaal"),
+                artist: "A", title: "AlleenLokaal", album: "Al", year: nil),
+        ])
+        let result = try await db.ingestPlexTracks([plex("1", artist: "A", title: "T", album: "Al")])
+
+        XCTAssertEqual(result.reclaimed, 1, "de local-rij voor hetzelfde nummer moet weg")
+        let rows = try await db.pool.read { db in
+            try Row.fetchAll(db, sql: "SELECT source, title FROM tracks ORDER BY title")
+        }
+        XCTAssertEqual(rows.map { $0["title"] as String? }, ["AlleenLokaal", "T"])
+        XCTAssertEqual(rows.map { $0["source"] as String? }, ["local", "plex"],
+                       "een bestand dat Plex NIET heeft moet als local blijven bestaan")
+    }
+
     func testReingestRefreshesInsteadOfDuplicating() async throws {
         try await db.ingestPlexTracks([plex("1", artist: "A", title: "T", album: "Al")])
         let second = try await db.ingestPlexTracks([

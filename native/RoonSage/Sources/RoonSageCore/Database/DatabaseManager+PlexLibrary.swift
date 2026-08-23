@@ -244,25 +244,36 @@ extension DatabaseManager {
                 start += slice.count
             }
 
-            // Displace the Roon rows Plex now owns, genres first — identical to
-            // the analyser ingest, and for the same reason: `track_genres` is
-            // keyed on the ROW with ON DELETE CASCADE, so deleting the Roon row
-            // without moving them drops the only genre some tracks have.
+            // Displace the rows Plex now owns, genres first: `track_genres` is
+            // keyed on the ROW with ON DELETE CASCADE, so deleting without moving
+            // them drops the only genre some tracks have.
             //
-            // Only `source='roon'` is displaced, never `source='local'`. The two
-            // synthetic sources describe the same files; deciding which of them
-            // wins is a separate call, not a side effect of an import.
+            // **Both `roon` AND `local` are displaced.** An earlier version left
+            // `local` alone, calling the choice between the two file-backed
+            // sources "a separate call". Measured on the live library after both
+            // had run: 65.871 local + 65.719 plex rows for 79.704 unique
+            // recordings — 48.663 of them present TWICE, a library nearly doubled
+            // with duplicates. There is no version of that which is correct, so
+            // the rule is stated here: where Plex has the recording, Plex owns the
+            // row. Plex is also the more accurate picture of the disk (it had
+            // 7.430 files the walk never analysed, while 8.038 analyser rows point
+            // at files that no longer exist).
+            //
+            // Safe in both directions: `ingestLocalTracks` only ever displaces
+            // `source='roon'`, so the two imports cannot fight over the same rows
+            // on alternating cycles. A local row for a file Plex does NOT have
+            // survives untouched — that is what keeps analyser-only files visible.
             var reclaimed = 0
             if !candidates.isEmpty, candidates.count * 2 >= existing.count {
                 try db.execute(sql: """
                     INSERT OR IGNORE INTO track_genres (track_id, genre)
                     SELECT p.id, g.genre
                     FROM track_genres g
-                    JOIN tracks r ON r.id = g.track_id AND r.source = 'roon'
+                    JOIN tracks r ON r.id = g.track_id AND r.source IN ('roon', 'local')
                     JOIN tracks p ON p.source = ? AND p.match_key = r.match_key
                     """, arguments: [Self.plexSource])
                 try db.execute(sql: """
-                    DELETE FROM tracks WHERE source = 'roon' AND match_key IN
+                    DELETE FROM tracks WHERE source IN ('roon', 'local') AND match_key IN
                       (SELECT match_key FROM tracks
                        WHERE source = ? AND match_key IS NOT NULL AND match_key != '')
                     """, arguments: [Self.plexSource])
