@@ -160,9 +160,12 @@ extension RoonClient {
                            library: [DatabaseManager.SonicTrack],
                            index: VectorIndex?,
                            limit: Int) async -> [DatabaseManager.SonicTrack]? {
+        // `availableToken`, not `localToken`: on a client the device's own
+        // PlexAuth token is what makes this path work at all. On the server the
+        // admin token still resolves, so nothing changes there.
         guard plexSonicEnabled,
               seed.id.hasPrefix(DatabaseManager.plexKeyPrefix),
-              let token = PlexClient.localToken(),
+              let token = PlexClient.availableToken(),
               let base = URL(string: plexBaseURL.trimmingCharacters(in: .whitespaces))
         else { return nil }
 

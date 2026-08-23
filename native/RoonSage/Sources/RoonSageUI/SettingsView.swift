@@ -58,6 +58,10 @@ public struct SettingsView: View {
     @AppStorage("appLanguage") private var appLanguage: LocalePreference = .system
     @AppStorage("showVisualizer") private var showVisualizer = true
     @State private var lastSync: String = "—"
+    @State private var plexSignedIn: Bool = PlexAuth.storedToken() != nil
+    @State private var plexPinCode: String?
+    @State private var plexSigningIn = false
+    @State private var plexStatus: String?
 
     // Server sync (client role: pull settings + library + features from the server)
     @State private var serverURL: String = UserDefaults.standard.string(forKey: "library_import_url") ?? ""
@@ -597,6 +601,65 @@ public struct SettingsView: View {
                 LT("settings.qobuzLocalHelp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }.scoped(.device, in: scope)
+
+            // Plex. Sign-in is per DEVICE (not synced): the token PlexAuth mints
+            // is scoped to this install, which is the whole reason it exists —
+            // the alternative is shipping the server's admin token to clients.
+            Section("Plex") {
+                if plexSignedIn {
+                    LabeledContent("Status", value: "Gekoppeld")
+                    Button("Ontkoppelen", role: .destructive) {
+                        PlexAuth.signOut()
+                        plexSignedIn = false
+                        plexPinCode = nil
+                        plexStatus = nil
+                    }
+                } else if let code = plexPinCode {
+                    LabeledContent("Koppelcode", value: code)
+                    Text("Ga naar plex.tv/link en voer deze code in. Hij verloopt na 15 minuten.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ProgressView()
+                } else {
+                    Button {
+                        plexSigningIn = true
+                        plexStatus = nil
+                        Task {
+                            defer { plexSigningIn = false; plexPinCode = nil }
+                            do {
+                                let token = try await PlexAuth.signIn { pin in
+                                    Task { @MainActor in plexPinCode = pin.code }
+                                }
+                                plexSignedIn = token != nil
+                                plexStatus = token != nil ? nil : "Code verlopen — probeer opnieuw."
+                            } catch {
+                                plexStatus = "Koppelen mislukt: \(error.localizedDescription)"
+                            }
+                        }
+                    } label: {
+                        Label("Koppel met Plex", systemImage: "link")
+                    }
+                    .disabled(plexSigningIn)
+                }
+                if let plexStatus {
+                    Text(plexStatus).font(.caption).foregroundStyle(.secondary)
+                }
+
+                // Bindings, geen computed property: een computed var op het
+                // @Observable model laat SwiftUI niet hertekenen (zie de
+                // Last.fm-schakelaars hierboven, en de memory hierover).
+                if role == .server {
+                    SettingToggle(
+                        "Plex-bibliotheek importeren",
+                        explanation: "Plex wordt de catalogus. Verdringt Roon-rijen voor nummers waarvan Plex het bestand heeft.",
+                        isOn: Binding(get: { client.plexSyncEnabled },
+                                      set: { client.plexSyncEnabled = $0 }))
+                }
+                SettingToggle(
+                    "Vergelijkbare nummers via Plex",
+                    explanation: "Gebruikt Plex' eigen sonische analyse. Zonder koppeling valt hij terug op de eigen motor.",
+                    isOn: Binding(get: { client.plexSonicEnabled },
+                                  set: { client.plexSonicEnabled = $0 }))
             }.scoped(.device, in: scope)
 
             Group {

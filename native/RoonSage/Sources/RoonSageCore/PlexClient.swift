@@ -60,6 +60,17 @@ public struct PlexClient: Sendable {
         return attribute("PlexOnlineToken", in: xml)
     }
 
+    /// The token to use here, wherever it comes from.
+    ///
+    /// A device that signed in through `PlexAuth` has its own token and that one
+    /// wins — it is scoped to that device and is what a client is *supposed* to
+    /// use. `localToken()` is the fallback and only ever resolves on the machine
+    /// running Plex, where reading the admin token out of Preferences.xml is not
+    /// a leak because it never crosses the network.
+    public static func availableToken() -> String? {
+        PlexAuth.storedToken() ?? localToken()
+    }
+
     /// Pull one `name="value"` attribute out of Plex's single-element XML. A
     /// full XML parse would be overkill for a one-line document, but the value
     /// may contain anything except a quote, so match to the closing quote.
