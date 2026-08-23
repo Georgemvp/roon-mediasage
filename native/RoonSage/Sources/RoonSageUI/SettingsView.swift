@@ -614,6 +614,7 @@ public struct SettingsView: View {
                         plexSignedIn = false
                         plexPinCode = nil
                         plexStatus = nil
+                        client.refreshPlexLinkState()
                     }
                 } else if let code = plexPinCode {
                     LabeledContent("Koppelcode", value: code)
@@ -632,6 +633,7 @@ public struct SettingsView: View {
                                 }
                                 plexSignedIn = token != nil
                                 plexStatus = token != nil ? nil : "Code verlopen — probeer opnieuw."
+                                client.refreshPlexLinkState()
                             } catch {
                                 plexStatus = "Koppelen mislukt: \(error.localizedDescription)"
                             }

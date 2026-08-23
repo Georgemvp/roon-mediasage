@@ -49,6 +49,7 @@ historie-import, dus verhuizen zou die data vernietigen.
 - "Alle UI-teksten/labels zijn in het Nederlands, code/symbolen/commentaren/APIs in het Engels" (user, 2026-08-23)
 - "Geen AppKit in gedeelde modules (RoonSageCore, RoonSageUI, AudioAnalysis, AnalyzerCore); houd RoonProtocol en RoonSageCore platform-onafhankelijk" (user, 2026-08-23)
 - "Zelfs als Roon wegvalt moet alles gewoon werken. Roon control is dan iets ernaast" — Roon is uitvoer, geen catalogus. Niets mag een werkende Roon-verbinding vereisen om de bibliotheek te tonen (user, 2026-08-23)
+- "als je de ios client start, moet je de eerste keer worden gevraagd in te loggen op plex en dan moet de app werkende zijn. En daar waar je de analyzer voor nodig hebt, de roonprotocl etc krijg je een melding om te verbinden met de anlayzer" + "En de analyzer is dus optioneel" — Plex-first opstart; de app moet volledig bruikbaar zijn met ALLEEN een Plex-koppeling, en analyzer-afhankelijke functies tonen een verbind-melding in plaats van de app te blokkeren (user, 2026-08-23)
 - "Ik wil echt toe naar een snelle plexamp/symphonica app want de roonsage app op ios is te sloom en te bugged" (user, 2026-08-23)
 - "Behalve lord of the rings trilogie, die moeten in hdr etc blijven" — FileFlows op /Volumes/8tbDrive: LOTR nooit aanraken (user, 2026-07-29)
 - "Test alle functies in RoonSage iOS, gebruik enkel max mini als zone" (user, 2026-07-22)

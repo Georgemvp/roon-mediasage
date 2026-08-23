@@ -23,7 +23,13 @@ public struct ContentView: View {
             // session is live — only a cold start or a deliberate disconnect
             // drops to the connect screen. Prevents a heavy generate stalling
             // /playback from tearing down views and losing in-flight state.
-            if client.connectionState.isConnected || client.hasLiveSession || client.offlineMode {
+            // `plexStandalone` joins the escape hatches: a device signed in to
+            // Plex with no RoonSage server has a complete library of its own, so
+            // parking it on the connect screen would hide a working app behind a
+            // server it does not need (user, 2026-08-23: "de analyzer is dus
+            // optioneel"). Analyser-only features ask to connect where they live.
+            if client.connectionState.isConnected || client.hasLiveSession
+                || client.offlineMode || client.plexStandalone {
                 // The banner is a layout SIBLING, not a top safe-area inset.
                 //
                 // As an inset it drew straight over the navigation toolbar: on
@@ -50,6 +56,12 @@ public struct ContentView: View {
         .animation(Motion.standard, value: client.offlineMode)
         .animation(Motion.standard, value: client.zonesAreStale)
         .overlay(alignment: .bottom) { ActionErrorToast() }
+        // Summoned by AnalyzerRequiredNotice: on a standalone Plex device the
+        // connect screen is no longer in the launch path, so a feature that needs
+        // the server has to be able to call it up from where the user is.
+        .sheet(isPresented: Bindable(client).showServerConnectSheet) {
+            ConnectView()
+        }
         .roonSageAppearance()
         .appLanguage()
         // Share the now-playing album-art tint with every tab, refreshed whenever
@@ -844,10 +856,24 @@ struct RootView: View {
         case .ask, .generate, .recommend: CreateHubView()
         case .playlists:   PlaylistsView()
         case .bookmarks:   BookmarksView()
-        case .djSet, .liveDJ, .dj: DJView()
+        // Analyser-only. Gated here rather than inside each screen so the feature
+        // views stay untouched and the rule lives in one place.
+        //
+        // Stations are NOT gated: with `plex_sonic_enabled` they run off Plex's
+        // own Sonic Analysis, so they degrade rather than disappear.
+        case .djSet, .liveDJ, .dj:
+            DJView().requiresAnalyzer(
+                client, feature: "DJ-sets",
+                reason: "Harmonisch mixen vraagt BPM en toonsoort per nummer. Plex meet die niet — de analyzer wel.")
         case .stationsHub, .radios, .journeys, .djModes: StationsHubView()
-        case .musicMap:    MusicMapView()
-        case .songPaths, .alchemy, .sonicLab: SonicLabView()
+        case .musicMap:
+            MusicMapView().requiresAnalyzer(
+                client, feature: "Muziekkaart",
+                reason: "De kaart tekent je bibliotheek uit de audio-embeddings van de analyzer.")
+        case .songPaths, .alchemy, .sonicLab:
+            SonicLabView().requiresAnalyzer(
+                client, feature: "Sonisch lab",
+                reason: "Song Paths en Song Alchemy rekenen met de audiovectoren van de analyzer. Plex geeft die niet vrij.")
         case .sonicSearch: SearchView()
         case .lab:         LabView()
         case .multitag:    MultitagView()

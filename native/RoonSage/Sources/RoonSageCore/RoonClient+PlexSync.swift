@@ -1,14 +1,19 @@
 import Foundation
 
-// MARK: - Plex library sync (server build only)
+// MARK: - Plex library sync
 //
 // Fase 1 of moving the catalogue off Roon's Browse walk. `ingestPlexTracks`
 // existed but nothing called it; this is the caller.
 //
-// Runs only on the always-on server build (`.direct`) — the Plex token lives in
-// the local server's Preferences.xml, which only exists on the machine running
-// Plex. Thin clients receive the resulting rows over the :5767 share like every
-// other library row, and never talk to Plex.
+// Two places run it, for different reasons:
+//
+//   • the always-on **server** build (`.direct`), which reads the admin token out
+//     of the local Preferences.xml and feeds the :5767 share every client pulls
+//     from — the original arrangement;
+//   • a **standalone client** (`plexStandalone`): signed in to Plex through
+//     `PlexAuth`, with no RoonSage server configured. There Plex IS the library,
+//     so the client builds it itself and the analyser is optional (user,
+//     2026-08-23). Nothing changes for a client that does have a server.
 
 extension RoonClient {
 
@@ -30,6 +35,36 @@ extension RoonClient {
         set { UserDefaults.standard.set(newValue, forKey: "plex_sync_enabled") }
     }
 
+    /// This device runs on Plex alone: signed in to Plex, with no RoonSage server
+    /// configured.
+    ///
+    /// The mode the product is aiming at (user, 2026-08-23): *"als je de ios
+    /// client start, moet je de eerste keer worden gevraagd in te loggen op plex
+    /// en dan moet de app werkende zijn … de analyzer is dus optioneel."* In this
+    /// mode the client builds its own library straight from Plex instead of
+    /// pulling `/library` off the share server, and analyser-only features ask to
+    /// connect rather than blocking the app.
+    public var plexStandalone: Bool {
+        guard plexLinked else { return false }
+        let server = UserDefaults.standard.string(forKey: "library_import_url") ?? ""
+        return server.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Re-read the Keychain into the observable `plexLinked`, and start or stop
+    /// the import to match. Call after every sign-in and sign-out.
+    public func refreshPlexLinkState() {
+        plexLinked = PlexAuth.storedToken() != nil
+        if plexStandalone {
+            startPlexSync()
+            // Don't make a fresh sign-in wait out the 120 s start-up delay before
+            // the library appears — that delay exists to let the server's Roon
+            // connect settle, which a standalone client does not have.
+            Task { await runPlexSync() }
+        } else if !plexLinked {
+            stopPlexSync()
+        }
+    }
+
     public static let plexSyncTaskName = "plex-library-sync"
 
     /// Outcome of one import pass — returned so callers (Settings, tests) can
@@ -43,7 +78,9 @@ extension RoonClient {
     }
 
     public func startPlexSync() {
-        guard controlMode == .direct else { return }
+        // Ook op een standalone client: dáár IS Plex de bibliotheek, en zonder
+        // deze taak blijft hij na het inloggen leeg.
+        guard controlMode == .direct || plexStandalone else { return }
         Task {
             await TaskScheduler.shared.register(
                 name: Self.plexSyncTaskName,
@@ -88,9 +125,13 @@ extension RoonClient {
     /// is a two-pass protocol that buys nothing here.
     @discardableResult
     public func runPlexSync() async -> PlexSyncOutcome {
-        guard plexSyncEnabled else { return .disabled }
+        // De schakelaar beschermt een BESTAANDE Roon-catalogus tegen verdringing.
+        // Een standalone client heeft die niet — daar is Plex de enige bron, dus
+        // daar hoort de import gewoon te lopen zonder dat je eerst een vinkje moet
+        // vinden. Anders is "log in en het werkt" niet waar.
+        guard plexSyncEnabled || plexStandalone else { return .disabled }
         guard let db = database else { return .failed("geen database") }
-        guard let token = PlexClient.localToken() else { return .noToken }
+        guard let token = PlexClient.availableToken() else { return .noToken }
         guard let base = URL(string: plexBaseURL.trimmingCharacters(in: .whitespaces)) else {
             return .failed("ongeldige Plex-URL")
         }

@@ -175,6 +175,27 @@ public final class RoonClient {
     /// no Roon extension is registered. Set once at launch via `useServerMode()`.
     public internal(set) var controlMode: RoonControlMode = .direct
     var isRemote: Bool { controlMode == .server }
+
+    /// Is this device signed in to Plex?
+    ///
+    /// **Stored, not computed.** `plexStandalone` decides whether RootView shows
+    /// the app or the connect screen, and a computed property that reads the
+    /// Keychain does not re-render an `@Observable` view — the app would stay on
+    /// the connect screen after a successful sign-in until something else
+    /// happened to invalidate it. Same trap, same fix as `localOutputSelected`.
+    /// Kept in step by `refreshPlexLinkState()`, which every sign-in/out calls.
+    public internal(set) var plexLinked: Bool = PlexAuth.storedToken() != nil
+
+    /// A feature that needs the server asked for a connect screen.
+    ///
+    /// RootView presents `ConnectView` on this. It exists because on a standalone
+    /// Plex device the connect screen is no longer in the launch path — the app
+    /// goes straight to the library — so the analyser-only features need a way to
+    /// summon it from wherever the user hit one.
+    public var showServerConnectSheet = false
+
+    /// Ask for the connect screen. Called by `AnalyzerRequiredNotice`.
+    public func requestServerConnection() { showServerConnectSheet = true }
     /// Resolved server base URL (e.g. http://10.94.184.22:5767) in server mode.
     var remoteBaseURL: String?
     var remotePollTask: Task<Void, Never>?
@@ -538,6 +559,14 @@ public final class RoonClient {
         // (which talks to the share server, not Roon) never triggers it.
         if RoonClientAuth.extensionIDOverride == "com.roonsage.server" {
             startServerBackgroundWork()
+        } else {
+            // A standalone client (signed in to Plex, no RoonSage server) owns its
+            // own catalogue: Plex is the library, so the import has to run HERE.
+            // Without this the app would come up empty after a Plex sign-in, which
+            // is the one thing "log in and it works" may not do. A client that does
+            // have a server takes no new work — `startPlexSync` guards on
+            // `plexStandalone` itself.
+            startPlexSync()
         }
         // One-time forced Qobuz resync: set via `defaults write <bundle-id>
         // qobuz_force_resync_once -bool YES` before a restart. Corrects playlists

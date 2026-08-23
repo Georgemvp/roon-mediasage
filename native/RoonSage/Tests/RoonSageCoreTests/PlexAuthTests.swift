@@ -68,6 +68,34 @@ final class PlexAuthTests: XCTestCase {
         XCTAssertNil(PlexAuth.storedToken())
     }
 
+    // MARK: - Standalone-modus
+
+    /// De poort waar de hele Plex-first opstart op hangt: gekoppeld aan Plex én
+    /// geen server ingesteld = de app hoort door te laten.
+    @MainActor
+    func testStandaloneRequiresBothAPlexTokenAndNoServer() {
+        let client = RoonClient.shared
+        let savedServer = UserDefaults.standard.string(forKey: "library_import_url")
+        defer {
+            UserDefaults.standard.set(savedServer, forKey: "library_import_url")
+            client.refreshPlexLinkState()
+        }
+
+        UserDefaults.standard.removeObject(forKey: "library_import_url")
+        PlexAuth.signOut()
+        client.refreshPlexLinkState()
+        XCTAssertFalse(client.plexStandalone, "zonder Plex-token nooit standalone")
+
+        _ = PlexAuth.store(token: "tok")
+        client.refreshPlexLinkState()
+        XCTAssertTrue(client.plexLinked)
+        XCTAssertTrue(client.plexStandalone, "Plex + geen server = standalone")
+
+        UserDefaults.standard.set("http://10.94.184.22:5767", forKey: "library_import_url")
+        XCTAssertFalse(client.plexStandalone,
+                       "mét server is de analyzer de bron; dan géén standalone-pad")
+    }
+
     // MARK: - Live (opt-in)
 
     /// Vraagt een echte code aan bij plex.tv. Onschadelijk: een niet-gekoppelde

@@ -8,15 +8,25 @@ import RoonSageCore
 /// it keeps showing on each launch *until the user is actually connected*, then
 /// never nags a returning user again. The final step hands off to `ConnectView`.
 ///
-/// Goals: explain what RoonSage is, make clear that the full experience needs
-/// the **Analyzer/server** running on an always-on Mac, and preview the headline
-/// features — all in Dutch, matching the rest of the app.
+/// Goals: explain what RoonSage is, offer the **Plex sign-in** as the primary
+/// way in, and preview the headline features — all in Dutch, matching the rest
+/// of the app.
+///
+/// Plex first, server second (user, 2026-08-23: *"als je de ios client start,
+/// moet je de eerste keer worden gevraagd in te loggen op plex en dan moet de app
+/// werkende zijn … de analyzer is dus optioneel"*). Signing in to Plex flips
+/// `plexStandalone`, which lets `WelcomeGate` through to the app; connecting to a
+/// RoonSage server stays available for everything the analyser adds.
 @MainActor
 struct OnboardingView: View {
     /// Called when the user is ready to connect (taps "Verbinden" or "Overslaan").
     let onContinue: () -> Void
 
+    @Environment(RoonClient.self) private var client
     @State private var step = 0
+    @State private var plexCode: String?
+    @State private var plexBusy = false
+    @State private var plexError: String?
 
     private let steps = OnboardingStep.all
 
@@ -85,11 +95,56 @@ struct OnboardingView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                 } else {
-                    Button { onContinue() } label: {
-                        Label(LS("onboarding.connect"), systemImage: "music.note.house.fill").frame(minWidth: 200)
+                    VStack(spacing: Spacing.sm) {
+                        if let plexCode {
+                            Text(plexCode)
+                                .font(.system(.largeTitle, design: .monospaced).weight(.bold))
+                                .tracking(6)
+                            Text("Ga naar plex.tv/link en voer deze code in.")
+                                .font(.callout).foregroundStyle(.secondary)
+                            ProgressView()
+                        } else {
+                            Button {
+                                plexBusy = true
+                                plexError = nil
+                                Task {
+                                    defer { plexBusy = false; plexCode = nil }
+                                    do {
+                                        let token = try await PlexAuth.signIn { pin in
+                                            Task { @MainActor in plexCode = pin.code }
+                                        }
+                                        if token != nil {
+                                            // Flipt plexStandalone → WelcomeGate laat door.
+                                            client.refreshPlexLinkState()
+                                        } else {
+                                            plexError = "Code verlopen — probeer opnieuw."
+                                        }
+                                    } catch {
+                                        plexError = "Koppelen mislukt: \(error.localizedDescription)"
+                                    }
+                                }
+                            } label: {
+                                Label("Koppel met Plex", systemImage: "link").frame(minWidth: 200)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                            .disabled(plexBusy)
+
+                            Button { onContinue() } label: {
+                                Label(LS("onboarding.connect"), systemImage: "music.note.house.fill")
+                                    .frame(minWidth: 200)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+
+                            Text("Plex is genoeg om te luisteren. De RoonSage-server voegt DJ-sets, Song Paths en Roon-zones toe.")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        if let plexError {
+                            Text(plexError).font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
                 }
             }
             .padding(.horizontal, Spacing.xl)
