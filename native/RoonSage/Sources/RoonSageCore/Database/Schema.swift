@@ -802,6 +802,24 @@ enum Schema {
             try db.execute(sql: "ALTER TABLE offline_tracks ADD COLUMN local_path TEXT")
         }
 
+        // Where the file for this row lives on the server's disk.
+        //
+        // The point of this column is the JOIN it enables. `track_features` is
+        // keyed on `file_path`; `tracks` was only ever joinable to it through
+        // `TrackIdentity.matchKey` plus a fuzzy reconcile, which loses rows (see
+        // STANDALONE_LIBRARY_PLAN). A source that knows the real path — Plex does,
+        // Roon's Browse API does not — can join exactly instead.
+        //
+        // ALWAYS store NFC-normalised (`PlexClient.normalizedPath`). APFS reports
+        // filenames decomposed and Plex stores them composed; comparing the two
+        // raw silently missed 2.608 of 65.738 paths when measured on 2026-08-23.
+        // NULL means "this source has no path", which is the normal case for a
+        // Roon row and for the Qobuz/streaming layer.
+        migrator.registerMigration("v51_tracks_file_path") { db in
+            try db.execute(sql: "ALTER TABLE tracks ADD COLUMN file_path TEXT")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tracks_file_path ON tracks(file_path)")
+        }
+
         try migrator.migrate(db)
     }
 }
