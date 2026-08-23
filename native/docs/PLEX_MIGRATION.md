@@ -75,6 +75,17 @@ blijft als Plex een endpoint wijzigt.
 Plex dekt de bestanden; Roon levert nog wat er geen bestand voor is
 (~13.175 Qobuz-only tracks).
 
+### Fase 4a — inloggen + rechtstreeks afspelen ✅ AF (`f01977a`, `13ed12c`)
+`PlexAuth` (plex.tv PIN-flow → eigen token per apparaat → Keychain) en
+`plexStreamURLs` → `streamURLOverride`. Geverifieerd tegen de echte server:
+`HTTP 206 audio/flac`, dus range-support en dus seeken. **Nog niet op een echt
+toestel gespeeld** — het bewijs is HTTP + unit-tests, niet AVPlayer op een iPhone.
+
+### Fase 4b — artwork, offline en transcode van Plex (open)
+Artwork loopt nu nog via de analyzer (`/artwork` op match_key), offline downloads
+ook. Plex kan beide: `thumb` is al opgeslagen bij de sync, en Plex Pass heeft een
+sync/download-API. Dit is wat er nog tussen zit voordat fase 5 kan.
+
 ### Fase 4 — audio van Plex in plaats van :5766
 
 > **Blokkade, gevonden 2026-08-23 bij het uitwerken.** Fase 4 is niet "de

@@ -10,18 +10,22 @@ Van monoliet naar een snelle, stabiele Plexamp/Symfonium-achtige client. Maatsta
 iOS: snel en zonder bugs. Snoeien is het middel, niet het doel.
 
 ## Now
-**Plex-migratie fases 1 t/m 3 zijn af, gepusht, getagd én LIVE op de mini.**
-`analyzer-v1.1.215` draait (pid 60276, was 1.1.208), één instantie, 0 ws-sluitingen,
-Roon verbonden. `plex_sync_enabled` staat AAN en de eerste echte import is gedraaid:
+**Plex-migratie: fases 1 t/m 3 LIVE op de mini, fase 4a gebouwd en getagd.**
+`analyzer-v1.1.215` draait, `plex_sync_enabled` staat aan, de echte import is gedraaid:
+tracks 89.752 → 96.644 (plex 65.719 / roon 30.925), onbereikbare analyses 19.537 → 8.959.
+Backup vóór de import: `library-pre-plex-20260823-161349.db`.
 
-    tracks:  89.752 -> 96.644   (plex 65.719, roon 30.925 — 58.827 verdrongen)
-    analyses zonder trackrij:  19.537 -> 8.959
-    plex-rijen met bestandspad: 65.719 / 65.719
+Sindsdien getagd t/m **v1.10.287 / ios-v1.7.253 / analyzer-v1.1.217**: Plex-inlog per
+apparaat (PIN-flow, Keychain) en rechtstreeks afspelen vanaf Plex. 1110 tests, 8 skipped,
+0 failures; release-build groen; lokalisatie 0 missend; lint 474 = baseline.
 
-`plex_sonic_enabled` staat bewust nog UIT: `plexSimilarTracks` heeft
-`PlexClient.localToken()` nodig, en dat bestaat alleen op de servermachine — op een
-client valt hij terug op RadioEngine. Fase 2 levert dus pas gebruikerswaarde ná de
-Plex-inlog uit fase 4.
+Nog UIT (bewust, zet ze aan in Instellingen → Plex): `plex_sonic_enabled`,
+`plex_direct_play_enabled`. Beide hebben een Plex-koppeling op dat apparaat nodig.
+
+**Openstaande beslissing van Casper:** waar gaan `listening_history` (44.157 rijen),
+`track_feedback` en `playlists` heen als de analyzer optioneel wordt? Aanname nu:
+client houdt ze zelf, analyzer wordt sync-peer — Plex accepteert geen teruggedateerde
+historie-import, dus verhuizen zou die data vernietigen.
 
 ## Next
 1. ~~CLAP-modellen uit de clients~~ AF · 2. ~~STATE opschonen~~ AF
