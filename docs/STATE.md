@@ -10,14 +10,18 @@ Van monoliet naar een snelle, stabiele Plexamp/Symfonium-achtige client. Maatsta
 iOS: snel en zonder bugs. Snoeien is het middel, niet het doel.
 
 ## Now
-Plex-migratie, plan in `native/docs/PLEX_MIGRATION.md`. **Fases 1 t/m 3 zijn af, gepusht
-en getagd** (t/m v1.10.285 / ios-v1.7.251 / analyzer-v1.1.215): Plex is bibliotheekbron,
-`/nearest` levert vergelijkbare nummers, en de Roon-walk maakt geen duplicaten meer van
-wat Plex bezit. 1099 tests, 6 skipped, 0 failures; release-build groen; lint 474 = baseline.
+**Plex-migratie fases 1 t/m 3 zijn af, gepusht, getagd én LIVE op de mini.**
+`analyzer-v1.1.215` draait (pid 60276, was 1.1.208), één instantie, 0 ws-sluitingen,
+Roon verbonden. `plex_sync_enabled` staat AAN en de eerste echte import is gedraaid:
 
-Beide Plex-schakelaars staan nog UIT (`plex_sync_enabled`, `plex_sonic_enabled`).
-Bezig met: analyzer-v1.1.215 uitrollen op de mini via de CI-DMG, dan de schakelaars aan
-en één echte import draaien.
+    tracks:  89.752 -> 96.644   (plex 65.719, roon 30.925 — 58.827 verdrongen)
+    analyses zonder trackrij:  19.537 -> 8.959
+    plex-rijen met bestandspad: 65.719 / 65.719
+
+`plex_sonic_enabled` staat bewust nog UIT: `plexSimilarTracks` heeft
+`PlexClient.localToken()` nodig, en dat bestaat alleen op de servermachine — op een
+client valt hij terug op RadioEngine. Fase 2 levert dus pas gebruikerswaarde ná de
+Plex-inlog uit fase 4.
 
 ## Next
 1. ~~CLAP-modellen uit de clients~~ AF · 2. ~~STATE opschonen~~ AF
