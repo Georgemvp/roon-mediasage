@@ -10,21 +10,22 @@ Van monoliet naar een snelle, stabiele Plexamp/Symfonium-achtige client. Maatsta
 iOS: snel en zonder bugs. Snoeien is het middel, niet het doel.
 
 ## Now
-Migratie naar het Plex-scenario, plan in `native/docs/PLEX_MIGRATION.md`. Fase 1 is AF:
-de Plex-import draait, geverifieerd op een KOPIE van de echte library.db —
-65.719/65.719 tracks, 58.827 Roon-rijen verdrongen, 16,4 s. **Staat default uit**
-(`plex_sync_enabled`), want de eerste run op de echte database herschrijft het gros van
-de catalogus. 1094 tests, 5 skipped, 0 failures.
+Plex-migratie, plan in `native/docs/PLEX_MIGRATION.md`. **Fases 1 t/m 3 zijn af, gepusht
+en getagd** (t/m v1.10.285 / ios-v1.7.251 / analyzer-v1.1.215): Plex is bibliotheekbron,
+`/nearest` levert vergelijkbare nummers, en de Roon-walk maakt geen duplicaten meer van
+wat Plex bezit. 1099 tests, 6 skipped, 0 failures; release-build groen; lint 474 = baseline.
 
-**Volgende concrete stap:** `plex_sync_enabled` aanzetten op de mini en één run op de
-échte database doen.
+Beide Plex-schakelaars staan nog UIT (`plex_sync_enabled`, `plex_sonic_enabled`).
+Bezig met: analyzer-v1.1.215 uitrollen op de mini via de CI-DMG, dan de schakelaars aan
+en één echte import draaien.
 
 ## Next
 1. ~~CLAP-modellen uit de clients~~ AF · 2. ~~STATE opschonen~~ AF
 3. ~~PlexLibrarySource + PlexSyncService~~ AF (`7ad4a0b`, `eda751a`). Artwork lost op via
    de bestaande /artwork-route; geen aparte resolver nodig.
-3b. Fase 2 van PLEX_MIGRATION: `/nearest` van Plex gebruiken voor vergelijkbaar/radio,
-   met SonicSelection.dropNearDuplicates erachter en RadioEngine als terugval.
+3b. ~~Fase 2: `/nearest` voor vergelijkbaar~~ AF (`5edb9a2`). ~~Fase 3: Roon-walk
+   degradeert~~ AF (`bc4c514`). Fase 4 (audio/offline van Plex) en fase 5 (share-server
+   krimpen) staan nog open — zie PLEX_MIGRATION.
 4. ~~RadioEngine-signatuur~~ AF (`57a66b1`). De audit-aanname "10 motoren samenvoegen" was
    fout — zie de commit; er valt hier niets meer samen te voegen.
 5. `RoonClient` opbreken: 13.041 regels / 547 functies / 115 properties -> < 2.000.
@@ -57,7 +58,8 @@ de catalogus. 1094 tests, 5 skipped, 0 failures.
 ## Facts
 - test/build: `cd native/RoonSage && swift build && swift test`; release: `swift build -c release --product RoonSage`; lint: `swiftlint lint --config .swiftlint.yml`
 - iOS: `cd native/iosapp && xcodegen generate`, dan `xcodebuild -project RoonSageiOS.xcodeproj -scheme RoonSageiOS -sdk iphonesimulator -derivedDataPath build/dd build`
-- Tag-namespaces: app `vX.Y.Z` · iOS `ios-vX.Y.Z` · analyzer `analyzer-vX.Y.Z`. Laatst getagd: v1.10.281 / ios-v1.7.247 / analyzer-v1.1.211; de mini draait analyzer-v1.1.202.
+- Tag-namespaces: app `vX.Y.Z` · iOS `ios-vX.Y.Z` · analyzer `analyzer-vX.Y.Z`. Laatst getagd: v1.10.285 / ios-v1.7.251 / analyzer-v1.1.215.
+- Lokaal signeren KAN NIET (`security find-identity -v -p codesigning` → 0 valid identities), dus deploy loopt altijd via de CI-DMG.
 - Deploy = handmatig: CI-DMG downloaden → `bootout` → installeren → `bootstrap`. Lokaal signeren kan niet meer. Een tag levert een DMG, geen uitrol.
 - GUI-verificatie: `~/bin/rs-sim` (iOS-simulator) en `~/bin/macui` (analyzer-app). Volledige route in het archief onder ## Facts.
 - Metingen 2026-08-23: 85.948 regels eigen Swift / 454 bestanden · 82 views · 50 migraties · 17 externe API's · 1 dependency (GRDB) · 1074 tests.
