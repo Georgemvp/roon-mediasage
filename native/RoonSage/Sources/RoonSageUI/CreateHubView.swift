@@ -14,13 +14,14 @@ public struct CreateHubView: View {
     public init() {}
 
     enum Mode: String, CaseIterable, Identifiable {
-        case generate, ask, albums
+        case generate, ask, albums, rules
         var id: String { rawValue }
         var label: String {
             switch self {
             case .generate: LS("nav.generate")
             case .ask:      LS("createHub.modeQuick")
             case .albums:   LS("bm.section.albums")
+            case .rules:    LS("createHub.modeRules")
             }
         }
     }
@@ -45,6 +46,7 @@ public struct CreateHubView: View {
                 mode = .generate
             })
             case .albums:   RecommendView()
+            case .rules:    SmartPlaylistView()
             }
         }
     }

@@ -1,9 +1,10 @@
+import AVFoundation
 import Foundation
 import Network
 
-/// Client-side policy for requesting AAC transcoding on the `/audio` stream
+/// Client-side policy for requesting transcoding on the `/audio` stream
 /// (LMS-audit §1.2): full-quality FLAC on the home network, a bandwidth-
-/// friendly AAC when listening over ZeroTier on cellular.
+/// friendly AAC or Opus when listening over ZeroTier on cellular.
 public enum LocalTranscode {
     public enum Mode: String, CaseIterable, Sendable {
         case off        // always the original file
@@ -11,8 +12,19 @@ public enum LocalTranscode {
         case always
     }
 
+    /// Which codec to ask the analyser for.
+    ///
+    /// Opus is the better codec at every bitrate this setting offers — but
+    /// unlike AAC it is not guaranteed to be decodable, so it is only ever
+    /// requested when `opusSupported` says this OS can actually play it.
+    public enum Format: String, CaseIterable, Sendable {
+        case aac
+        case opus
+    }
+
     static let modeKey = "local_transcode_mode"
     static let bitrateKey = "local_transcode_kbps"
+    public static let formatKey = "local_transcode_format"
 
     /// The defaults as constants, because the settings screen binds `@AppStorage`
     /// to the SAME keys this type reads. When the two disagree the screen lies
@@ -49,6 +61,37 @@ public enum LocalTranscode {
         set { UserDefaults.standard.set(newValue, forKey: bitrateKey) }
     }
 
+    /// AAC by default, because it is the only codec every Apple client is
+    /// guaranteed to decode. Opus is an explicit, checked opt-in.
+    public static let defaultFormat: Format = .aac
+
+    /// Whether AVFoundation on THIS OS can decode Ogg/Opus.
+    ///
+    /// Measured, not assumed. `isPlayableExtendedMIMEType` has existed since
+    /// iOS 5 / macOS 10.7, so the question can be asked on every OS this app
+    /// supports — and it has to be asked, because Ogg container support arrived
+    /// far later than the deployment floor (iOS 17 / macOS 14) and this project
+    /// cannot test a device that old. Answering it at runtime means an OS that
+    /// lacks it simply never sees the option, instead of silently playing
+    /// nothing the first time the user leaves the house.
+    ///
+    /// Computed once: the answer cannot change while the process runs.
+    public static let opusSupported: Bool =
+        AVURLAsset.isPlayableExtendedMIMEType("audio/ogg; codecs=\"opus\"")
+
+    /// The requested codec. An explicit choice is honoured; a stored `opus` on
+    /// an OS that cannot decode it degrades to AAC rather than to silence —
+    /// settings sync between devices, and the iPhone and the Mac need not agree
+    /// about what they can play.
+    public static var format: Format {
+        get {
+            let stored = UserDefaults.standard.string(forKey: formatKey)
+                .flatMap(Format.init(rawValue:)) ?? defaultFormat
+            return (stored == .opus && !opusSupported) ? .aac : stored
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: formatKey) }
+    }
+
     /// Query items to append to an `/audio` URL, or empty when the policy says
     /// to stream the original.
     public static func queryItems() -> [URLQueryItem] {
@@ -58,7 +101,7 @@ public enum LocalTranscode {
         case .cellular: NetworkPathMonitor.shared.isExpensive
         }
         guard active else { return [] }
-        return [URLQueryItem(name: "format", value: "aac"),
+        return [URLQueryItem(name: "format", value: format.rawValue),
                 URLQueryItem(name: "bitrate", value: String(bitrateKbps))]
     }
 }

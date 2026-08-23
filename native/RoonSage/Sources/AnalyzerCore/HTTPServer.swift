@@ -12,6 +12,8 @@ import Network
 ///       local playback on the phone
 ///   GET /artwork?match_key=…&size=… → embedded/sidecar cover art, for library
 ///       rows the analyser contributed (they have no Roon image_key)
+///   GET /lyrics?matchKey=… → `.lrc`-sidecar / embedded SYLT-USLT lyrics, or
+///       `null` when the file carries none (the app then asks LRCLIB)
 ///   GET /health → status
 ///
 /// When `token` is set, every endpoint but `/health` requires it in the
@@ -272,18 +274,28 @@ public final class HTTPServer {
         guard AudioStreaming.isAllowedExtension((sourcePath as NSString).pathExtension) else {
             return err("415 Unsupported Media Type", "unsupported audio type")
         }
-        // Optional AAC transcode (`format=aac&bitrate=<kbps>`) for remote/
+        // Optional transcode (`format=aac|opus` + `bitrate=<kbps>`) for remote/
         // cellular clients. Smart no-op: an already-lossy source at or below
         // the requested bitrate is served untouched; a failed encode falls
         // back to the original file rather than erroring the stream.
+        //
+        // The Content-Type comes from the codec that was actually produced, not
+        // the one requested — asking for Opus on a machine without ffmpeg gets
+        // AAC, and labelling those bytes `audio/ogg` would hand the client a
+        // decode error that reads like a corrupt download.
         var path = sourcePath
         var ctypeOverride: String?
-        if Self.queryValue("format", in: target)?.lowercased() == "aac" {
-            let kbps = Int(Self.queryValue("bitrate", in: target) ?? "") ?? 256
+        if let requested = Self.queryValue("format", in: target)?.lowercased(),
+           let codec = AudioTranscoder.Codec(rawValue: requested) {
+            // 256 is the AAC default; Opus is transparent far lower, and a
+            // client asking for Opus without naming a bitrate wants the saving.
+            let kbps = Int(Self.queryValue("bitrate", in: target) ?? "")
+                ?? (codec == .opus ? 128 : 256)
             if AudioTranscoder.shouldTranscode(sourcePath: sourcePath, requestedKbps: kbps),
-               let transcoded = await AudioTranscoder.shared.transcoded(sourcePath: sourcePath, kbps: kbps) {
-                path = transcoded.path
-                ctypeOverride = "audio/mp4"
+               let result = await AudioTranscoder.shared.transcoded(
+                   sourcePath: sourcePath, kbps: kbps, codec: codec) {
+                path = result.url.path
+                ctypeOverride = result.codec.contentType
             }
         }
         guard let size = AudioStreaming.fileSize(path: path) else {
@@ -339,6 +351,32 @@ public final class HTTPServer {
             // The MusicBrainz genre hierarchy: [{genre, parent?, mbid?}]. Small
             // (~2000 rows), so it's served whole and rebuilt cheaply per request.
             return ("200 OK", store.taxonomyJSON(), "application/json")
+        }
+        if path.hasPrefix("/lyrics") {
+            // The words the library already owns: a `.lrc` beside the file or an
+            // embedded SYLT/USLT frame, harvested by `LyricsBackfill`. Answers
+            // `null` when the track has none, which is a real answer — the app
+            // falls through to LRCLIB on it.
+            //
+            // `matchKey` and `match_key` are both accepted: every other endpoint
+            // here spells it `match_key`, and rejecting the camelCase form would
+            // make this the one that behaves differently.
+            guard let key = Self.queryValue("matchKey", in: path) ?? Self.queryValue("match_key", in: path),
+                  !key.isEmpty else {
+                return ("400 Bad Request", Data("{\"error\":\"missing matchKey\"}".utf8), "application/json")
+            }
+            // The stored row first (including a stored "none"), so a hit costs
+            // one indexed lookup. Only an unchecked track touches the volume.
+            let resolved: LyricsProvider.Resolved?
+            if let stored = store.lyrics(matchKey: key) {
+                resolved = stored
+            } else {
+                let fresh = LyricsProvider.lyrics(matchKey: key, store: store)
+                try? store.setLyrics(matchKey: key, lyrics: fresh,
+                                     checkedAt: ISO8601DateFormatter().string(from: Date()))
+                resolved = fresh
+            }
+            return ("200 OK", LyricsProvider.jsonBody(resolved), "application/json")
         }
         if path.hasPrefix("/health") { return ("200 OK", Data("{\"status\":\"ok\",\"tracks\":\(store.count())}".utf8), "application/json") }
         return ("404 Not Found", Data("not found".utf8), "text/plain")

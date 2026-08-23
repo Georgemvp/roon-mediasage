@@ -30,6 +30,13 @@ public struct Cover: Identifiable {
     }
 }
 
+/// Edge length of one cover on a horizontal shelf, in points.
+///
+/// One constant instead of the literal `130` that used to appear in both the
+/// artwork and the tile's `frame` — a shelf whose art and whose text column
+/// disagree by a few points is what makes a row of covers look ragged.
+public let coverTileSize: CGFloat = 140
+
 /// Columns for a cover grid: three per row at compact width (an iPhone in
 /// portrait), larger tiles wherever there is more room.
 ///
@@ -185,7 +192,7 @@ public func coverTile(_ c: Cover, zoneAvailable: Bool) -> some View {
         c.play()
     } label: {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            AlbumArtView(imageKey: c.imageKey, size: 130)
+            AlbumArtView(imageKey: c.imageKey, size: coverTileSize)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.md))
                 .shadow(color: .roonShadow, radius: 4, y: 2)
                 // Smaller and white-on-scrim rather than a gold disc. At `.title2`
@@ -205,7 +212,7 @@ public func coverTile(_ c: Cover, zoneAvailable: Bool) -> some View {
                 Text(sub).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
         }
-        .frame(width: 130)
+        .frame(width: coverTileSize)
     }
     .buttonStyle(.plain)
     .disabled(!zoneAvailable)

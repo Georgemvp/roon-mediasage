@@ -169,6 +169,9 @@ struct AlbumDetailView: View {
                     .disabled(!client.hasActiveOutput)
                     .accessibilityLabel(LS("libraryDetail.albumRadio"))
                     .help(LS("libraryDetail.albumRadioHelp"))
+                // "Neem dit album mee" — with the state, so you can tell a
+                // finished download from one that never started.
+                AlbumDownloadButton(tracks: tracks)
                 FavoriteStarButton(isOn: client.isFavoriteAlbum(album: album.album, artist: album.artist)) {
                     Task { await client.toggleFavoriteAlbum(album: album.album, artist: album.artist) }
                 }
@@ -488,6 +491,10 @@ struct ArtistAlbumsGridView: View {
     let title: String
     let subtitle: String
     let albums: [DatabaseManager.AlbumResult]
+    /// Off by default — on an artist's own discography every tile would repeat
+    /// the name in the toolbar above it. The library feed's album shelves span
+    /// many artists, so there it has to be on.
+    var showsArtist: Bool = false
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var hSizeClass
@@ -504,7 +511,7 @@ struct ArtistAlbumsGridView: View {
                     NavigationLink {
                         AlbumDetailView(album: album)
                     } label: {
-                        AlbumGridCell(album: album, showsArtist: false)
+                        AlbumGridCell(album: album, showsArtist: showsArtist)
                     }
                     .buttonStyle(.plain)
                 }

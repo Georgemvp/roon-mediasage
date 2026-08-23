@@ -68,6 +68,19 @@ public struct LibraryView: View {
     /// The week's spotlit record label plus its albums — deterministic per week.
     @State private var spotlightLabel: DatabaseManager.LabelRow?
     @State private var labelAlbums: [DatabaseManager.AlbumResult] = []
+    /// "Vergeten parels": albums you once played a lot and haven't touched in
+    /// half a year. Albums, not tracks — `forgotten` above is the track-level
+    /// shelf and answers a different question.
+    @State private var forgottenGems: [DatabaseManager.AlbumResult] = []
+    /// "Sonische aanbevelingen": albums nearest the CLAP centroid of your
+    /// current top artists, with those artists themselves excluded.
+    @State private var sonicPicks: [DatabaseManager.AlbumResult] = []
+    /// "Willekeurige selectie": the one unranked shelf, so the tail of a
+    /// 13.000-album library is reachable at all.
+    @State private var randomPicks: [DatabaseManager.AlbumResult] = []
+    /// Drives the "toon alles" push for the album shelves — same `isPresented`
+    /// route as the label section, for the double-chevron reason in `sectionChevron`.
+    @State private var allAlbumsShelf: AlbumShelf?
     /// Drives the label section's chevron. Pushed with `isPresented` rather than
     /// a `NavigationLink` in the row — see `sectionChevron`.
     @State private var showLabelAlbums = false
@@ -205,6 +218,13 @@ public struct LibraryView: View {
         .navigationDestination(for: LibraryFilter.self) { FilteredTracksView(filter: $0) }
         .navigationDestination(isPresented: $showLabelAlbums) {
             if let spotlightLabel { LabelAlbumsView(label: spotlightLabel) }
+        }
+        // The album shelves' "toon alles". One destination for all three, keyed
+        // on the shelf itself, so a fourth shelf costs a state assignment rather
+        // than another `isPresented` flag and another modifier.
+        .navigationDestination(item: $allAlbumsShelf) { shelf in
+            ArtistAlbumsGridView(title: shelf.subtitle, subtitle: shelf.title,
+                                 albums: shelf.albums, showsArtist: true)
         }
         .screenTitle(String(format: LS("library.titleWithCount"), client.trackCount))
         .searchable(text: $searchText, prompt: searchPrompt)
@@ -1262,8 +1282,23 @@ public struct LibraryView: View {
                 if let label = spotlightLabel, !labelAlbums.isEmpty {
                     labelSection(label).plainCardRow()
                 }
+                if !sonicPicks.isEmpty {
+                    albumShelf(LS("library.sonicPicks"), sonicPicks,
+                               subtitle: LS("library.sonicPicksSubtitle")).plainCardRow()
+                }
+                if !forgottenGems.isEmpty {
+                    albumRows(LS("library.forgottenGems"), forgottenGems,
+                              subtitle: LS("library.forgottenGemsSubtitle")).plainCardRow()
+                }
                 if forgotten.count > 1 {
                     recordShelf(LS("library.forgottenFavorites"), forgotten).plainCardRow()
+                }
+                // A list, not a shelf, purely for the feed's rhythm: the section
+                // above it is already a cover shelf, and two in a row read as one
+                // block again. The full twenty are one tap away on the chevron.
+                if !randomPicks.isEmpty {
+                    albumRows(LS("library.randomPicks"), randomPicks,
+                              subtitle: LS("library.randomPicksSubtitle")).plainCardRow()
                 }
                 browseTiles.plainCardRow()
                 collectionTiles.plainCardRow()
@@ -1390,6 +1425,34 @@ public struct LibraryView: View {
     private func recordShelf(_ title: String, _ recs: [TrackRecord]) -> some View {
         shelf(title, covers: recs.map(recordCover),
               zoneAvailable: client.hasActiveOutput) { EmptyView() }
+    }
+
+    /// An album shelf whose chevron pushes the whole set as a grid.
+    ///
+    /// Unlike `trackShelf`'s chevron this cannot flip the browse mode: these
+    /// three shelves are rankings that exist nowhere else in the screen (a CLAP
+    /// neighbourhood, a 180-day dormancy window, a shuffle), so "toon alles"
+    /// has to carry the rows it already has rather than re-derive them from a
+    /// `SortField` that does not exist.
+    private func albumShelf(_ title: String, _ albums: [DatabaseManager.AlbumResult],
+                            subtitle: String) -> some View {
+        shelf(title, covers: albums.map(albumCover),
+              zoneAvailable: client.hasActiveOutput) {
+            sectionChevron { allAlbumsShelf = AlbumShelf(title: title, subtitle: subtitle, albums: albums) }
+        }
+    }
+
+    /// The list form of `albumShelf` — four rows plus the same chevron.
+    private func albumRows(_ title: String, _ albums: [DatabaseManager.AlbumResult],
+                           subtitle: String) -> some View {
+        compactRows(title, covers: albums.prefix(4).map(albumCover),
+                    zoneAvailable: client.hasActiveOutput) {
+            sectionChevron { allAlbumsShelf = AlbumShelf(title: title, subtitle: subtitle, albums: albums) }
+        } menu: { cover in
+            PlayActionsMenu(fetch: { [client] in
+                await client.tracksForAlbum(cover.id).map(\.asTrackRecord)
+            })
+        }
     }
 
     /// The chevron on a shelf header. Not a `NavigationLink`: these sections all
@@ -1617,6 +1680,12 @@ public struct LibraryView: View {
         async let facetsV = client.radioFacetOptions()
         async let todayV = client.onThisDay()
         async let monthV = topOfMonthRows()
+        // 180 days, not `dormantAlbums`' 120 default: "vergeten parels" has to
+        // mean genuinely gone from rotation, and at 120 days it overlapped the
+        // track-level "vergeten favorieten" shelf right below it.
+        async let gemsV = client.dormantAlbums(days: 180, limit: overviewShelfSize)
+        async let sonicV = client.sonicallyRecommendedAlbums(limit: overviewShelfSize)
+        async let randomV = client.randomAlbums(limit: 20)
 
         stats = await statsV
         let a = await analyzedV
@@ -1628,6 +1697,9 @@ public struct LibraryView: View {
         facets = await facetsV
         onThisDayEntry = await todayV.first
         topOfMonth = await monthV
+        forgottenGems = await gemsV
+        sonicPicks = await sonicV
+        randomPicks = await randomV
         // Last, and deliberately after everything visible has been assigned: the
         // label tables are seeded lazily, and on a library that has never opened
         // the Lab's label explorer they are empty (measured: 0 rows in `label`
@@ -1716,12 +1788,6 @@ struct LibraryTrackRow: View {
     var showsArtist = true
     let onPlay: () -> Void
 
-    /// Downloaded rows carry a small mark. Read from the in-memory key set, not
-    /// the filesystem — a list must never stat per row.
-    private var isDownloaded: Bool {
-        client.offlineKeys.contains(LocalPlayability.matchKey(for: asRecordStatic(track)))
-    }
-
     /// Whether to show BPM + musical key on each row. Device-local, OFF by
     /// default — see the comment at the badges below. (Both this and the switch
     /// in Settings default to `false`; the doc here used to claim "on by
@@ -1746,12 +1812,9 @@ struct LibraryTrackRow: View {
                     if let y = track.year {
                         Text(String(y)).font(.caption).foregroundStyle(.tertiary)
                     }
-                    if isDownloaded {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.caption2)
-                            .foregroundStyle(Color.roonGold)
-                            .accessibilityLabel(LS("downloads.availableOffline"))
-                    }
+                    // Queued / downloading / here — one shared mark, so the row
+                    // says which of the three it is instead of only the last.
+                    DownloadStatusMark(track: asRecordStatic(track))
                 }
                 HStack(spacing: 6) {
                     if showsArtist, let a = track.artist {
@@ -1812,6 +1875,23 @@ struct LibraryTrackRow: View {
             .background(.quaternary, in: Capsule())
             .foregroundStyle(.secondary)
     }
+}
+
+// MARK: - "Toon alles" for an album shelf
+
+/// The albums behind one feed section, carried into the pushed grid.
+///
+/// Identity is the section title, not the contents: the shuffle shelf's albums
+/// change on every refresh, and hashing 20 `AlbumResult`s to decide whether the
+/// pushed screen is "the same destination" would pop it out from under you.
+struct AlbumShelf: Identifiable, Hashable {
+    let title: String
+    let subtitle: String
+    let albums: [DatabaseManager.AlbumResult]
+    var id: String { title }
+
+    static func == (lhs: AlbumShelf, rhs: AlbumShelf) -> Bool { lhs.title == rhs.title }
+    func hash(into hasher: inout Hasher) { hasher.combine(title) }
 }
 
 // MARK: - Album grid cell

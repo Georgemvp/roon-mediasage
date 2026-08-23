@@ -68,12 +68,51 @@ extension RoonClient {
            let existing = await Task.detached(operation: { db.storedLyrics(matchKey: key) }).value {
             return existing.hasContent ? existing : nil   // row exists → don't refetch
         }
-        let fetched = await LyricsService.shared.lyrics(
-            title: title, artist: artist, album: album, durationSec: durationSec)
+
+        // The analyser before LRCLIB. It reads `.lrc` sidecars and embedded
+        // SYLT/USLT frames straight off the music volume, so for a well-tagged
+        // library the words are already on this machine — no round trip to a
+        // free third-party service, and it is the only source for a track
+        // LRCLIB has never heard of. Nothing there simply falls through.
+        var source = "lrclib"
+        var fetched = key.isEmpty ? nil : await analyzerLyrics(matchKey: key)
+        if fetched?.hasContent == true {
+            source = "analyzer"
+        } else {
+            fetched = await LyricsService.shared.lyrics(
+                title: title, artist: artist, album: album, durationSec: durationSec)
+        }
+
         if !key.isEmpty, let db = database {
-            _ = await Task.detached(operation: { try? db.upsertLyrics(matchKey: key, lyrics: fetched, source: "lrclib") }).value
+            let stored = fetched
+            let storedSource = source
+            _ = await Task.detached(operation: {
+                try? db.upsertLyrics(matchKey: key, lyrics: stored, source: storedSource)
+            }).value
         }
         return (fetched?.hasContent ?? false) ? fetched : nil
+    }
+
+    /// `GET /lyrics?matchKey=…` on the analyzer (:5766).
+    ///
+    /// Best-effort by design: an analyzer that predates the endpoint answers
+    /// 404, an unreachable one times out, and both mean "ask LRCLIB instead"
+    /// rather than "this track has no lyrics" — so neither is cached as a
+    /// negative here. Only what the caller stores is cached, and it stores the
+    /// LRCLIB outcome in that case.
+    private func analyzerLyrics(matchKey: String) async -> Lyrics? {
+        let base = analyzerURL.trimmingCharacters(in: .whitespaces)
+        guard !base.isEmpty,
+              var comp = URLComponents(string: "\(base)/lyrics") else { return nil }
+        comp.queryItems = [URLQueryItem(name: "matchKey", value: matchKey)]
+        guard let url = comp.url else { return nil }
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        authorizeShareRequest(&req)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        // The endpoint answers the literal `null` for a track with no words,
+        // which decodes to nil rather than throwing.
+        return try? JSONDecoder().decode(Lyrics?.self, from: data)
     }
 
     /// `/lyrics` endpoint body: the resolved `Lyrics`, or the literal `null`.

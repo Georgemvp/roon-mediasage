@@ -134,35 +134,17 @@ public actor LyricsService {
         return lyrics.hasContent ? lyrics : nil
     }
 
-    /// Parse an LRC string into timestamped lines. Handles multiple timestamps per
-    /// line (`[00:12.00][00:47.00] text`), `mm:ss.xx` and `mm:ss` forms, and skips
-    /// ID-tag lines (`[ar:...]`, `[ti:...]`). Blank lyric lines are kept as pauses.
+    /// Parse an LRC string into timestamped lines.
+    ///
+    /// The parsing itself lives in `AudioAnalysis.LRCParser`, because the
+    /// analyser reads `.lrc` sidecars off the music volume and cannot import
+    /// this module. This is the mapping boundary between that module's `Line`
+    /// and the wire type clients decode.
     static func parseLRC(_ raw: String) -> [LyricLine] {
-        var out: [LyricLine] = []
-        for line in raw.split(separator: "\n", omittingEmptySubsequences: false) {
-            var s = Substring(line)
-            var stamps: [Double] = []
-            while s.first == "[" {
-                guard let close = s.firstIndex(of: "]") else { break }
-                let tag = s[s.index(after: s.startIndex)..<close]
-                if let secs = parseStamp(String(tag)) { stamps.append(secs) }
-                else if !stamps.isEmpty { break }   // stop at a non-time tag once we've seen times
-                s = s[s.index(after: close)...]
-                if stamps.isEmpty && !tag.contains(":") { /* skip ID tag, keep scanning */ }
-            }
-            guard !stamps.isEmpty else { continue }
-            let text = s.trimmingCharacters(in: .whitespaces)
-            for t in stamps { out.append(LyricLine(time: t, text: text)) }
-        }
-        return out.sorted { $0.time < $1.time }
+        LRCParser.parse(raw).map { LyricLine(time: $0.time, text: $0.text) }
     }
 
     /// Parse a `mm:ss`, `mm:ss.xx` or `mm:ss.xxx` timestamp to seconds; nil for
     /// non-time tags (ID metadata).
-    static func parseStamp(_ tag: String) -> Double? {
-        let parts = tag.split(separator: ":")
-        guard parts.count == 2, let minutes = Double(parts[0]) else { return nil }
-        guard let seconds = Double(parts[1]) else { return nil }
-        return minutes * 60 + seconds
-    }
+    static func parseStamp(_ tag: String) -> Double? { LRCParser.parseStamp(tag) }
 }

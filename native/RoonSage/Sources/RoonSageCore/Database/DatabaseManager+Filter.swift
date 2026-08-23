@@ -248,6 +248,10 @@ extension DatabaseManager {
                 switch ext {
                 case let e? where e.hasPrefix("listenbrainz:"): source = "listenbrainz"
                 case let e? where e.hasPrefix("lastfm:"):       source = "lastfm"
+                // Generated here rather than imported, but the same rule
+                // applies: it is not user-curated, so a client must be able to
+                // tell it apart and must not treat it as something to preserve.
+                case let e? where e.hasPrefix(RecapService.sourcePrefix): source = "recap"
                 default:                                        source = nil
                 }
                 return PlaylistSummary(

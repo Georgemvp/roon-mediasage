@@ -53,6 +53,7 @@ struct RoonSageAnalyzerApp: App {
         model.autoPopularityIfEnabled()      // trickle Deezer popularity
         model.autoLoudnessIfEnabled()        // backfill F3 loudness (disk-gentle)
         model.autoIdentityIfEnabled()        // read ISRC + MusicBrainz ids off the tags
+        model.autoLyricsIfEnabled()          // harvest .lrc sidecars + SYLT/USLT frames
         model.autoPreviewIfEnabled()         // embed file-less (Qobuz) tracks
         model.autoDeezerGenreIfEnabled()     // backfill Deezer genres
         model.autoArousalRefreshIfNeeded()   // one-time perceptual-energy axis

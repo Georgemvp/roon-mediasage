@@ -116,6 +116,9 @@ public struct PlaylistsView: View {
         switch source {
         case "listenbrainz": return ("ListenBrainz", Color.roonGold)
         case "lastfm":       return ("Last.fm", Color(red: 0.79, green: 0.04, blue: 0.04))
+        // Generated weekly/monthly, and regenerated in place — badged so it is
+        // clear this list is not one you made and will change on its own.
+        case "recap":        return (LS("playlists.recapBadge"), Color.roonGold)
         default:             return nil
         }
     }

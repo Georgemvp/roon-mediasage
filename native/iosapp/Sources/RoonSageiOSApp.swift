@@ -12,6 +12,7 @@ import RoonSageUI
 @main
 @MainActor
 struct RoonSageiOSApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var client: RoonClient
     @State private var bgTaskID: UIBackgroundTaskIdentifier = .invalid
     @State private var lastSavedNowPlaying: SharedNowPlaying?

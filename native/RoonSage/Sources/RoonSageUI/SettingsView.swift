@@ -898,6 +898,10 @@ struct OfflineDownloadsSection: View {
     @State private var sizeBytes = 0
     @State private var downloadedCount = 0
     @AppStorage(LocalAudioCache.downloadOnCellularKey) private var allowOnCellular = false
+    // Bound to the SAME key `RoonClient.keepFavoritesOffline` reads, never a
+    // repeated literal — the two disagreeing is how a screen ends up lying
+    // about what the app is doing.
+    @AppStorage(RoonClient.keepFavoritesOfflineKey) private var keepFavorites = false
 
     private static let sizeFormatter: ByteCountFormatter = {
         let f = ByteCountFormatter()
@@ -927,6 +931,9 @@ struct OfflineDownloadsSection: View {
                                value: "\(downloadedCount) · \(Self.sizeFormatter.string(fromByteCount: Int64(sizeBytes)))")
             }
             Toggle(LS("downloads.allowOnCellular"), isOn: $allowOnCellular)
+            Toggle(LS("downloads.keepFavorites"), isOn: $keepFavorites)
+            Text(LS("downloads.keepFavoritesExplainer"))
+                .font(.caption).foregroundStyle(.secondary)
             Button(LS("downloads.removeAll"), role: .destructive) {
                 Task { await client.removeAllOfflineTracks(); await refresh() }
             }
@@ -936,6 +943,13 @@ struct OfflineDownloadsSection: View {
         }
         .task { await refresh() }
         .task(id: client.downloadProgress?.isFinished) { await refresh() }
+        // Turning it ON queues immediately; turning it off simply stops future
+        // runs — it never deletes what you already have, which the explainer
+        // says out loud so "uit" doesn't read as "wis".
+        .task(id: keepFavorites) {
+            guard keepFavorites else { return }
+            await client.syncFavoritesOffline()
+        }
     }
 
     private func refresh() async {
@@ -1030,6 +1044,7 @@ struct TranscodeSettingsSection: View {
     // this screen would show a setting the app isn't using.
     @AppStorage("local_transcode_mode") private var modeRaw = LocalTranscode.defaultMode.rawValue
     @AppStorage("local_transcode_kbps") private var kbps = LocalTranscode.defaultBitrateKbps
+    @AppStorage(LocalTranscode.formatKey) private var formatRaw = LocalTranscode.defaultFormat.rawValue
 
     var body: some View {
         Section(LS("settings.streamingOnTheGo")) {
@@ -1039,6 +1054,16 @@ struct TranscodeSettingsSection: View {
                 LT("settings.always").tag(LocalTranscode.Mode.always.rawValue)
             }
             if modeRaw != LocalTranscode.Mode.off.rawValue {
+                // Only offered when this OS can actually decode Ogg/Opus —
+                // `opusSupported` asks AVFoundation rather than assuming. On an
+                // OS without it the row is simply absent, which is better than a
+                // choice that produces silence the first time you leave home.
+                if LocalTranscode.opusSupported {
+                    Picker(LS("settings.mobileAudioQuality"), selection: $formatRaw) {
+                        LT("settings.codecAAC").tag(LocalTranscode.Format.aac.rawValue)
+                        LT("settings.codecOpus").tag(LocalTranscode.Format.opus.rawValue)
+                    }
+                }
                 Picker("Bitrate", selection: $kbps) {
                     LT("settings.bitrate64").tag(64)
                     LT("settings.bitrate96").tag(96)
@@ -1050,6 +1075,12 @@ struct TranscodeSettingsSection: View {
             LT("settings.transcodeHelp")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if modeRaw != LocalTranscode.Mode.off.rawValue,
+               formatRaw == LocalTranscode.Format.opus.rawValue {
+                LT("settings.codecOpusHelp")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

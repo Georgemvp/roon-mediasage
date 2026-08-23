@@ -443,7 +443,9 @@ public final class RoonClient {
     /// Match keys that are pinned to this device — read per row to show a mark,
     /// so the UI never stats the filesystem in a list.
     public internal(set) var offlineKeys: Set<String> = []
-    @ObservationIgnored var downloadTask: Task<Void, Never>?
+    /// One-shot guard for `startOfflineDownloads()` — the engine's callbacks are
+    /// wired once per process, not once per download.
+    @ObservationIgnored var offlineDownloadsStarted = false
 
     /// Watches for system memory pressure so the sonic caches can be dropped.
     /// See `startMemoryPressureRelief()`.
@@ -506,6 +508,10 @@ public final class RoonClient {
         // Give the ~113 MB sonic vector index back when the system asks for it.
         startMemoryPressureRelief()
         Task { await refreshOfflineKeys() }
+        // Reattach the background download session: a queue that finished while
+        // the app was suspended has results waiting, and without this they are
+        // never written to the bookkeeping table.
+        startOfflineDownloads()
         #if os(macOS)
         // Sharing defaults to on so the iPhone can pull library + settings
         // without the user flipping a toggle first; an explicit opt-out (key
@@ -599,6 +605,7 @@ public final class RoonClient {
         startDiscoverWeeklySchedule()
         startServerFeatureSync()
         startLyricsBackfill()
+        startRecapGeneration()
         startMaintenance()
     }
 

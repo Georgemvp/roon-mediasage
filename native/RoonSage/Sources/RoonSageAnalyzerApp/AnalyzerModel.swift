@@ -23,6 +23,10 @@ final class AnalyzerModel {
     /// Trickle the hard-identity backfill (ISRC + MusicBrainz ids straight out of
     /// the file's tags). Tag-only, so it is cheap next to every other backfill.
     var autoIdentity: Bool { didSet { UserDefaults.standard.set(autoIdentity, forKey: "auto_identity") } }
+    /// Trickle the lyrics harvest (`.lrc` sidecars + embedded SYLT/USLT frames).
+    /// Tag-and-sidecar only — no audio is decoded — so it sits in the same cheap
+    /// class as the identity backfill.
+    var autoLyrics: Bool { didSet { UserDefaults.standard.set(autoLyrics, forKey: "auto_lyrics") } }
     /// Trickle preview-embeddings for file-less (Qobuz-only) library tracks via
     /// Deezer 30s previews (network-gentle, resumable) — makes them radio
     /// candidates like any analyzed track.
@@ -90,6 +94,9 @@ final class AnalyzerModel {
     private(set) var identity: IdentityProgress?
     private(set) var isIdentityBackfilling = false
     private(set) var hardIdentityCount = 0
+    private(set) var lyrics: LyricsProgress?
+    private(set) var isLyricsBackfilling = false
+    private(set) var lyricsCount = 0
     private(set) var loudnessCount = 0
     private(set) var preview: PreviewProgress?
     private(set) var isPreviewBackfilling = false
@@ -107,6 +114,7 @@ final class AnalyzerModel {
     private var popularityEnricher: PopularityEnricher?
     private var loudnessBackfill: LoudnessBackfill?
     private var identityBackfill: IdentityBackfill?
+    private var lyricsBackfill: LyricsBackfill?
     private var previewBackfill: PreviewEmbeddingBackfill?
     private var deezerGenreEnricher: DeezerGenreEnricher?
     private var server: HTTPServer?
@@ -127,6 +135,7 @@ final class AnalyzerModel {
         autoPopularity = UserDefaults.standard.object(forKey: "auto_popularity") as? Bool ?? true
         autoLoudness = UserDefaults.standard.object(forKey: "auto_loudness") as? Bool ?? true
         autoIdentity = UserDefaults.standard.object(forKey: "auto_identity") as? Bool ?? true
+        autoLyrics = UserDefaults.standard.object(forKey: "auto_lyrics") as? Bool ?? true
         autoPreview = UserDefaults.standard.object(forKey: "auto_preview") as? Bool ?? true
         autoDeezerGenre = UserDefaults.standard.object(forKey: "auto_deezer_genre") as? Bool ?? true
         walkerConcurrency = UserDefaults.standard.object(forKey: "walker_concurrency") as? Int ?? 3
@@ -163,6 +172,7 @@ final class AnalyzerModel {
         popularityCount = store?.popularityCount() ?? 0
         loudnessCount = store?.loudnessCount() ?? 0
         hardIdentityCount = store?.hardIdentityCount() ?? 0
+        lyricsCount = store?.lyricsCounts().withLyrics ?? 0
         previewCount = store?.previewRowCount() ?? 0
         isrcCount = store?.isrcCount() ?? 0
         deezerGenreCount = store?.deezerGenreEnrichedCount() ?? 0
@@ -215,6 +225,8 @@ final class AnalyzerModel {
             autoTagIfNeeded()
             // Hard identity off the tags — tag-only, so it costs almost nothing.
             autoIdentityIfEnabled()
+            // Words the files already carry (.lrc sidecars, SYLT/USLT frames).
+            autoLyricsIfEnabled()
         }
     }
 
@@ -397,6 +409,40 @@ final class AnalyzerModel {
         if trackCount == 0 { refresh() }
         guard trackCount > 0 else { return }
         startIdentity()
+    }
+
+    // MARK: - Lyrics harvest (.lrc sidecars + embedded SYLT/USLT)
+
+    /// Harvest the lyrics the library already owns into the analyser's store,
+    /// so `/lyrics` answers offline and the app never has to ask LRCLIB for a
+    /// track whose words are sitting next to it on disk.
+    ///
+    /// Same cost class as `startIdentity`: sidecars and tag blocks only, no
+    /// audio decoding, and resumable — a finished library costs one query.
+    func startLyrics() {
+        guard let store, !isLyricsBackfilling, trackCount > 0 else { return }
+        isLyricsBackfilling = true
+        lyrics = nil
+        status = "Songteksten uit de bestanden lezen (.lrc + ingesloten tags)…"
+        let b = LyricsBackfill(store: store)
+        lyricsBackfill = b
+        Task {
+            let found = await b.run { p in Task { @MainActor in self.lyrics = p } }
+            isLyricsBackfilling = false
+            refresh()
+            status = "Songteksten: \(lyricsCount)/\(trackCount) tracks (+\(found) deze ronde)."
+        }
+    }
+
+    func cancelLyrics() { lyricsBackfill?.cancel() }
+
+    /// Trickle the lyrics harvest in the background when enabled. Exits fast
+    /// once every row has been checked, so it is cheap on every launch.
+    func autoLyricsIfEnabled() {
+        guard autoLyrics, !isLyricsBackfilling, store != nil else { return }
+        if trackCount == 0 { refresh() }
+        guard trackCount > 0 else { return }
+        startLyrics()
     }
 
     // MARK: - Preview embeddings (Qobuz-only tracks)

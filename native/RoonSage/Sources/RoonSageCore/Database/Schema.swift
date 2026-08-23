@@ -785,6 +785,23 @@ enum Schema {
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tracks_source ON tracks(source)")
         }
 
+        // Where the pinned file actually landed.
+        //
+        // A NAME, not a path. The download directory lives inside the app's
+        // container, whose UUID changes when the app is reinstalled — an
+        // absolute path recorded here would point at a directory that no longer
+        // exists on the very next launch, which is the classic iOS bug of
+        // storing sandbox paths in a database. Resolution happens against the
+        // current container in `LocalAudioCache.downloadURL(forFilename:)`.
+        //
+        // Nullable on purpose: rows written before this migration were stored by
+        // the same hashing scheme and are still found by
+        // `LocalAudioCache.downloadedFile(forKey:variant:)`, so a NULL here
+        // means "look it up by key", not "missing".
+        migrator.registerMigration("v50_offline_local_path") { db in
+            try db.execute(sql: "ALTER TABLE offline_tracks ADD COLUMN local_path TEXT")
+        }
+
         try migrator.migrate(db)
     }
 }

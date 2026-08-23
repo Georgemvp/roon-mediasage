@@ -144,6 +144,87 @@ public struct MetadataReader {
         return m
     }
 
+    /// Lyrics carried inside the audio file itself.
+    ///
+    /// `synced` wins over `plain` for a karaoke view, but both are returned:
+    /// a file can hold a `SYLT` frame with only the chorus timed and a full
+    /// `USLT` transcription beside it, and throwing one away to keep the other
+    /// loses words either way.
+    public struct EmbeddedLyrics: Sendable, Equatable {
+        public var plain: String?
+        public var synced: [LRCParser.Line]?
+        /// Where it came from — "sylt", "uslt", "lrc-tag" — for the coverage
+        /// readout and for telling a tagger's output from LRCLIB's.
+        public var source: String
+        public var isEmpty: Bool { (plain?.isEmpty ?? true) && (synced?.isEmpty ?? true) }
+    }
+
+    /// Read embedded lyrics: ID3 `SYLT` (synchronised) first, then any of the
+    /// unsynchronised carriers — ID3 `USLT`, the iTunes `©lyr` atom, and the
+    /// Vorbis comments FLAC taggers actually write (`LYRICS`,
+    /// `UNSYNCEDLYRICS`, `SYNCEDLYRICS`).
+    ///
+    /// A Vorbis `LYRICS` comment routinely holds a whole LRC document rather
+    /// than plain text — that is how most FLAC taggers store timed lyrics,
+    /// since Vorbis has no SYLT equivalent. So an unsynchronised carrier whose
+    /// text parses as LRC is promoted to `synced`, and the words are kept as
+    /// `plain` as well.
+    ///
+    /// Returns `nil` when the file carries nothing (distinct from an empty
+    /// `EmbeddedLyrics`, which never happens here) so the caller can record a
+    /// negative and stop re-reading the file.
+    public static func lyrics(url: URL) -> EmbeddedLyrics? {
+        let asset = AVURLAsset(url: url)
+        var syncedFromSYLT: [LRCParser.Line]?
+        var rawText: String?
+        var textSource = "uslt"
+
+        func scan(_ items: [AVMetadataItem]) {
+            for item in items {
+                let raw = ((item.key as? String) ?? item.identifier?.rawValue ?? "").uppercased()
+                // Squash punctuation so `UNSYNCED_LYRICS`, `UNSYNCEDLYRICS` and
+                // an ID3 identifier like `ID3/SYLT` compare as one key — the
+                // same normalisation `applyRawTag` uses for identity tags.
+                let squashed = raw.filter { $0.isLetter || $0.isNumber }
+
+                if syncedFromSYLT == nil, squashed.contains("SYLT"),
+                   let data = item.dataValue, let lines = SYLTParser.parse(data) {
+                    syncedFromSYLT = lines
+                    continue
+                }
+                guard rawText == nil, let value = item.stringValue,
+                      !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+                // "LYRICIST" and "ORIGINALLYRICIST" are credits, not words —
+                // they contain "LYRIC" and would otherwise be stored as the
+                // song's lyrics.
+                guard !squashed.contains("LYRICIST") else { continue }
+                if squashed.contains("USLT") { rawText = value; textSource = "uslt" }
+                else if squashed.contains("SYNCEDLYRICS") { rawText = value; textSource = "lrc-tag" }
+                else if squashed.contains("LYRIC") { rawText = value; textSource = "lrc-tag" }
+            }
+        }
+
+        scan(asset.commonMetadata)
+        scan(asset.metadata)
+
+        var synced = syncedFromSYLT
+        var plain: String?
+        var source = syncedFromSYLT != nil ? "sylt" : textSource
+
+        if let rawText {
+            let parsed = LRCParser.parse(rawText)
+            if !parsed.isEmpty {
+                if synced == nil { synced = parsed; source = "lrc-tag" }
+                plain = LRCParser.plainText(rawText)
+            } else {
+                plain = rawText
+            }
+        }
+
+        let result = EmbeddedLyrics(plain: plain, synced: synced, source: source)
+        return result.isEmpty ? nil : result
+    }
+
     /// Embedded cover art, if the file carries any.
     ///
     /// Roon-sourced library rows get their artwork from the Roon Core's image

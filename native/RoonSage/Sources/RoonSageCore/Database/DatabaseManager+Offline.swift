@@ -17,24 +17,36 @@ extension DatabaseManager {
         public let album: String?
         public let imageKey: String?
         public let bytes: Int
+        /// The stored file's NAME inside the downloads directory — never an
+        /// absolute path. The app's container carries a UUID that changes on
+        /// reinstall, so a full path written here would point nowhere on the
+        /// next launch. Resolve with `LocalAudioCache.downloadURL(forFilename:)`.
+        public let localPath: String?
         public var id: String { matchKey }
+
+        /// The file on THIS device, if it is still there.
+        public var localFileURL: URL? {
+            localPath.flatMap { LocalAudioCache.downloadURL(forFilename: $0) }
+        }
     }
 
     public func recordOfflineTrack(matchKey: String, variant: String, title: String,
                                    artist: String?, album: String?, imageKey: String?,
-                                   bytes: Int) async {
+                                   bytes: Int, localPath: String? = nil) async {
         guard !matchKey.isEmpty else { return }
         try? await pool.write { db in
             try db.execute(sql: """
                 INSERT INTO offline_tracks
-                    (match_key, variant, title, artist, album, image_key, bytes, added_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (match_key, variant, title, artist, album, image_key, bytes, added_at, local_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(match_key) DO UPDATE SET
                     variant = excluded.variant, title = excluded.title,
                     artist = excluded.artist, album = excluded.album,
-                    image_key = excluded.image_key, bytes = excluded.bytes
+                    image_key = excluded.image_key, bytes = excluded.bytes,
+                    local_path = excluded.local_path
                 """, arguments: [matchKey, variant, title, artist, album,
-                                 imageKey, bytes, ISO8601DateFormatter().string(from: Date())])
+                                 imageKey, bytes, ISO8601DateFormatter().string(from: Date()),
+                                 localPath])
         }
     }
 
@@ -49,12 +61,13 @@ extension DatabaseManager {
     public func offlineTracks() async throws -> [OfflineTrack] {
         try await pool.read { db in
             try Row.fetchAll(db, sql: """
-                SELECT match_key, variant, title, artist, album, image_key, bytes
+                SELECT match_key, variant, title, artist, album, image_key, bytes, local_path
                 FROM offline_tracks ORDER BY added_at DESC
                 """).map {
                 OfflineTrack(matchKey: $0["match_key"], variant: $0["variant"],
                              title: $0["title"], artist: $0["artist"], album: $0["album"],
-                             imageKey: $0["image_key"], bytes: $0["bytes"] ?? 0)
+                             imageKey: $0["image_key"], bytes: $0["bytes"] ?? 0,
+                             localPath: $0["local_path"])
             }
         }
     }
@@ -78,5 +91,40 @@ extension DatabaseManager {
 
     public func deleteAllOfflineTracks() async {
         try? await pool.write { db in try db.execute(sql: "DELETE FROM offline_tracks") }
+    }
+
+    /// Every library track on one of `albums`, where an album is the
+    /// `(album, artist)` NAME pair — the content key `FavoriteKind.albumKey`
+    /// produces, not a Roon `album_key`.
+    ///
+    /// Name-matched deliberately: a star survives a resync precisely because it
+    /// is not tied to an item key, so the tracks behind it have to be found the
+    /// same way. A nil artist on the favourite matches any artist on the album,
+    /// which is how a starred compilation resolves.
+    public func tracksForFavoriteAlbums(_ albums: [(album: String, artist: String?)]) async throws
+        -> [TrackRecord] {
+        guard !albums.isEmpty else { return [] }
+        return try await pool.read { db in
+            var out: [TrackRecord] = []
+            var seen = Set<String>()
+            for entry in albums {
+                let album = entry.album.lowercased()
+                guard !album.isEmpty else { continue }
+                let rows: [TrackRecord]
+                if let artist = entry.artist, !artist.isEmpty {
+                    rows = try TrackRecord.fetchAll(db, sql: """
+                        SELECT * FROM tracks
+                        WHERE LOWER(album) = ? AND LOWER(artist) = ?
+                        ORDER BY rowid
+                        """, arguments: [album, artist.lowercased()])
+                } else {
+                    rows = try TrackRecord.fetchAll(db, sql: """
+                        SELECT * FROM tracks WHERE LOWER(album) = ? ORDER BY rowid
+                        """, arguments: [album])
+                }
+                for r in rows where seen.insert(r.id).inserted { out.append(r) }
+            }
+            return out
+        }
     }
 }

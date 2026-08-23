@@ -18,6 +18,9 @@ public enum AudioStreaming {
         case "m4a", "alac", "aac": return "audio/mp4"
         case "wav": return "audio/wav"
         case "aiff", "aif": return "audio/aiff"
+        // Produced by the Opus transcode, never walked from the library —
+        // `allowedExtensions` deliberately still excludes them as SOURCES.
+        case "ogg", "opus": return "audio/ogg"
         default: return "application/octet-stream"
         }
     }

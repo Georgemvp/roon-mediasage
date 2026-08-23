@@ -480,6 +480,63 @@ extension RoonClient {
         return (try? await db.forgottenFavorites(days: days, limit: limit)) ?? []
     }
 
+    /// "Willekeurige selectie" — an unranked shuffle of owned albums.
+    ///
+    /// Straight passthrough on purpose: the moment this gets a ranking it stops
+    /// being the one shelf that can reach the tail of the library.
+    public func randomAlbums(limit: Int = 20) async -> [DatabaseManager.AlbumResult] {
+        guard let db = database else { return [] }
+        return (try? await db.randomAlbums(limit: limit)) ?? []
+    }
+
+    /// "Sonische aanbevelingen" — owned albums whose CLAP centroid sits closest
+    /// to the centroid of the artists you are currently playing most.
+    ///
+    /// Deliberately seeded from the CURRENT top artists rather than from
+    /// `personalTasteVector`: the taste vector is a recency-weighted average of
+    /// your whole history plus your likes, so it already backs "Herontdek" and
+    /// every station. Seeding from the top artists alone gives a tighter, more
+    /// legible neighbourhood — "meer in de richting van wat je nu draait" — and
+    /// keeps this shelf from being a fourth view of the same centroid.
+    ///
+    /// Those same artists are excluded from the candidate pool, so the shelf
+    /// answers "what else sounds like this" instead of handing back the seed.
+    /// Returns `[]` (and the caller hides the shelf) whenever there are no
+    /// embeddings, no history, or nothing left after the exclusion — never a
+    /// silent fallback to an unrelated ranking.
+    public func sonicallyRecommendedAlbums(limit: Int = 16, seedArtists: Int = 12) async
+        -> [DatabaseManager.AlbumResult] {
+        guard let db = database,
+              let top = try? await db.topArtistsListened(limit: seedArtists), !top.isEmpty,
+              let index = await activeIndex(db) else { return [] }
+
+        let seedNames = Set(top.map { $0.artist.lowercased() })
+        let seedIDs = index.tracks
+            .filter { seedNames.contains(($0.artist ?? "").lowercased()) }
+            .map(\.id)
+        guard let seedCentroid = index.centroid(ofIds: seedIDs) else { return [] }
+
+        guard let pool = try? await db.albumSonicCandidates(
+            excludingArtists: top.map(\.artist), limit: max(limit * 12, 200)), !pool.isEmpty else { return [] }
+
+        // match_key → track id, so an album's rows can be looked up in the index.
+        var idByKey = [String: String](minimumCapacity: index.tracks.count)
+        for t in index.tracks where !t.matchKey.isEmpty { idByKey[t.matchKey] = t.id }
+
+        let ranked = pool.compactMap { candidate -> (album: DatabaseManager.AlbumResult, score: Float)? in
+            let ids = candidate.matchKeys.compactMap { idByKey[$0] }
+            guard let centroid = index.centroid(ofIds: ids) else { return nil }
+            // Both centroids come back L2-normalised → cosine is the plain dot.
+            var dot: Float = 0
+            for i in 0..<min(centroid.count, seedCentroid.count) { dot += centroid[i] * seedCentroid[i] }
+            return (candidate.album, dot)
+        }
+        .sorted { $0.score > $1.score }
+        .prefix(limit)
+        .map(\.album)
+        return Array(ranked)
+    }
+
     /// Owned albums you once played a lot but have long neglected — ranked by past
     /// play depth (not taste similarity), so "Herontdek" genuinely resurfaces old
     /// music instead of echoing the taste-vector picks the other Ontdek surfaces show.

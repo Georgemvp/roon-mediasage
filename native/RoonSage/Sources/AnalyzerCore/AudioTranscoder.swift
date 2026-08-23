@@ -1,21 +1,40 @@
 import AVFoundation
 import Foundation
 
-/// On-the-fly AAC transcoding for the `/audio` endpoint (LMS-audit §1.2):
+/// On-the-fly transcoding for the `/audio` endpoint (LMS-audit §1.2):
 /// streaming FLAC over ZeroTier on cellular is heavy and expensive, so remote
-/// clients can request `format=aac&bitrate=<kbps>` and get an M4A instead.
+/// clients can request `format=aac&bitrate=<kbps>` (an M4A) or
+/// `format=opus&bitrate=<kbps>` (Ogg/Opus) instead.
 ///
 /// Design choices (deliberately different from LMS's ffmpeg pipe):
 ///  - **Whole-file to a disk cache, then serve with Range.** AVPlayer seeks by
-///    Range requests; a fully-written M4A with a real Content-Length seeks
+///    Range requests; a fully-written file with a real Content-Length seeks
 ///    natively, so no `-ss` offset re-request protocol is needed.
 ///  - **Smart no-op** (`shouldTranscode`): an already-lossy source at or below
 ///    the requested bitrate is served as-is — never burn CPU to make audio
 ///    worse. Lossless sources always transcode when asked.
-///  - **Single-flight per (file, bitrate)** so a scrubbing client doesn't kick
-///    off parallel encodes of the same track; LRU cache capped at 500 MB.
+///  - **Single-flight per (file, bitrate, codec)** so a scrubbing client doesn't
+///    kick off parallel encodes of the same track; LRU cache capped at 500 MB.
+///
+/// The two codecs take different routes, and not by accident. AAC goes through
+/// `AVAssetWriter`, which is in-process and always available. Opus has no
+/// AVFoundation *encoder* on macOS, so it shells out to `ffmpeg` — which means
+/// Opus is only offered when ffmpeg is actually installed, and a request for it
+/// on a machine without one degrades to AAC rather than failing.
 public actor AudioTranscoder {
     public static let shared = AudioTranscoder()
+
+    /// What the client asked for. `aac` is the floor: every Apple client can
+    /// decode it, so it is what an unavailable codec falls back to.
+    public enum Codec: String, Sendable, CaseIterable {
+        case aac
+        case opus
+
+        var fileExtension: String { self == .aac ? "m4a" : "ogg" }
+        /// What `/audio` must send back, so the client's decoder is told the
+        /// truth about the bytes.
+        public var contentType: String { self == .aac ? "audio/mp4" : "audio/ogg" }
+    }
 
     static let lossyExtensions: Set<String> = ["mp3", "m4a", "aac", "ogg", "opus"]
     static let cacheCap: Int64 = 500 * 1024 * 1024
@@ -37,10 +56,24 @@ public actor AudioTranscoder {
         return estKbps > Double(requestedKbps) * 1.15
     }
 
-    /// Cached (or freshly encoded) M4A for this source at this bitrate.
-    /// nil = encode failed; callers fall back to the original file.
-    public func transcoded(sourcePath: String, kbps: Int) async -> URL? {
-        let dest = Self.cacheURL(sourcePath: sourcePath, kbps: kbps)
+    /// Cached (or freshly encoded) file for this source, bitrate and codec, plus
+    /// the codec that was actually used — which is not always the one asked for
+    /// (Opus without ffmpeg falls back to AAC). `nil` = encode failed; callers
+    /// fall back to the original file.
+    ///
+    /// Returning the codec rather than letting the caller assume is the point:
+    /// serving Ogg bytes under `audio/mp4` produces a file the client refuses
+    /// with a decode error that looks like a corrupt download.
+    public func transcoded(sourcePath: String, kbps: Int, codec: Codec = .aac) async -> (url: URL, codec: Codec)? {
+        let effective: Codec = (codec == .opus && Self.ffmpegPath() == nil) ? .aac : codec
+        guard let url = await encodeOrCached(sourcePath: sourcePath, kbps: kbps, codec: effective) else {
+            return nil
+        }
+        return (url, effective)
+    }
+
+    private func encodeOrCached(sourcePath: String, kbps: Int, codec: Codec) async -> URL? {
+        let dest = Self.cacheURL(sourcePath: sourcePath, kbps: kbps, codec: codec)
         if FileManager.default.fileExists(atPath: dest.path) {
             // Touch for LRU.
             try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: dest.path)
@@ -49,7 +82,10 @@ public actor AudioTranscoder {
         let key = dest.lastPathComponent
         if let running = inFlight[key] { return await running.value }
         let task = Task<URL?, Never>.detached(priority: .userInitiated) {
-            let ok = await Self.encode(source: URL(fileURLWithPath: sourcePath), dest: dest, kbps: kbps)
+            let source = URL(fileURLWithPath: sourcePath)
+            let ok = codec == .aac
+                ? await Self.encode(source: source, dest: dest, kbps: kbps)
+                : Self.encodeOpus(source: source, dest: dest, kbps: kbps)
             if ok { Self.pruneCache() }
             return ok ? dest : nil
         }
@@ -69,14 +105,18 @@ public actor AudioTranscoder {
         return dir
     }
 
-    static func cacheURL(sourcePath: String, kbps: Int) -> URL {
+    static func cacheURL(sourcePath: String, kbps: Int, codec: Codec = .aac) -> URL {
         let mtime = (try? FileManager.default.attributesOfItem(atPath: sourcePath)[.modificationDate] as? Date)
             .map { String(Int($0.timeIntervalSince1970)) } ?? "0"
         var h: UInt64 = 0xcbf29ce484222325
-        for b in "\(sourcePath)\u{1f}\(mtime)\u{1f}\(kbps)".utf8 {
+        // The codec is part of the key, not just the extension: two encodes of
+        // the same track at the same bitrate are different files, and hashing
+        // only the extension apart would let a prune of one evict the other's
+        // name into a collision.
+        for b in "\(sourcePath)\u{1f}\(mtime)\u{1f}\(kbps)\u{1f}\(codec.rawValue)".utf8 {
             h ^= UInt64(b); h &*= 0x100000001b3
         }
-        return cacheDir().appendingPathComponent(String(h, radix: 36) + ".m4a")
+        return cacheDir().appendingPathComponent(String(h, radix: 36) + "." + codec.fileExtension)
     }
 
     /// LRU-ish prune: drop oldest-touched files until under the cap.
@@ -96,6 +136,97 @@ public actor AudioTranscoder {
             guard total > cacheCap else { break }
             try? fm.removeItem(at: e.url)
             total -= e.size
+        }
+    }
+
+    // MARK: - Encoding: Opus (ffmpeg)
+    //
+    // AVFoundation can DECODE Opus but ships no encoder for it, so this is the
+    // one path that leaves the process. `ffmpeg` is treated as optional
+    // equipment: absent, `transcoded` quietly serves AAC instead, and the
+    // client never learns the difference beyond the Content-Type it is told.
+
+    /// Where `ffmpeg` lives, cached for the process. Homebrew first (this is
+    /// where it is on the Mac mini that runs the server-of-record), then the
+    /// Intel Homebrew prefix, then the system path.
+    ///
+    /// An absolute path, never a bare `ffmpeg` handed to a shell: the analyser
+    /// runs under launchd with a minimal PATH, and resolving through `$PATH`
+    /// both fails there and is the shape of an injection bug.
+    nonisolated(unsafe) private static var cachedFFmpeg: String??
+    private static let ffmpegLock = NSLock()
+
+    /// A `var` only so a test can empty it and exercise the no-ffmpeg fallback,
+    /// which is a supported configuration and therefore has to be covered on a
+    /// machine that does have ffmpeg installed.
+    nonisolated(unsafe) static var ffmpegCandidates = [
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/usr/bin/ffmpeg",
+    ]
+
+    static func ffmpegPath() -> String? {
+        ffmpegLock.lock(); defer { ffmpegLock.unlock() }
+        if let cached = cachedFFmpeg { return cached }
+        let found = ffmpegCandidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+        cachedFFmpeg = found
+        return found
+    }
+
+    /// Forget the resolved path — for tests, and so installing ffmpeg does not
+    /// need an analyser restart to take effect on the next launch's first miss.
+    static func resetFFmpegPath() {
+        ffmpegLock.lock(); cachedFFmpeg = nil; ffmpegLock.unlock()
+    }
+
+    /// Encode to Ogg/Opus. Synchronous — it already runs on a detached task, and
+    /// `Process.waitUntilExit()` is the honest way to wait for a child.
+    static func encodeOpus(source: URL, dest: URL, kbps: Int) -> Bool {
+        guard let ffmpeg = ffmpegPath() else { return false }
+        let tmp = dest.appendingPathExtension("part")
+        try? FileManager.default.removeItem(at: tmp)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ffmpeg)
+        process.arguments = [
+            "-nostdin",            // never block waiting on a terminal that isn't there
+            "-v", "error",
+            "-i", source.path,
+            "-vn",                 // drop embedded cover art: it is not audio, and
+                                   // an Ogg stream with a video track confuses players
+            "-map", "0:a:0",       // first audio stream only
+            "-c:a", "libopus",
+            "-b:a", "\(max(32, min(320, kbps)))k",
+            // Opus is defined at 48 kHz; libopus resamples anything else itself,
+            // but saying so keeps the output predictable across sources.
+            "-ar", "48000",
+            "-f", "ogg",
+            "-y", tmp.path,
+        ]
+        // Discard the child's output rather than inheriting: a full pipe buffer
+        // would deadlock the encode, and there is nothing here worth logging per
+        // track.
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+
+        do { try process.run() } catch {
+            try? FileManager.default.removeItem(at: tmp)
+            return false
+        }
+        process.waitUntilExit()
+
+        let size = (try? tmp.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        guard process.terminationStatus == 0, size > 0 else {
+            try? FileManager.default.removeItem(at: tmp)
+            return false
+        }
+        try? FileManager.default.removeItem(at: dest)
+        do {
+            try FileManager.default.moveItem(at: tmp, to: dest)
+            return true
+        } catch {
+            try? FileManager.default.removeItem(at: tmp)
+            return false
         }
     }
 

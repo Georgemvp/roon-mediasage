@@ -189,6 +189,90 @@ extension DatabaseManager {
         }
     }
 
+    /// A blind shuffle of owned albums — the shelf that is deliberately NOT
+    /// ranked by anything.
+    ///
+    /// Every other discovery surface here converges on the same sonic centroid
+    /// (taste vector) or the same history (play depth, recency). That is right
+    /// for each of them individually and wrong for the feed as a whole: a
+    /// library of 13.000 albums has a long tail that no ranking will ever reach,
+    /// because the ranking is built from the head. `ORDER BY RANDOM()` is the
+    /// only query here that can surface it.
+    ///
+    /// Albums with fewer than `minTracks` owned tracks are skipped — a
+    /// one-track "album" is nearly always a single or compilation stray, and a
+    /// shuffle full of those reads as noise rather than as a shelf.
+    public func randomAlbums(minTracks: Int = 3, limit: Int = 20) async throws -> [AlbumResult] {
+        try await pool.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT album_key, album, artist, year, COUNT(*) AS track_count,
+                       MAX(image_key) AS image_key
+                FROM tracks
+                WHERE album IS NOT NULL AND album <> ''
+                GROUP BY album_key
+                HAVING track_count >= ?
+                ORDER BY RANDOM()
+                LIMIT ?
+            """, arguments: [minTracks, limit]).map(Self.albumResult)
+        }
+    }
+
+    /// Candidate albums for the sonic-recommendation shelf: a randomly-sampled
+    /// pool of owned albums plus each album's analysed `match_key`s, so the
+    /// caller can rank them by how close their CLAP centroid sits to the
+    /// centroid of the artists you are actually playing right now.
+    ///
+    /// `excludingArtists` holds those same top artists (lowercased, matched on
+    /// `LOWER(artist)`): recommending Radiohead because you listen to Radiohead
+    /// is a tautology, not a recommendation. The exclusion is what makes this
+    /// shelf different from "meest gespeeld".
+    ///
+    /// The pool is sampled rather than exhaustive because ranking it means one
+    /// centroid per album in Swift — bounded work on a 200-album pool, minutes
+    /// on 13.000. Random sampling also keeps the shelf from ossifying.
+    public func albumSonicCandidates(excludingArtists: [String], minTracks: Int = 3,
+                                     limit: Int = 200) async throws -> [(album: AlbumResult, matchKeys: [String])] {
+        try await pool.read { db in
+            var clauses = ["album IS NOT NULL", "album <> ''", "match_key IS NOT NULL", "match_key <> ''"]
+            var args: [DatabaseValueConvertible] = []
+            let excluded = excludingArtists.map { $0.lowercased() }.filter { !$0.isEmpty }
+            if !excluded.isEmpty {
+                let ph = excluded.map { _ in "?" }.joined(separator: ",")
+                clauses.append("(artist IS NULL OR LOWER(artist) NOT IN (\(ph)))")
+                args.append(contentsOf: excluded as [DatabaseValueConvertible])
+            }
+            args.append(minTracks)
+            args.append(limit)
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT album_key, album, artist, year, COUNT(*) AS track_count,
+                       MAX(image_key) AS image_key, GROUP_CONCAT(match_key, '|') AS match_keys
+                FROM tracks
+                WHERE \(clauses.joined(separator: " AND "))
+                GROUP BY album_key
+                HAVING track_count >= ?
+                ORDER BY RANDOM()
+                LIMIT ?
+            """, arguments: StatementArguments(args))
+            return rows.map { row in
+                let raw = (row["match_keys"] as String?) ?? ""
+                let keys = raw.split(separator: "|").map(String.init).filter { !$0.isEmpty }
+                return (album: Self.albumResult(row), matchKeys: keys)
+            }
+        }
+    }
+
+    /// Shared row mapper for the album shelves above (expects the
+    /// `album_key/album/artist/year/track_count/image_key` projection).
+    private static func albumResult(_ row: Row) -> AlbumResult {
+        AlbumResult(
+            albumKey:   row["album_key"]   as String? ?? "",
+            album:      row["album"]       as String? ?? "",
+            artist:     row["artist"],
+            year:       row["year"],
+            trackCount: row["track_count"] as Int? ?? 0,
+            imageKey:   row["image_key"])
+    }
+
     /// Your most-played tracks (from listening history), resolved to current
     /// library item_keys.
     public func topTracks(limit: Int = 25) async throws ->[TrackRecord] {

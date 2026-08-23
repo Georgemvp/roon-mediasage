@@ -1271,3 +1271,58 @@
 /* B6 — dedup in de bibliotheek zichtbaar maken */
 "library.duplicatesHidden"   = "%d dubbele versies verborgen — tik om ze te tonen";
 "library.duplicatesShown"    = "Dubbele versies worden getoond — tik om ze te verbergen";
+
+/* Fase 1 — drie extra planken in het bibliotheekoverzicht */
+"library.sonicPicks" = "Klinkt als wat je nu draait";
+"library.sonicPicksSubtitle" = "Sonische aanbevelingen";
+"library.forgottenGems" = "Vergeten parels";
+"library.forgottenGemsSubtitle" = "Lang niet meer gedraaid";
+"library.randomPicks" = "Willekeurige selectie";
+"library.randomPicksSubtitle" = "Uit je hele bibliotheek";
+
+/* Fase 3 — downloadstatus + favorieten offline houden */
+"downloads.statusQueued" = "In de wachtrij";
+"downloads.statusDownloading" = "Wordt gedownload";
+"downloads.keepFavorites" = "Houd favorieten offline";
+"downloads.keepFavoritesExplainer" = "Albums met een ster worden automatisch op dit apparaat bewaard. Uitzetten stopt alleen nieuwe downloads — wat je al hebt blijft staan.";
+
+/* Fase 4 — codeckeuze voor onderweg */
+"settings.mobileAudioQuality" = "Mobiele audiokwaliteit";
+"settings.codecAAC" = "AAC";
+"settings.codecOpus" = "Opus";
+"settings.codecOpusHelp" = "Opus klinkt bij dezelfde bitrate beter dan AAC. Kan de server geen Opus maken (ffmpeg ontbreekt), dan valt hij vanzelf terug op AAC.";
+
+/* Fase 5 — regels-playlists en terugblikken */
+"createHub.modeRules" = "Regels";
+"playlists.recapBadge" = "Terugblik";
+"smart.matchingTracks" = "nummers voldoen aan de regels";
+"smart.explainer" = "Deze lijst komt uit je bibliotheek, niet uit een taalmodel: dezelfde regels geven altijd hetzelfde resultaat.";
+"smart.genres" = "Genres";
+"smart.noGenresYet" = "Nog geen genres bekend — synchroniseer je bibliotheek.";
+"smart.sound" = "Klank";
+"smart.useBPM" = "Op tempo filteren";
+"smart.bpmFrom" = "Vanaf BPM";
+"smart.bpmTo" = "Tot BPM";
+"smart.useEnergy" = "Op energie filteren";
+"smart.energyRange" = "Energie %.2f — %.2f";
+"smart.camelotKeys" = "Toonsoorten (Camelot)";
+"smart.soundsLike" = "Klinkt als “%@”";
+"smart.history" = "Luistergeschiedenis";
+"smart.notPlayedOff" = "Speeldatum negeren";
+"smart.notPlayedDays" = "Niet gespeeld in %d dagen";
+"smart.minPlaysOff" = "Aantal keer gespeeld negeren";
+"smart.minPlaysValue" = "Minstens %d keer gespeeld";
+"smart.excludeLive" = "Live-opnames uitsluiten";
+"smart.output" = "Resultaat";
+"smart.trackCount" = "Maximaal %d nummers";
+"smart.play" = "Speel deze lijst";
+"smart.saveAsPlaylist" = "Bewaar als playlist";
+"smart.preview" = "Voorbeeld";
+"smart.saveTitle" = "Playlist bewaren";
+"smart.playlistName" = "Naam";
+"smart.saveMessage" = "%d nummers worden bewaard.";
+"smart.save" = "Bewaar";
+"smart.cancel" = "Annuleer";
+"smart.saved" = "“%@” bewaard.";
+"core.recap.week" = "Terugblik — week %d";
+"core.recap.month" = "Terugblik — %@";

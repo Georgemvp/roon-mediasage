@@ -252,7 +252,96 @@ public final class FeatureStore {
                     checked_at TEXT NOT NULL
                 )
             """)
+
+            // Lyrics read off the music volume — `.lrc` sidecars and embedded
+            // SYLT/USLT/Vorbis frames. Its own table rather than columns on
+            // track_features for two reasons: a plain transcription is a few kB
+            // and would multiply the size of every /features export, and the
+            // backfill has to record "looked, found nothing" (found = 0) so a
+            // library without lyrics is not re-read on every launch.
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS track_lyrics (
+                    match_key  TEXT PRIMARY KEY,
+                    plain      TEXT,
+                    synced     TEXT,
+                    source     TEXT,
+                    found      INTEGER NOT NULL DEFAULT 0,
+                    checked_at TEXT NOT NULL
+                )
+            """)
         }
+    }
+
+    // MARK: - Lyrics (from the music volume)
+
+    /// Stored lyrics for a match key, or `nil` when nothing has been read yet.
+    /// A row with `found = 0` returns a `Resolved` with no content — that is how
+    /// the caller tells "checked, none" from "never checked".
+    public func lyrics(matchKey: String) -> LyricsProvider.Resolved? {
+        (try? dbQueue.read { db -> LyricsProvider.Resolved? in
+            guard let row = try Row.fetchOne(db,
+                sql: "SELECT plain, synced, source FROM track_lyrics WHERE match_key = ?",
+                arguments: [matchKey]) else { return nil }
+            let syncedJSON: String? = row["synced"]
+            let synced = syncedJSON
+                .flatMap { $0.data(using: .utf8) }
+                .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] }
+                .map { arr in
+                    arr.compactMap { entry -> LRCParser.Line? in
+                        guard let t = entry["time"] as? Double else { return nil }
+                        return LRCParser.Line(time: t, text: entry["text"] as? String ?? "")
+                    }
+                }
+            return LyricsProvider.Resolved(plain: row["plain"], synced: synced,
+                                           source: row["source"] ?? "")
+        }) ?? nil
+    }
+
+    /// Record what a read found — including nothing. `checkedAt` is stamped
+    /// either way, which is what makes `LyricsBackfill` resumable.
+    public func setLyrics(matchKey: String, lyrics: LyricsProvider.Resolved?, checkedAt: String) throws {
+        let syncedJSON = lyrics?.synced
+            .map { lines in lines.map { ["time": $0.time, "text": $0.text] as [String: Any] } }
+            .flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+            .flatMap { String(data: $0, encoding: .utf8) }
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                INSERT INTO track_lyrics (match_key, plain, synced, source, found, checked_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(match_key) DO UPDATE SET
+                  plain=excluded.plain, synced=excluded.synced, source=excluded.source,
+                  found=excluded.found, checked_at=excluded.checked_at
+            """, arguments: [matchKey, lyrics?.plain, syncedJSON, lyrics?.source,
+                             (lyrics?.hasContent ?? false) ? 1 : 0, checkedAt])
+        }
+    }
+
+    /// Rows with a real on-disk file that have never been checked for lyrics.
+    /// Preview-analysed rows are excluded — there is no file to read.
+    public func tracksNeedingLyrics(limit: Int) -> [(matchKey: String, filePath: String)] {
+        (try? dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT f.match_key AS mk, f.file_path AS path
+                FROM track_features f
+                LEFT JOIN track_lyrics l ON l.match_key = f.match_key
+                WHERE l.match_key IS NULL
+                  AND f.file_path IS NOT NULL AND f.file_path <> ''
+                  AND f.file_path NOT LIKE ?
+                LIMIT ?
+            """, arguments: [Self.previewPathPrefix + "%", limit])
+            .map { (matchKey: $0["mk"] as String? ?? "", filePath: $0["path"] as String? ?? "") }
+            .filter { !$0.matchKey.isEmpty && !$0.filePath.isEmpty }
+        }) ?? []
+    }
+
+    /// (tracks with lyrics, tracks checked, total analysed) — the coverage readout.
+    public func lyricsCounts() -> (withLyrics: Int, checked: Int, total: Int) {
+        (try? dbQueue.read { db -> (Int, Int, Int) in
+            let found = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM track_lyrics WHERE found = 1") ?? 0
+            let checked = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM track_lyrics") ?? 0
+            let total = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM track_features") ?? 0
+            return (found, checked, total)
+        }) ?? (0, 0, 0)
     }
 
     // MARK: - Preview-embedding backfill (Qobuz-only tracks)

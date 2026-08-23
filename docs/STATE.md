@@ -22,6 +22,72 @@ bv. "Werk feature #1 (skip = live re-steer) volledig uit" of "Doe alleen B7".
 Fix ALLES uit de 6-dimensie audit (2026-07-06): security, correctheid, performance, UX, architectuur én de 13 nieuwe features. Incrementeel per batch: bewerken → build/test → commit+push+tag.
 
 ## Now
+NU (2026-08-23, namiddag): **NAVIDROME + SHELV — VIJF FASES ERIN, ALLES GROEN,
+NOG NIET GECOMMIT/GEPUSHT/GETAGD.** (user: "Opdracht: RoonSage Verrijken met
+Best-Practices uit Navidrome & Shelv", vijf fases.)
+
+**Wat er al bleek te staan** — fase 1 t/m 4 waren grotendeels af: `Shelves.swift`
++ de overzicht-feed, de LRC-parser + karaoke-`LyricsView`, een downloadwachtrij en
+de AAC-transcoder. De opdracht is dus uitgevoerd als *gaten vullen*, niet als
+herbouw.
+
+**Fase 1** — drie ontbrekende planken: `randomAlbums()` (de énige ongerangschikte
+plank, zodat de staart van 13k albums bereikbaar is), `sonicallyRecommendedAlbums()`
+(CLAP-centroïde van je huidige topartiesten, mét die artiesten uitgesloten) en
+"Vergeten parels" op `dormantAlbums(days: 180)`. Hoestegel 130 → 140 pt via één
+`coverTileSize`. "Toon alles" duwt naar `ArtistAlbumsGridView(showsArtist: true)`.
+
+**Fase 2** — songteksten aan de analyzer-kant. `LRCParser`/`SYLTParser` staan nu in
+`AudioAnalysis` (één parser; `LyricsService.parseLRC` verwijst ernaar),
+`MetadataReader.lyrics()` leest USLT/SYLT/Vorbis, `LyricsProvider` doet
+`.lrc`-sidecars, `LyricsBackfill` is hervatbaar (negatieven worden gestempeld), en
+**`GET /lyrics?matchKey=` staat op 5766**. `resolveLyrics` vraagt nu eerst de
+analyzer, pas daarna LRCLIB. *Bewust géén hook in `LibraryWalker`*: die slaat 24k
+geanalyseerde rijen over, dus een hook daar zou de bestaande bibliotheek nooit
+raken — de backfill dekt alles.
+
+**Fase 3** — `OfflineDownloadManager` op `URLSessionDownloadDelegate` met een
+**achtergrondsessie**: downloads overleven suspend, en de bestanden worden
+*verplaatst* i.p.v. via `Data` in RAM gelezen (een FLAC is 30–40 MB). `AppDelegate`
+in de iOS-app vangt `handleEventsForBackgroundURLSession`. Nieuw: schema v50
+`offline_tracks.local_path` (bestandsNAAM, geen pad — de container-UUID verandert
+bij herinstallatie), "Houd favorieten offline" (alleen ge-sterde ALBUMS; verwijdert
+nooit iets), en `DownloadStatusMark`/`AlbumDownloadButton` met wachtend/bezig/klaar.
+
+**Fase 4** — Opus naast AAC. `AudioTranscoder.Codec`, Opus via ffmpeg
+(`/opt/homebrew/bin/ffmpeg`, v8.1.2), `format=opus` op `/audio`, en `transcoded()`
+geeft de codec terug die hij *echt* maakte — zonder ffmpeg valt hij terug op AAC.
+Client: `LocalTranscode.Format` + kiezer, maar alleen zichtbaar als
+`AVURLAsset.isPlayableExtendedMIMEType("audio/ogg; codecs=\"opus\"")` waar is.
+Gemeten op deze machine: waar. iOS 17 kon ik niet meten — vandaar de runtime-probe
+in plaats van een aanname.
+
+**Fase 5** — helemaal nieuw. `SmartPlaylistRules` (snake_case JSON: `genre`,
+`bpm_range`, `camelot_keys`, `energy_range`, `last_played_days_ago`,
+`min_play_count`, `sonic_similarity`) → `SmartPlaylistEngine.compile` → één SQL
+`WHERE`. `sonic_similarity` kán niet in SQL (blob-embeddings), dus de SQL-stap
+overfetcht ×8 en `RoonClient.smartPlaylistTracks` herrangschikt. UI: vierde tab
+"Regels" in `CreateHubView`. `RecapService` maakt week-/maandterugblikken via
+`syncExternalPlaylists(sourcePrefix: "recap:")` — idempotent, snoeit oude periodes,
+raakt eigen playlists niet aan; dagelijkse taak op de server-build.
+
+**Geverifieerd, kaal, met echte exit-codes:** `RoonProtocol swift test` 0 ·
+`RoonSage swift test` 0 (**1074 tests, 3 skipped, 0 failures**; was 1032) ·
+`swift build -c release --product RoonSage` 0 · `xcodegen generate` 0 ·
+swiftlint 474 violations / 2 serious — beide serious zijn pre-existing
+(`DiscoveryDigestNotifier.swift`, `DiscoverySettingsView.swift`), baseline 469.
+
+**Twee dingen die het bouwen opleverde.** (1) De strings-catalogustest ving
+`core.error.downloadTrackFailed` en `core.recap.*` als onvertaald — de tweede keer
+omdat mijn uitgelijnde `"key"    = "…"` niet matcht op de parser, die exact `" = "`
+verwacht; alle toegevoegde regels zijn nu genormaliseerd. (2) De release-build
+waarschuwde dat `Compiled: Sendable` een `[DatabaseValueConvertible]` droeg — dat
+existential is niet Sendable in GRDB 6.29.3. Nu `[DatabaseValue]` (concreet, wél
+Sendable) in plaats van een `@preconcurrency`-onderdrukking.
+
+────────────────────────────────────────────────────────────────────────
+
+
 NU (2026-08-23, begin middag): **HET BIBLIOTHEEKOVERZICHT IS EEN FEED GEWORDEN.**
 (user: "Ga door library view heen, het is nu heel chaotisch het moet meer gaan
 lijken op dit" + vier schermafdrukken van Plexamp.) Wat de referentie doet en wij
@@ -1373,6 +1439,16 @@ VERVOLG 2026-07-08 ("permanente verrijkingslaag", zie project_musicmovearr_roadm
 ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AUDIT.md. Batch 1 (a5e1244+c956ceb): QW1-5+M1+M2+U1+U4 — RadioEngine.rank(queryAnchor:) over sub-VectorIndex, mood/activity-gate, [mood,bpm]-hints, flow-ordening, TitleGrounding-titel, reasons, dial/arc-UI, expliciete dropNearDuplicates. Batch 2 (NOG NIET gecommit): U2 seed-artiesten/nummers (FacetMultiSelectView hergebruikt) → echte ankers in rank(seeds:) → ontsluit fan-graph (relatedArtistWeights) + σ-vloer (nnStats→floor); U3 duur-doel (durationByMatchKey + trimToDuration + Aantal/Duur-toggle); M3-veilig suggestedArc (Auto-arc uit facetten). Verified: swift build && swift test → 513 tests 0 failures; release-build + swiftlint schoon. Enige open punt: "volledig M3" (bewust niet, regressierisico). NIET gepusht/getagd.
 
 ## Next
+- **Committen + pushen + taggen** (v / ios-v / analyzer-v) — nog niet gedaan, de
+  user heeft er in deze sessie niet om gevraagd.
+- Fase 2 werkt pas op de mini ná een analyzer-uitrol (bootout → installeren →
+  bootstrap): `/lyrics` op 5766 en de `LyricsBackfill` zitten in de analyzer.
+- Fase 4: Opus is alleen op macOS 26.5 gemeten. Vóór je het op de iPhone aanzet:
+  kijk of de kiezer daar überhaupt verschijnt — de runtime-probe verbergt hem als
+  AVFoundation Ogg/Opus niet kan decoderen.
+- Fase 3: de achtergrondsessie is niet op een echt toestel gemeten, alleen de
+  unit-tests en de build. Eén album downloaden met de app in de achtergrond is
+  de test die telt.
 - **Beoordelen op de Mac.** De rasters zijn alleen op de iPhone-simulator gemeten. macOS houdt bewust de 150 pt-tegel (`coverGridColumns(compact:)` krijgt daar `false`), dus er zou niets moeten veranderen — maar dat is niet gezien, alleen gebouwd. De Mac-client draaien op de mini is geen optie (Roon-extensie).
 - **Analyzer-v1.1.209 uitrollen op de mini** als je die versie live wilt: tag = DMG, geen uitrol. Route staat in `## Open items` (CI-DMG downloaden → `bootout` → installeren → `bootstrap`). Deze batch is puur UI, dus voor de bibliotheek- en artiestpagina hoeft dat niet — die zit in de Mac- en iOS-clients.
 - **Fase 3, herzien** (`native/docs/STANDALONE_LIBRARY_PLAN.md` §5d): sleutel op de identiteit die er nu ís — `release_track_mbid` → `recording_mbid`/`isrc` → een deterministische terugval, met het schema in de sleutel (`isrc::`, `mb::`, `k::`) zoals `local::` en `import::` dat al doen. Twee dingen niet vergeten: Roon's Browse-API geeft géén identifiers, dus dit repareert alleen de bestandskant; en de dekking wordt ~80% ISRC / ~24% MB-id, dus de terugval blijft nodig.
@@ -1408,6 +1484,9 @@ ZIJSPOOR 2026-07-07 ("doe alles" generate-audit) — zie native/docs/GENERATE_AU
 - B8+ Features: skip re-steer, Siri-intents, Control Center, NL steering, share-cards, "op deze dag", gapless, taste-timemachine, scenes, CarPlay, crossfade, loudness, chat-agent
 
 ## Constraints
+- "Geen Apple TV / tvOS (scope is strikt macOS 14+ en iOS 17+)" — geen tvOS-target, geen tvOS-code (user, 2026-08-23)
+- "Alle UI-teksten/labels zijn in het Nederlands, code/symbolen/commentaren/APIs in het Engels" (user, 2026-08-23)
+- "Geen AppKit in gedeelde modules (RoonSageCore, RoonSageUI, AudioAnalysis, AnalyzerCore). Houd RoonProtocol en RoonSageCore platform-onafhankelijk" (user, 2026-08-23)
 - "Ja bak 2 moet dus de belangrijkste bak zijn. De Roon bak is enkel voor als ik via zone wat wil afspelen. Maar RoonSage moet dus een zelfstandige speler worden die zijn eigen muziek indentificatie heeft en zelfstandig is. Zelfs als Roon wegvalt moet alles gewoon werken. Roon control is dan iets ernaast" — de analyzer (eigen scan + eigen identiteit) is de PRIMAIRE bibliotheekbron; de Roon-walk levert alleen nog wat de analyzer niet kan hebben (de Qobuz/streaming-laag). Roon is uitvoer, geen catalogus. Niets in de app mag een werkende Roon-verbinding vereisen om de bibliotheek te tonen (user, 2026-08-23)
 - "Behalve lord of the rings trilogie, die moeten in hdr etc blijven" — FileFlows-transcode op /Volumes/8tbDrive: de LOTR-trilogie NOOIT aanraken (4K DV/HDR10 REMUX blijft byte-identiek); de `FileNameMatches`-node met literal `Lord of the Rings` is bewezen werkend en mag niet naar regex (user, 2026-07-29)
 - "Test alle functies in RoonSage iOS, gebruik enkel max mini als zone" — bij de iOS-functietest ALLEEN de Roon-zone "Mac mini" gebruiken voor playback; nooit op andere zones spelen (user, 2026-07-22)

@@ -102,6 +102,52 @@ public enum LocalAudioCache {
         do { try data.write(to: f, options: .atomic); return true } catch { return false }
     }
 
+    /// Pin a file that is ALREADY on disk, by moving it — for
+    /// `URLSessionDownloadTask`, which hands over a temporary file rather than
+    /// bytes.
+    ///
+    /// A move instead of a read-then-write: a FLAC album track is 30–40 MB, and
+    /// `Data(contentsOf:)` on the download's temp file would put every one of
+    /// them through RAM on a phone. It also has to happen synchronously inside
+    /// the delegate callback — URLSession deletes the temp file the moment that
+    /// callback returns.
+    ///
+    /// Returns the stored file's NAME (not its path): the app's container
+    /// directory carries a UUID that changes when the app is reinstalled, so an
+    /// absolute path recorded in the database would be wrong on the next launch.
+    /// Callers resolve it against `pinnedDirectory()`.
+    public static func storeDownload(movingFrom temp: URL, forKey key: String, variant: String) -> String? {
+        guard !key.isEmpty, let dir = pinnedDirectory() else { return nil }
+        // The extension decides whether AVURLAsset will open the file at all
+        // (see the note above), and it has to be read from the bytes — the
+        // temp file is named by URLSession and has no meaningful extension.
+        let base = filename(forKey: key, variant: variant)
+        let ext = fileExtension(ofFileAt: temp)
+        let dest = ext.map { dir.appendingPathComponent("\(base).\($0)") }
+            ?? dir.appendingPathComponent(base)
+        let fm = FileManager.default
+        // A re-download of the same track replaces the old copy — including one
+        // stored under a different extension, which `allPaths` covers.
+        for old in allPaths(base: base, in: dir) where fm.fileExists(atPath: old.path) {
+            try? fm.removeItem(at: old)
+        }
+        do {
+            try fm.moveItem(at: temp, to: dest)
+            return dest.lastPathComponent
+        } catch {
+            return nil
+        }
+    }
+
+    /// Resolve a filename recorded by `storeDownload(movingFrom:…)` back to a
+    /// URL in the CURRENT container. Nil when the file is gone (a reinstall, or
+    /// the user cleared downloads on another device and the row survived).
+    public static func downloadURL(forFilename name: String) -> URL? {
+        guard !name.isEmpty, let dir = pinnedDirectory() else { return nil }
+        let url = dir.appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
     @discardableResult
     public static func removeDownload(forKey key: String, variant: String) -> Bool {
         guard let dir = pinnedDirectory() else { return false }

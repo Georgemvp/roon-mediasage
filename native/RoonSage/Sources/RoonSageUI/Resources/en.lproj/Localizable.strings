@@ -1271,3 +1271,58 @@
 /* B6 — dedup in de bibliotheek zichtbaar maken */
 "library.duplicatesHidden"   = "%d duplicate versions hidden — tap to show";
 "library.duplicatesShown"    = "Duplicate versions shown — tap to hide";
+
+/* Phase 1 — three extra shelves on the library overview */
+"library.sonicPicks" = "Sounds like what you're playing";
+"library.sonicPicksSubtitle" = "Sonic recommendations";
+"library.forgottenGems" = "Forgotten gems";
+"library.forgottenGemsSubtitle" = "Not played in a long time";
+"library.randomPicks" = "Random selection";
+"library.randomPicksSubtitle" = "From your whole library";
+
+/* Phase 3 — download status + keeping favourites offline */
+"downloads.statusQueued" = "Queued";
+"downloads.statusDownloading" = "Downloading";
+"downloads.keepFavorites" = "Keep favourites offline";
+"downloads.keepFavoritesExplainer" = "Starred albums are kept on this device automatically. Turning this off only stops new downloads — what you already have stays.";
+
+/* Phase 4 — codec choice for streaming on the go */
+"settings.mobileAudioQuality" = "Mobile audio quality";
+"settings.codecAAC" = "AAC";
+"settings.codecOpus" = "Opus";
+"settings.codecOpusHelp" = "Opus sounds better than AAC at the same bitrate. If the server can't produce Opus (no ffmpeg), it falls back to AAC by itself.";
+
+/* Phase 5 — rule-based playlists and recaps */
+"createHub.modeRules" = "Rules";
+"playlists.recapBadge" = "Recap";
+"smart.matchingTracks" = "tracks match the rules";
+"smart.explainer" = "This list comes from your library, not from a language model: the same rules always give the same result.";
+"smart.genres" = "Genres";
+"smart.noGenresYet" = "No genres known yet — sync your library.";
+"smart.sound" = "Sound";
+"smart.useBPM" = "Filter by tempo";
+"smart.bpmFrom" = "From BPM";
+"smart.bpmTo" = "To BPM";
+"smart.useEnergy" = "Filter by energy";
+"smart.energyRange" = "Energy %.2f — %.2f";
+"smart.camelotKeys" = "Keys (Camelot)";
+"smart.soundsLike" = "Sounds like “%@”";
+"smart.history" = "Listening history";
+"smart.notPlayedOff" = "Ignore last played";
+"smart.notPlayedDays" = "Not played in %d days";
+"smart.minPlaysOff" = "Ignore play count";
+"smart.minPlaysValue" = "Played at least %d times";
+"smart.excludeLive" = "Exclude live recordings";
+"smart.output" = "Result";
+"smart.trackCount" = "At most %d tracks";
+"smart.play" = "Play this list";
+"smart.saveAsPlaylist" = "Save as playlist";
+"smart.preview" = "Preview";
+"smart.saveTitle" = "Save playlist";
+"smart.playlistName" = "Name";
+"smart.saveMessage" = "%d tracks will be saved.";
+"smart.save" = "Save";
+"smart.cancel" = "Cancel";
+"smart.saved" = "“%@” saved.";
+"core.recap.week" = "Recap — week %d";
+"core.recap.month" = "Recap — %@";
